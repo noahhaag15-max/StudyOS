@@ -42,6 +42,63 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   overflow-x: hidden;
+  color-scheme: dark;
+}
+html { color-scheme: dark; }
+
+/* ════════════════════════════════════════════════════════
+   GLOBALE DARK-FORM-STYLES — fängt auch ohne Theme alles ab
+   Dropdown-Listen (option), Date-Picker, Time-Picker etc.
+   ════════════════════════════════════════════════════════ */
+select, input[type="text"], input[type="date"], input[type="datetime-local"],
+input[type="time"], input[type="number"], input[type="email"], input[type="search"],
+textarea {
+  background: rgba(20,26,42,.6);
+  color: #e5ecff;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  color-scheme: dark;
+}
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, rgba(255,255,255,.5) 50%),
+                    linear-gradient(135deg, rgba(255,255,255,.5) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+  cursor: pointer;
+}
+/* Dropdown-Liste (option) — vom OS gerendert, aber background/color funktioniert */
+option {
+  background: #0e1424 !important;
+  color: #e5ecff !important;
+  padding: 8px 10px;
+}
+/* Date/Time-Picker Icon weiss färben (Chrome/Edge) */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(.6);
+  cursor: pointer;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover,
+input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) opacity(1);
+}
+/* Placeholder dezent */
+input::placeholder, textarea::placeholder { color: rgba(229,236,255,.35); }
+/* Focus-State */
+select:focus, input:focus, textarea:focus {
+  border-color: rgba(255,255,255,.35);
+  background: rgba(20,26,42,.85);
 }
 body::before {
   content: '';
@@ -542,6 +599,45 @@ body.theme-tron textarea:focus,
 body.theme-tron select:focus {
   border-color: #00f0ff !important;
   box-shadow: 0 0 8px rgba(0,240,255,.3);
+}
+/* Tron-Select: cyan Pfeil + cyan-getönte Options */
+body.theme-tron select {
+  background-image: linear-gradient(45deg, transparent 50%, #00f0ff 50%),
+                    linear-gradient(135deg, #00f0ff 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 30px;
+}
+body.theme-tron option {
+  background: #061018 !important;
+  color: #d6f7ff !important;
+}
+/* Arbeit-Section: orange Pfeil */
+body.theme-tron #sec-arbeit select,
+body.theme-tron #sec-wplan select {
+  background-image: linear-gradient(45deg, transparent 50%, #ff9000 50%),
+                    linear-gradient(135deg, #ff9000 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+body.theme-tron #sec-arbeit option,
+body.theme-tron #sec-wplan option {
+  background: #1a0f00 !important;
+  color: #ffd9a8 !important;
+}
+/* Liv-Section: pink Pfeil */
+body.theme-tron #sec-liv select {
+  background-image: linear-gradient(45deg, transparent 50%, #ff6090 50%),
+                    linear-gradient(135deg, #ff6090 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+body.theme-tron #sec-liv option {
+  background: #1a0612 !important;
+  color: #ffd1e0 !important;
 }
 /* Arbeit-Sektion: Inputs in Orange */
 body.theme-tron #sec-arbeit input[type="text"],
