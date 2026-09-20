@@ -2071,6 +2071,12 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 
 /* PHASE H */
 .mr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+
+/* ZEITSPANNEN */
+.wp-col { position: relative; }
+.sp-tint { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.sp-band { font-size: 9px; line-height: 14px; height: 14px; border-radius: 6px; margin-top: 3px; color: #0b1620; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; padding: 0 3px; }
+.sp-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid; border-radius: 99px; padding: 2px 10px; font-size: 11px; color: var(--lp-text); } .sp-pill i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 </style>
 </head>
 <body>
@@ -3364,7 +3370,7 @@ var D = {
 // nichts, was nur lokal existiert, geht verloren. Einzige Ausnahme: bewusst lokal gelöschte
 // Einträge können durch einen älteren Snapshot wieder auftauchen — das ist der bewusste
 // Kompromiss (lieber ein Karteileichen-Eintrag zurück als echte Daten verloren).
-var MERGE_ARRAY_COLLECTIONS = ['lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
+var MERGE_ARRAY_COLLECTIONS = ['spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
 // wplan & track sind hier bewusst NICHT drin — die brauchen einen ECHTEN Tiefen-Merge (siehe
 // mergeWplan/mergeTrack unten), weil ihre Werte pro Woche/Tag komplexe, häufig aktiv bearbeitete
 // Strukturen sind. Ein einfacher Object.assign auf oberster Ebene hätte (und hat!) eine ganze
@@ -4831,7 +4837,7 @@ function wpEditor(id,def){
     +'<div class="lp-fld"><label>Zeit</label><input class="lp-in lp-mono" type="time" id="wpm-start" value="'+lpEsc(o.start||'09:00')+'"'+(fix?' disabled':'')+'/><span class="lp-mu">bis</span><input class="lp-in lp-mono" type="time" id="wpm-ende" value="'+lpEsc(o.ende||'10:00')+'"'+(fix?' disabled':'')+'/></div>';
   if(b&&(b.typ==='aufgabe'||b.typ==='fix'))h+='<div class="lp-fld"><label>Status</label><div class="lp-row" style="gap:4px;flex-wrap:wrap">'+[['offen','offen'],['ok','✓'],['teil','◐'],['nein','✗']].map(function(s){ return '<button type="button" class="wp-pill'+(b.status===s[0]?' on':'')+'" data-wp="mst" data-st="'+s[0]+'">'+s[1]+'</button>'; }).join('')+'</div></div>';
   if(b&&b.typ==='aufgabe'&&b.status==='offen')h+='<div class="lp-fld"><label>↻ Verschieben</label><input class="lp-in" type="date" id="wpm-vtag" value="'+lpAdd(b.tag,1)+'"/><button type="button" class="lp-btn" data-wp="ghost">Auf diesen Tag verschieben</button></div>';
-  h+='<div class="lp-row" style="justify-content:space-between;margin-top:10px">'+(b&&!fix?'<button type="button" class="lp-btn danger" data-wp="del">Löschen</button>':'<span></span>')
+  h+='<div class="lp-row" style="justify-content:space-between;margin-top:10px">'+(b?'<button type="button" class="lp-btn danger" data-wp="del">Löschen</button>':'<span></span>')
     +'<span class="lp-row"><button type="button" class="lp-btn gray" data-wp="ed-close">Abbrechen</button><button type="button" class="lp-btn fill" data-wp="ed-save">Speichern</button></span></div></div>';
   host.innerHTML=h;
   var ti=document.getElementById('wpm-titel'); if(ti&&!fix)ti.focus();
@@ -5380,7 +5386,7 @@ function wpEditor(id,def){
     if(b.daten&&b.daten.fertig)h+='<div class="lp-mu" style="margin-bottom:6px">Erfasst: '+(b.daten.kcal?b.daten.kcal+' kcal':'')+(b.daten.uebung?lpEsc(b.daten.uebung)+' · '+b.daten.minuten+' Min':'')+(b.daten.stunden?b.daten.stunden+' h':'')+'</div>';
   }
   if(b&&b.typ==='aufgabe'&&b.status==='offen')h+='<div class="lp-fld"><label>↻ Verschieben</label><input class="lp-in" type="date" id="wpm-vtag" value="'+lpAdd(b.tag,1)+'"/><button type="button" class="lp-btn" data-wp="ghost">Auf diesen Tag verschieben</button></div>';
-  h+='<div class="lp-row" style="justify-content:space-between;margin-top:10px">'+(b&&!fix?'<button type="button" class="lp-btn danger" data-wp="del">Löschen</button>':'<span></span>')
+  h+='<div class="lp-row" style="justify-content:space-between;margin-top:10px">'+(b?'<button type="button" class="lp-btn danger" data-wp="del">Löschen</button>':'<span></span>')
     +'<span class="lp-row"><button type="button" class="lp-btn gray" data-wp="ed-close">Abbrechen</button><button type="button" class="lp-btn fill" data-wp="ed-save">Speichern</button></span></div></div>';
   host.innerHTML=h;
   var ti=document.getElementById('wpm-titel'); if(ti&&!fix)ti.focus();
@@ -7428,7 +7434,7 @@ ckFavMatches=function(date){
   return mdMatches(date).map(function(x){ return {time:x.time||'',name:mdMask(x.heim)+' – '+mdMask(x.gast),typ:mdMask(x.typ||''),ico:mdIsNfl(x)?'ball-american-football':'ball-football'}; }).sort(function(a,b){return a.time.localeCompare(b.time);});
 };
 function mdWindows(d){
-  return mdMatches(d).filter(function(x){ return !wpFindByQuelle('match:'+x.id); }).map(function(x){ var s=lpT2M(x.time); return {id:'md:'+x.id,tag:d,start:x.time,ende:wpM2T(Math.min(1439,s+(mdIsNfl(x)?200:125))),titel:'Match: '+mdMask(x.heim)+' – '+mdMask(x.gast),kategorie:'freizeit',typ:'fenster',status:'offen'}; });
+  return mdMatches(d).filter(function(x){ return !x.planAus&&!wpFindByQuelle('match:'+x.id); }).map(function(x){ var s=lpT2M(x.time); return {id:'md:'+x.id,tag:d,start:x.time,ende:wpM2T(Math.min(1439,s+(mdIsNfl(x)?200:125))),titel:'Match: '+mdMask(x.heim)+' – '+mdMask(x.gast),kategorie:'freizeit',typ:'fenster',status:'offen'}; });
 }
 var _wpEditor_p6=wpEditor;
 wpEditor=function(id,pre){ if(id&&String(id).indexOf('md:')===0)return; return _wpEditor_p6(id,pre); };
@@ -9286,7 +9292,7 @@ ckTermineHTML=function(){
       total++; if(shown>=8)return; shown++;
       if(it.dl&&dn<=1)red=true;
       var badge=it.dl?'<span class="ck-badge'+(dn<=1?' red':'')+'">'+(dn===0?'Heute':dn===1?'Morgen':dn+' T')+'</span>':'';
-      rows+='<div class="lp-row" style="justify-content:space-between;gap:8px;padding:2px 0"><div style="min-width:0;font-size:12px">'+(it.col?'<i class="ck-dot" style="background:'+it.col+'"></i>':'')+lpEsc(it.titel)+(it.time?' <span class="lp-mu">'+lpEsc(it.time)+'</span>':'')+(it.sub?'<div class="lp-mu" style="font-size:10px">'+lpEsc(it.sub)+'</div>':'')+'</div>'+badge+'</div>';
+      rows+='<div class="lp-row" style="justify-content:space-between;gap:8px;padding:2px 0"><div style="min-width:0;font-size:12px">'+(it.col?'<i class="ck-dot" style="background:'+it.col+'"></i>':'')+lpEsc(it.titel)+(it.time?' <span class="lp-mu">'+lpEsc(it.time)+'</span>':'')+(it.sub?'<div class="lp-mu" style="font-size:10px">'+lpEsc(it.sub)+'</div>':'')+'</div>'+badge+(it.exam?'<button type="button" class="lp-x" data-ex="edit" data-fach="'+lpEsc(it.exam.fach)+'" data-typ="'+lpEsc(it.exam.typ)+'" aria-label="Termin ändern"><i class="ti ti-pencil"></i></button>':'')+'</div>';
     });
     if(rows)cards+='<div class="ck-ev'+(red?' red':'')+'"><div class="ck-tile"><div class="lp-mono" style="font-size:10px">'+lpDayLbl(d).toUpperCase()+'</div><div class="lp-mono" style="font-size:16px">'+d.slice(8)+'</div></div><div style="flex:1;min-width:0">'+rows+'</div></div>';
   });
@@ -9338,7 +9344,7 @@ function clMigrate(){
   ['pendenzen','aufgaben','abklaeren'].forEach(function(k){ ((D.arbeit&&D.arbeit[k])||[]).forEach(function(x){
     if(x.migriert)return; var name=(k==='abklaeren'?'Abklären: ':'')+(x.text||x.name||x.titel||''); if(name&&!x.erledigt&&!x.done)push('arb:'+x.id,name,x.faellig||x.datum||'','arbeit',''); x.migriert=true; x.updatedAt=Date.now(); }); });
   (D.calEvs||[]).forEach(function(e){
-    if(e.migriert)return; e.migriert=true; e.updatedAt=Date.now(); if((e.date||'')<today())return;
+    if(e.migriert)return; e.migriert=true; e.updatedAt=Date.now(); if((e.date||'')<today()||e.nrKey)return;
     var id='wpb:cal:'+e.id; if(wpFindByQuelle('cal:'+e.id))return;
     var st=e.time||'09:00', en=wpM2T(Math.min(1439,lpT2M(st)+60));
     var b=wpNew({tag:e.date,start:st,ende:en,titel:e.name,kategorie:e.type==='arbeit'?'arbeit':e.type==='schule'?'uni':'termin',typ:'fix',quelle:'cal:'+e.id}); b.id=id; wpAdd(b); n++;
@@ -10438,6 +10444,185 @@ document.addEventListener('click',function(ev){
   }
 });
 function mrCompact(mon){ try{ var ym=mrPrevMonth(mon); if(!mrHasData(mrStats(ym)))return ''; return mrText(ym,true); }catch(e){ return ''; } }
+
+// ═══════════════════════════════════════════════════════════
+// PRÜFUNGSTERMINE ÄNDERBAR + Fix-Blöcke löschbar + Match-Fenster ausblendbar
+// Quelle der Prüfungsdaten: Notenrechner (Zwischenprüfung / Semesterendprüfung) bzw. Fach. Der Wochenplan-Block folgt in
+// beide Richtungen: Datum im Notenrechner ändern → Block zieht um; Block verschieben → Datum im Notenrechner folgt.
+// ═══════════════════════════════════════════════════════════
+var EX={busy:false,t:0};
+function exList(){
+  var out=[]; Object.keys(nrEnsure().f).forEach(function(fach){ var en=D.noten.f[fach]; if(!en)return;
+    [['zpDatum','zp','Zwischenprüfung'],['sepDatum','sep','Semesterendprüfung']].forEach(function(k){ out.push({fach:fach,key:k[1],typ:k[2],field:k[0],date:en[k[0]]||''}); }); });
+  return out;
+}
+function exSync(){
+  if(EX.busy)return false; EX.busy=true; var changed=false, td=today();
+  try{
+    exList().forEach(function(x){
+      var q='pruef:'+x.fach+'|'+x.key, id='wpb:'+q, b=wpFindByQuelle(q);
+      if(!b){
+        if(!x.date||x.date<td||(D.tombstones&&D.tombstones[id]))return;
+        b=wpNew({tag:x.date,start:'08:00',ende:'10:00',titel:x.typ+' '+x.fach,kategorie:'uni',typ:'fix',quelle:q}); b.id=id; b.pruefDatum=x.date; wpAdd(b); changed=true; return;
+      }
+      var known=b.pruefDatum||b.tag;
+      if(b.tag!==known&&b.tag!==x.date){            // Block wurde im Wochenplan verschoben → Notenrechner übernimmt
+        var en=nrEntry(x.fach); if(en){ en[x.field]=b.tag; nrTouch(x.fach); b.pruefDatum=b.tag; lpTouch(b); nrSyncTermine(x.fach); changed=true; }
+      } else if(x.date&&x.date!==b.tag){             // Datum im Notenrechner geändert → Block zieht um
+        if(lpMonday(x.date)!==lpMonday(b.tag)){ var w=wpWeek(lpMonday(b.tag)); if(w)w.bloecke=w.bloecke.filter(function(y){return y.id!==b.id;}); b.tag=x.date; wpAdd(b); } else b.tag=x.date;
+        b.pruefDatum=x.date; lpTouch(b); changed=true;
+      } else if(!x.date&&b.tag>=td){                 // Datum entfernt → Block weg
+        wpRemove(b); changed=true;
+      } else if(b.pruefDatum!==b.tag){ b.pruefDatum=b.tag; changed=true; }
+    });
+    // Alte, aus dem Notenrechner abgeleitete Kalender-Blöcke der Phase-C-Migration entfernen (sie würden doppelt erscheinen)
+    (D.calEvs||[]).forEach(function(e){ if(!e.nrKey)return; var b=wpFindByQuelle('cal:'+e.id); if(b){ wpRemove(b); changed=true; } });
+  }finally{ EX.busy=false; }
+  if(changed){ saveD(); try{ wpRender(); }catch(e){} try{ ckRender(); }catch(e){} }
+  return changed;
+}
+function exSyncSoon(){ clearTimeout(EX.t); EX.t=setTimeout(exSync,300); }
+var _nrSyncTermine_ex=nrSyncTermine;
+nrSyncTermine=function(fach){ _nrSyncTermine_ex(fach); if(!EX.busy)exSyncSoon(); };
+var _wpAfterChange_ex=wpAfterChange;
+wpAfterChange=function(dates){ _wpAfterChange_ex(dates); if(!EX.busy)exSyncSoon(); };
+
+// ── Agenda: Prüfungen aus Notenrechner und Fach, mit ✎ zum Ändern ──
+var _ckAgenda_ex=ckAgenda;
+ckAgenda=function(){
+  var A=_ckAgenda_ex(), td=today(), lim=lpAdd(td,(+cfg('agenda.tage')||7)-1);
+  var isEx=function(it){ return it.sub==='Prüfung'; };
+  A.items=A.items.filter(function(it){ return !isEx(it); }); A.later=A.later.filter(function(it){ return !isEx(it); });
+  var seen={};
+  nrPruefungen().forEach(function(p){
+    var titel=(p.fach?p.typ+' '+p.fach:p.typ), k=p.datum+'|'+titel; if(seen[k])return; seen[k]=1;
+    var it={date:p.datum,time:'',titel:titel,sub:'Prüfung',dl:true,exam:p.fach?{fach:p.fach,typ:p.typ}:null};
+    (p.datum<=lim?A.items:A.later).push(it);
+  });
+  A.items.sort(function(a,b){return (a.date+(a.dl?'0':'1')+a.time)>(b.date+(b.dl?'0':'1')+b.time)?1:-1;}); A.later.sort(function(a,b){return a.date>b.date?1:-1;});
+  return A;
+};
+function exEdit(fach,typ){
+  var en=nrEntry(fach), f=lpFach(fach,false), field=typ==='Zwischenprüfung'?'zpDatum':typ==='Semesterendprüfung'?'sepDatum':'fach';
+  var cur=field==='fach'?(f&&f.pruefung)||'':(en&&en[field])||'';
+  syModal('ex-edit','<div class="lp-cap">PRÜFUNGSTERMIN ÄNDERN</div><div style="font-size:15px;font-weight:500;margin:6px 0 10px">'+lpEsc(typ+' '+fach)+'</div>'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap"><input class="lp-in lp-mono" type="date" id="ex-date" value="'+lpEsc(cur)+'"></div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-top:6px">Der Termin im Notenrechner und der Block im Wochenplan ziehen automatisch mit.</div>'
+    +'<div class="lp-row" style="justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px"><button type="button" class="lp-btn gray" data-ex="clear" data-fach="'+lpEsc(fach)+'" data-f="'+field+'">Termin entfernen</button><span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-ex="close">Abbrechen</button><button type="button" class="lp-btn fill" data-ex="save" data-fach="'+lpEsc(fach)+'" data-f="'+field+'">Speichern</button></span></div>');
+}
+function exApply(fach,field,val){
+  if(field==='fach'){ var f=lpFach(fach,false); if(f){ f.pruefung=val||''; lpTouch(f); } }
+  else { var en=nrEntry(fach); if(en){ en[field]=val||''; nrTouch(fach); nrSyncTermine(fach); } }
+  saveD(); exSync(); try{ nrAfter(fach); }catch(e){} try{ ckRender(); }catch(e){} try{ wpRender(); }catch(e){}
+}
+// ── Match-Fenster im Plan ausblenden ──
+function exMatchDlg(mid){
+  var x=(D.fussball||[]).concat(D.nfl||[]).find(function(s){return s.id===mid;}); if(!x)return;
+  syModal('ex-md','<div class="lp-cap">MATCH IM WOCHENPLAN</div><div style="font-size:15px;font-weight:500;margin:6px 0 4px">'+lpEsc(mdMask(x.heim)+' – '+mdMask(x.gast))+'</div><div class="lp-mu" style="font-size:12px;margin-bottom:12px">'+lpEsc(lpFmt(x.date)+' · '+(x.time||''))+'</div>'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="lp-btn gray" data-ex="close">Schliessen</button><button type="button" class="lp-btn gray" data-ex="md-unfav" data-id="'+lpEsc(mid)+'">Favorit entfernen</button><button type="button" class="lp-btn fill" data-ex="md-hide" data-id="'+lpEsc(mid)+'">Aus dem Plan entfernen</button></div>');
+}
+var _wpEditor_ex=wpEditor;
+wpEditor=function(id,pre){ if(id&&String(id).indexOf('md:')===0)return exMatchDlg(String(id).slice(3)); return _wpEditor_ex(id,pre); };
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-ex]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var a=el.getAttribute('data-ex'), id=el.getAttribute('data-id'), close=function(){ ['ex-edit','ex-md'].forEach(function(i){ var m=document.getElementById(i); if(m)m.remove(); }); };
+  switch(a){
+    case 'close': return close();
+    case 'save': var v=(document.getElementById('ex-date')||{}).value; if(!v){ showToast('Bitte ein Datum wählen (oder «Termin entfernen»).'); return; } exApply(el.getAttribute('data-fach'),el.getAttribute('data-f'),v); close(); return showToast('Prüfungstermin geändert ✓','ok');
+    case 'clear': exApply(el.getAttribute('data-fach'),el.getAttribute('data-f'),''); close(); return showToast('Prüfungstermin entfernt.','ok');
+    case 'edit': return exEdit(el.getAttribute('data-fach'),el.getAttribute('data-typ'));
+    case 'md-hide': var x=(D.fussball||[]).concat(D.nfl||[]).find(function(s){return s.id===id;}); if(!x)return close(); x.planAus=true; x.updatedAt=Date.now(); saveD(); close(); try{ wpRender(); }catch(e){}
+      return pdUndoPush('Match aus dem Plan entfernt',function(){ x.planAus=false; saveD(); });
+    case 'md-unfav': var y=(D.fussball||[]).concat(D.nfl||[]).find(function(s){return s.id===id;}); if(!y)return close(); y.interesting=false; y.updatedAt=Date.now(); saveD(); close(); try{ wpRender(); ckRender(); }catch(e){}
+      return pdUndoPush('Favorit entfernt',function(){ y.interesting=true; saveD(); });
+  }
+},true);
+function exInit(){ try{ exSync(); }catch(e){} }
+
+// ═══════════════════════════════════════════════════════════
+// ZEITSPANNEN (Ferien, Militär, Arbeit, Liv, Reise …): färben die Tage im Wochenplan ein, ohne Blöcke zu verändern
+// ═══════════════════════════════════════════════════════════
+var SP_TYPEN=[['militaer','Militär','#8fa06a'],['arbeit','Arbeit','#f5b942'],['liv','Liv','#ff5ca8'],['ferien','Ferien','#3ddc84'],['reise','Reise','#8b7cff'],['sonst','Sonstiges','#7d8b99']];
+SY_LIST_LABEL.spannen='Zeitspannen';
+function spList(){ if(!Array.isArray(D.spannen))D.spannen=[]; return D.spannen; }
+function spTyp(k){ return SP_TYPEN.find(function(t){return t[0]===k;})||SP_TYPEN[5]; }
+function spOn(d){ return spList().filter(function(s){ return s&&s.von&&s.bis&&s.von<=d&&d<=s.bis; }); }
+function spEdit(id,pre){
+  var s=id?spList().find(function(x){return x.id===id;}):null; if(id&&!s)return;
+  var o=s||Object.assign({typ:'militaer',titel:'',von:(WP_UI&&WP_UI.week)||today(),bis:(WP_UI&&WP_UI.week)?lpAdd(WP_UI.week,4):today(),farbe:'',notiz:''},pre||{});
+  var t=spTyp(o.typ), col=o.farbe||t[2], up=spList().filter(function(x){return x.bis>=today();}).sort(function(a,b){return a.von>b.von?1:-1;}).slice(0,6);
+  syModal('sp-edit','<div class="lp-cap" style="margin-bottom:8px">'+(s?'ZEITSPANNE BEARBEITEN':'NEUE ZEITSPANNE')+'</div>'
+    +(!s&&up.length?'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Bestehende: '+up.map(function(x){ return '<a href="#" data-sp="edit" data-id="'+lpEsc(x.id)+'" style="color:var(--c-accent)">'+lpEsc(x.titel||spTyp(x.typ)[1])+' ('+lpFmtShort(x.von)+'–'+lpFmtShort(x.bis)+')</a>'; }).join(' · ')+'</div>':'')
+    +'<div style="display:flex;flex-direction:column;gap:8px"><div class="lp-row" style="gap:8px;flex-wrap:wrap"><select class="lp-in" id="sp-typ" data-sp="typ">'+SP_TYPEN.map(function(x){ return '<option value="'+x[0]+'"'+(x[0]===o.typ?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select>'
+    +'<input class="lp-in" id="sp-titel" placeholder="Titel (z. B. WK, Ferien mit Liv)" value="'+lpEsc(o.titel||'')+'" style="flex:1;min-width:140px"><input type="color" id="sp-farbe" value="'+lpEsc(/^#[0-9a-f]{6}$/i.test(col)?col:t[2])+'" style="width:44px;height:36px;padding:2px;border-radius:10px;border:1px solid var(--border);background:none"></div>'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap;align-items:center"><span class="lp-mu">von</span><input class="lp-in lp-mono" type="date" id="sp-von" value="'+lpEsc(o.von)+'"><span class="lp-mu">bis</span><input class="lp-in lp-mono" type="date" id="sp-bis" value="'+lpEsc(o.bis)+'"></div>'
+    +'<input class="lp-in" id="sp-notiz" placeholder="Notiz (optional)" value="'+lpEsc(o.notiz||'')+'"></div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-top:8px">Die Tage werden im Wochenplan eingefärbt. Deine Blöcke bleiben unverändert.</div>'
+    +'<div class="lp-row" style="justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px">'+(s?'<button type="button" class="lp-btn danger" data-sp="del" data-id="'+lpEsc(s.id)+'">Löschen</button>':'<span></span>')+'<span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-sp="close">Abbrechen</button><button type="button" class="lp-btn fill" data-sp="save" data-id="'+lpEsc(id||'')+'">Speichern</button></span></div>');
+}
+function spSave(id){
+  var g=function(i){ return (document.getElementById(i)||{}).value||''; }, von=g('sp-von'), bis=g('sp-bis');
+  if(!von||!bis){ showToast('Bitte «von» und «bis» ausfüllen.'); return; } if(bis<von){ showToast('«Bis» muss am selben Tag oder nach «von» liegen.'); return; }
+  var typ=g('sp-typ'), titel=g('sp-titel').trim()||spTyp(typ)[1], farbe=g('sp-farbe'), o={typ:typ,titel:titel,von:von,bis:bis,farbe:(farbe&&farbe.toLowerCase()!==spTyp(typ)[2].toLowerCase())?farbe:'',notiz:g('sp-notiz').trim()};
+  if(id){ var s=spList().find(function(x){return x.id===id;}); if(s)Object.assign(s,o); } else spList().push(Object.assign({id:uid()},o));
+  saveD(); var m=document.getElementById('sp-edit'); if(m)m.remove(); try{ wpRender(); ckRender(); }catch(e){} showToast('Zeitspanne gespeichert ✓','ok');
+}
+function spDel(id){
+  var s=spList().find(function(x){return x.id===id;}); if(!s)return; var snap=JSON.parse(JSON.stringify(s));
+  markDeleted(id); D.spannen=D.spannen.filter(function(x){return x.id!==id;}); saveD(); var m=document.getElementById('sp-edit'); if(m)m.remove(); try{ wpRender(); ckRender(); }catch(e){}
+  pdUndoPush('Zeitspanne gelöscht: '+snap.titel,function(){ if(!spList().some(function(x){return x.id===id;}))D.spannen.push(snap); saveD(); });
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-sp]'); if(!el)return; var a=el.getAttribute('data-sp'); if(a==='typ')return;
+  ev.preventDefault(); ev.stopPropagation(); var id=el.getAttribute('data-id');
+  switch(a){
+    case 'new': return spEdit(null);
+    case 'edit': var m=document.getElementById('sp-edit'); if(m)m.remove(); return spEdit(id);
+    case 'close': var c=document.getElementById('sp-edit'); if(c)c.remove(); return;
+    case 'save': return spSave(id);
+    case 'del': return spDel(id);
+  }
+},true);
+document.addEventListener('change',function(ev){
+  var e=ev.target; if(!e||e.id!=='sp-typ')return; var t=spTyp(e.value), f=document.getElementById('sp-farbe'), ti=document.getElementById('sp-titel'); if(f)f.value=t[2]; if(ti&&!ti.value.trim())ti.placeholder=t[1];
+});
+
+// Wochenplan: Tage einfärben (Tönung hinter den Blöcken) + Band im Tageskopf
+var _wpRender_sp=wpRender;
+wpRender=function(){
+  _wpRender_sp();
+  try{
+    var root=document.getElementById('wp-root'); if(!root)return; var mon=WP_UI.week||lpMonday(today());
+    var bar=root.querySelector('.lp-row [data-wp="new"]'); if(bar&&!root.querySelector('[data-sp="new"]')){ var b=document.createElement('button'); b.type='button'; b.className='wp-pill'; b.setAttribute('data-sp','new'); b.innerHTML='<i class="ti ti-calendar-event"></i> Zeitspanne'; bar.parentNode.insertBefore(b,bar); }
+    var heads=root.querySelectorAll('.wp-dh'), cols=root.querySelectorAll('.wp-col'), shown={};
+    for(var i=0;i<7;i++){
+      var d=lpAdd(mon,i), l=spOn(d); if(!l.length)continue;
+      var col0=l[0].farbe||spTyp(l[0].typ)[2];
+      if(cols[i]){ var tn=document.createElement('div'); tn.className='sp-tint'; tn.style.background='color-mix(in srgb,'+col0+' 17%,transparent)'; cols[i].insertBefore(tn,cols[i].firstChild); }
+      l.forEach(function(s){
+        var col=s.farbe||spTyp(s.typ)[2], first=!shown[s.id]; shown[s.id]=1;
+        if(heads[i]){ var bd=document.createElement('div'); bd.className='sp-band'; bd.setAttribute('data-sp','edit'); bd.setAttribute('data-id',s.id); bd.title=(s.titel||spTyp(s.typ)[1])+' · '+lpFmtShort(s.von)+'–'+lpFmtShort(s.bis); bd.style.background=col; bd.textContent=(first||s.von===d)?(s.titel||spTyp(s.typ)[1]):' '; heads[i].appendChild(bd); }
+      });
+    }
+  }catch(e){}
+};
+
+// Cockpit: Hinweis im Kopf, Beginn/Ende in der Agenda
+var _ckHeaderHTML_sp=ckHeaderHTML;
+ckHeaderHTML=function(){
+  var h=_ckHeaderHTML_sp(), l=spOn(today()); if(!l.length||!h)return h;
+  var pills=l.map(function(s){ var col=s.farbe||spTyp(s.typ)[2]; return '<span class="sp-pill" style="border-color:'+col+'"><i style="background:'+col+'"></i>'+lpEsc(s.titel||spTyp(s.typ)[1])+' · bis '+lpEsc(lpDayLbl(s.bis)+' '+lpFmtShort(s.bis))+'</span>'; }).join('');
+  return h+'<div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-top:8px">'+pills+'</div>';
+};
+var _ckAgenda_sp=ckAgenda;
+ckAgenda=function(){
+  var A=_ckAgenda_sp(), td=today(), lim=lpAdd(td,(+cfg('agenda.tage')||7)-1);
+  spList().forEach(function(s){
+    [[s.von,'Beginn'],[s.bis,'Ende']].forEach(function(p){ if(!p[0]||p[0]<td)return; var it={date:p[0],time:'',titel:p[1]+': '+(s.titel||spTyp(s.typ)[1]),sub:'Zeitspanne',col:s.farbe||spTyp(s.typ)[2]}; (p[0]<=lim?A.items:A.later).push(it); });
+  });
+  A.items.sort(function(a,b){return (a.date+(a.dl?'0':'1')+a.time)>(b.date+(b.dl?'0':'1')+b.time)?1:-1;}); A.later.sort(function(a,b){return a.date>b.date?1:-1;});
+  return A;
+};
 
 // ═══════════════════════════════════════════════════════════
 // LERNPLAN-MODUL — Fach → Thema → Etappe → Checkpoints (D.lp). Ersetzt den alten Themenplan.
@@ -15694,6 +15879,7 @@ clInit();
 cl2Init();
 pdInit();
 pwInit();
+exInit();
 
 // Auto-refresh Scores und LivCounter
 setInterval(function(){renderLivCounter();renderDayTimer();renderFocus();},60000);
