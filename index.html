@@ -2068,6 +2068,9 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 .pw-bn { position: fixed; left: 12px; right: 12px; bottom: 14px; z-index: 2450; display: flex; justify-content: center; pointer-events: none; }
 .pw-in { pointer-events: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; max-width: 520px; width: 100%; padding: 10px 12px; background: var(--bg2); border: 1px solid color-mix(in srgb, var(--c-accent) 55%, transparent); border-radius: 16px; }
 #pw-a2hs { bottom: 84px; }
+
+/* PHASE H */
+.mr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
 </style>
 </head>
 <body>
@@ -7253,6 +7256,7 @@ function boBericht(mon){
   D.buchungen.forEach(function(b){ if(b.datum>=mon&&b.datum<=end&&(b.xp||b.meilen)){ xp+=b.xp||0; mi+=b.meilen||0; book.push(b); if(b.meilen<0)abz.push(b); } });
   L.push('XP: +'+xp+' · Meilen netto: '+(mi>=0?'+':'')+mi);
   L.push('Abzüge: '+(abz.length?abz.map(function(b){ return lpFmtShort(b.datum)+' '+b.meilen+' Meilen ('+b.text+')'; }).join('; '):'keine'));
+  var _mc=mrCompact(mon); if(_mc)L.push(_mc,'');
   L.push('Rettungsmodus: '+pdRescueWeek(mon)+'× genutzt'+(pdRescueWeek(mon)?' ('+Object.keys(D.rettung||{}).filter(function(d){return d>=mon&&d<=end;}).map(function(d){ return lpFmtShort(d)+': '+D.rettung[d].eine; }).join('; ')+')':''),'');
   L.push('BUCHUNGEN'); book.sort(function(a,b){return a.datum<b.datum?-1:a.datum>b.datum?1:0;}).forEach(function(b){ L.push('- '+lpFmtShort(b.datum)+' · '+b.text+' · '+(b.xp?'+'+b.xp+' XP ':'')+(b.meilen?(b.meilen>0?'+':'')+b.meilen+' Meilen':'')+' ['+b.quelle+']'); });
   L.push('','BLÖCKE PRO TAG (✓ erledigt, ◐ teilweise, ↻ verschoben, ✗ nicht gemacht, · offen)');
@@ -7958,9 +7962,9 @@ var SOS_LOGO='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs>
   try{
     var url='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(SOS_LOGO);
     var mk=function(rel,href,extra){ var l=document.createElement('link'); l.rel=rel; l.href=href; if(extra)l.type=extra; document.head.appendChild(l); return l; };
-    Array.prototype.slice.call(document.querySelectorAll('link[rel~="icon"],link[rel="apple-touch-icon"]')).forEach(function(e){ e.remove(); });
+    Array.prototype.slice.call(document.querySelectorAll('link[rel~="icon"]')).forEach(function(e){ e.remove(); });
     mk('icon',url,'image/svg+xml');
-    var img=new Image(); img.onload=function(){ try{ var c=document.createElement('canvas'); c.width=c.height=180; c.getContext('2d').drawImage(img,0,0,180,180); mk('apple-touch-icon',c.toDataURL('image/png')); }catch(e){} }; img.src=url;
+    var img=new Image(); if(!document.querySelector('link[rel="apple-touch-icon"]'))img.onload=function(){ try{ var c=document.createElement('canvas'); c.width=c.height=180; c.getContext('2d').drawImage(img,0,0,180,180); mk('apple-touch-icon',c.toDataURL('image/png')); }catch(e){} }; img.src=url;
     var t=document.querySelector('.sb-title'); if(t&&!t.querySelector('.sb-mark')){ var m=document.createElement('span'); m.className='sb-mark'; m.innerHTML=SOS_LOGO; t.insertBefore(m,t.firstChild); }
     if(!document.getElementById('sos-logo-m')){ var d=document.createElement('div'); d.id='sos-logo-m'; d.innerHTML=SOS_LOGO+'<b>Study<span>OS</span></b>'; document.body.appendChild(d); }
   }catch(e){}
@@ -9416,7 +9420,7 @@ function clTrkView(){
   var el=document.getElementById('trk-root'); if(!el)return;
   var view=TRK_UI.view||'heute', td=today();
   Array.prototype.slice.call(el.children).forEach(function(k,i){
-    var t=k.innerText||'', verlauf=/GEWICHT · 30 TAGE|WOCHE IM ÜBERBLICK|ÄLTERE EINTRÄGE/.test(t);
+    var t=k.innerText||'', verlauf=/MONATSRÜCKBLICK|GEWICHT · 30 TAGE|WOCHE IM ÜBERBLICK|ÄLTERE EINTRÄGE/.test(t);
     if(i===0){ k.style.display=''; return; }
     k.style.display=((view==='verlauf')===verlauf)?'':'none';
   });
@@ -10202,7 +10206,7 @@ async function pwEnable(){
     var r=await fetch(w+'/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pwId(),sub:sub.toJSON()})});
     if(!r.ok)throw new Error('Worker meldet Fehler '+r.status+' beim Anmelden.');
     localStorage.setItem('sos_push_on','1'); pwPushConfigWrite(); pwSyncSchedule(true); step('Aktiv auf diesem Gerät ✓');
-  }catch(e){ step('Fehlgeschlagen: '+((e&&e.message)||e)); }
+  }catch(e){ var em=(e&&e.message)||String(e), hint=/push service error|AbortError/i.test(em)?' — Der Push-Dienst deines Browsers ist nicht erreichbar. Brave: Einstellungen › Datenschutz und Sicherheit › «Google-Dienste für Push-Nachrichten verwenden» einschalten und den Browser neu starten. Sonst: Chrome, Edge oder Firefox ohne VPN/Werbeblocker probieren, oder direkt das Handy (App vom Home-Bildschirm) nehmen.':''; step('Fehlgeschlagen: '+em+hint); }
   renderHangar();
 }
 async function pwDisable(){
@@ -10210,9 +10214,20 @@ async function pwDisable(){
   try{ if(pwWorker())await fetch(pwWorker()+'/unsubscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pwId()})}); }catch(e){}
   localStorage.removeItem('sos_push_on'); localStorage.removeItem('sos_push_hash'); PW.msg='Auf diesem Gerät ausgeschaltet.'; pwRenderHg();
 }
+async function pwLocalTest(){
+  try{
+    if(!('Notification' in window)){ PW.msg='Dieser Browser kennt keine Benachrichtigungen.'; return pwRenderHg(); }
+    var perm=Notification.permission==='granted'?'granted':await Notification.requestPermission();
+    if(perm!=='granted'){ PW.msg='Benachrichtigungen sind blockiert ('+perm+'). Erlaube sie beim Schloss-Symbol in der Adresszeile.'; return pwRenderHg(); }
+    var reg=await navigator.serviceWorker.getRegistration(); if(!reg)throw new Error('kein Service Worker');
+    await reg.showNotification('Study OS',{body:'Lokaler Test: Anzeige funktioniert ✓',tag:'lokal',icon:'icons/icon-192.png'});
+    PW.msg='Lokale Testmeldung gesendet. Siehst du sie? Dann funktioniert die Anzeige, und ein Fehler liegt beim Push-Weg (Test senden).';
+  }catch(e){ PW.msg='Lokaler Test fehlgeschlagen: '+((e&&e.message)||e); }
+  pwRenderHg();
+}
 async function pwTest(){
   if(localStorage.getItem('sos_push_on')!=='1'){ PW.msg='Für den Test muss dieses Gerät zuerst aktiviert sein («Auf diesem Gerät aktivieren»).'; return pwRenderHg(); }
-  try{ var r=await fetch(pwWorker()+'/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pwId()})}), j=await r.json(); PW.msg=(j.result==='ok')?'Test gesendet — die Meldung sollte gleich erscheinen.':(j.error?'Fehler: '+j.error:'Ergebnis: '+j.result); }catch(e){ PW.msg='Worker nicht erreichbar.'; }
+  try{ var r=await fetch(pwWorker()+'/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pwId()})}), j=await r.json(); PW.msg=(j.result==='ok')?'Der Push-Dienst ('+(j.endpoint||'?')+') hat die Meldung angenommen. Sie sollte in wenigen Sekunden erscheinen. Wenn nicht: erst «Lokal testen», dann Benachrichtigungs-Einstellungen von Windows/Browser prüfen.':(j.error?'Fehler: '+j.error:'Push-Dienst meldet: '+j.result+(j.detail?' — '+j.detail:'')+(j.result==='gone'?' (Gerät war abgemeldet: bitte erneut «Auf diesem Gerät aktivieren»)':'')); }catch(e){ PW.msg='Worker nicht erreichbar.'; }
   pwRenderHg();
 }
 
@@ -10232,7 +10247,7 @@ function hgPushInner(){
     +'<div class="hg-ln"><span>Erlaubte Seite (im Worker als <span class="lp-mono">ALLOWED_ORIGIN</span> eintragen)</span><span class="lp-mono lp-mu" style="word-break:break-all;text-align:right;font-size:11px">'+lpEsc(location.origin)+'</span></div>'
     +'<div class="hg-ln"><span>Dieses Gerät</span><span class="lp-mono lp-mu">'+lpEsc(pwStatusText())+'</span></div>'
     +'<div class="hg-ln"><span>Service Worker (sw.js)</span><span class="lp-mono lp-mu" style="text-align:right;font-size:11px">'+lpEsc(!('serviceWorker' in navigator)?'nicht unterstützt':PW.swErr?'Fehler: '+PW.swErr:(PW.reg?(PW.reg.active?'aktiv':PW.reg.installing?'wird installiert …':PW.reg.waiting?'wartet …':'registriert'):'wird geladen …'))+'</span></div>'
-    +'<div class="lp-row" style="flex-wrap:wrap;margin-top:8px">'+(on?'<button type="button" class="lp-btn fill" data-pw="test">Test senden</button><button type="button" class="lp-btn gray" data-pw="disable">Auf diesem Gerät ausschalten</button>':'<button type="button" class="lp-btn fill" data-pw="enable">Auf diesem Gerät aktivieren</button><button type="button" class="lp-btn gray" data-pw="test">Test senden</button>')+'</div>'
+    +'<div class="lp-row" style="flex-wrap:wrap;margin-top:8px">'+(on?'<button type="button" class="lp-btn fill" data-pw="test">Test senden</button><button type="button" class="lp-btn gray" data-pw="local">Lokal testen</button><button type="button" class="lp-btn gray" data-pw="disable">Auf diesem Gerät ausschalten</button>':'<button type="button" class="lp-btn fill" data-pw="enable">Auf diesem Gerät aktivieren</button><button type="button" class="lp-btn gray" data-pw="test">Test senden</button><button type="button" class="lp-btn gray" data-pw="local">Lokal testen</button>')+'</div>'
     +(PW.msg?'<div class="lp-mu" style="margin-top:8px;font-size:12px">'+lpEsc(PW.msg)+'</div>':'')+'</div>'
     +'<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">WAS ERINNERT DICH</div>'
     +pwRow('tagesabschluss','Tagesabschluss',pwTimeIn('tagesabschluss','zeit',R.tagesabschluss.zeit))
@@ -10262,6 +10277,7 @@ document.addEventListener('click',function(ev){
     case 'enable': return pwEnable();
     case 'disable': return pwDisable();
     case 'test': return pwTest();
+    case 'local': return pwLocalTest();
     case 'rem-toggle': var k=el.getAttribute('data-k'); pwRemSet(k,'on',!pwRem()[k].on); return renderHangar();
   }
 });
@@ -10282,6 +10298,146 @@ function pwInit(){
   setInterval(function(){ pwCheckUpdate(false); },30*60000);
   setTimeout(function(){ pwSyncSchedule(false); },8000);
 }
+
+// ═══════════════════════════════════════════════════════════
+// PHASE H — MONATSRÜCKBLICK (Logbuch › Verlauf, Karte im Cockpit am Monatsanfang)
+// ═══════════════════════════════════════════════════════════
+var MR={ym:null};
+var MR_MON=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+function mrP2(n){ return n<10?'0'+n:''+n; }
+function mrPrevMonth(td){ var y=+td.slice(0,4), m=+td.slice(5,7)-1; if(m<1){ m=12; y--; } return y+'-'+mrP2(m); }
+function mrShift(ym,n){ var y=+ym.slice(0,4), m=+ym.slice(5,7)+n; while(m<1){ m+=12; y--; } while(m>12){ m-=12; y++; } return y+'-'+mrP2(m); }
+function mrName(ym){ return MR_MON[+ym.slice(5,7)-1]; }
+function mrDays(ym){ var n=new Date(Date.UTC(+ym.slice(0,4),+ym.slice(5,7),0)).getUTCDate(), o=[]; for(var i=1;i<=n;i++)o.push(ym+'-'+mrP2(i)); return o; }
+function mrAvg(a){ return a.length?a.reduce(function(x,y){return x+y;},0)/a.length:null; }
+
+function mrStats(ym){
+  var td=today(), days=mrDays(ym).filter(function(d){return d<=td;}), first=ym+'-01', last=mrDays(ym).slice(-1)[0], L=lpEnsure(), r={ym:ym,tage:days.length};
+  // Lernen
+  r.lernMin=0; days.forEach(function(d){ r.lernMin+=trkLern(d); });
+  var fach={}, seen={}, fN={}; L.faecher.forEach(function(f){ fN[f.id]=f.fach; });
+  var eT={}; L.etappen.forEach(function(e){ eT[e.id]=e; }); var tF={}; L.themen.forEach(function(t){ tF[t.id]=fN[t.fachId]||'Ohne Fach'; });
+  L.sessions.forEach(function(s){
+    if(s.status!=='abgeschlossen')return; var d=lpSessDate(s); if(d<first||d>last)return;
+    var e=eT[s.etappeId], name=(e&&tF[e.themaId])||'Ohne Fach'; fach[name]=(fach[name]||0)+(s.nettoMin||0);
+    if(e&&(s.ergebnis==='ok'||s.ergebnis==='hilfe'||s.ergebnis==='erledigt'))seen[s.etappeId]=1;
+  });
+  r.faecher=Object.keys(fach).map(function(k){ return {name:k,min:Math.round(fach[k])}; }).sort(function(a,b){return b.min-a.min;});
+  r.etappen=Object.keys(seen).length;
+  // Schlaf, Energie
+  var sl=[], en=[]; days.forEach(function(d){ var h=trkSleepH(d); if(h!=null&&h>0)sl.push(h); var e=D.dailyTracker&&D.dailyTracker[d]&&D.dailyTracker[d].energie; if(e)en.push(+e); });
+  r.schlaf=mrAvg(sl); r.schlafN=sl.length; r.energie=mrAvg(en); r.energieN=en.length;
+  // Sport
+  r.sportMin=0; r.sportTage=0; days.forEach(function(d){ var s=trkSport(d).min; if(s>0){ r.sportMin+=s; r.sportTage++; } });
+  // Spiel
+  r.xp=0; r.mPlus=0; r.mMinus=0; r.einl=[]; var byDay={}; r.abz=[];
+  D.buchungen.forEach(function(b){
+    if(b.datum<first||b.datum>last)return; r.xp+=b.xp||0; if(b.meilen>0)r.mPlus+=b.meilen; else r.mMinus+=b.meilen;
+    if(String(b.id).indexOf('rew:')===0&&b.meilen<0&&String(b.text||'').indexOf('(rückgängig)')<0)r.einl.push({text:String(b.text||'').replace(/^Belohnung:\s*/,''),mi:-b.meilen});
+    byDay[b.datum]=(byDay[b.datum]||0)+(b.xp||0);
+  });
+  r.meilen=r.mPlus+r.mMinus;
+  r.best=null; Object.keys(byDay).forEach(function(d){ if(byDay[d]>0&&(!r.best||byDay[d]>r.best.xp))r.best={datum:d,xp:byDay[d]}; });
+  spielEnsure().abzeichen.forEach(function(a){ if(a.datum>=first&&a.datum<=last){ var i=loBadgeInfo(a); r.abz.push({name:i.name,datum:a.datum}); } });
+  // Streak innerhalb des Monats
+  var free=+cfg('zeiten.freierTag'), run=0; r.streak=0;
+  days.forEach(function(d){ if(spielAktiverTag(d)){ run++; if(run>r.streak)r.streak=run; } else if(lpWd(d)!==free)run=0; });
+  // Vorsätze
+  r.vs=[]; vsEnsure().forEach(function(v){
+    var ok=0, of=0, z=vsZiel(v), er=v.erstellt||'0000-00-00';   // Vorsätze zählen erst ab ihrem Anlegen
+    if(v.zeitraum==='woche'){ var m=lpMonday(first); for(;m<=last;m=lpAdd(m,7)){ var w1=lpAdd(m,6)>last?last:lpAdd(m,6); if(w1>td)break; if(m<first||lpAdd(m,6)<er)continue; of++; if(vsSum(v,m,lpAdd(m,6))>=z)ok++; } }
+    else if(v.zeitraum==='monat'){ if(last<=td&&last>=er){ of=1; if(vsSum(v,first,last)>=z)ok=1; } }
+    else { days.forEach(function(d){ if(d<er)return; of++; if(vsSum(v,d,d)>=z)ok++; }); }
+    if(of)r.vs.push({name:v.name,ok:ok,of:of});
+  });
+  return r;
+}
+function mrHasData(s){ return s.lernMin>0||s.xp>0||s.schlafN>0||s.sportMin>0||s.etappen>0; }
+function mrH(min){ return nrF(min/60,1)+' h'; }
+
+// Vergleich: Verbesserungen hervorheben, Verschlechterungen neutral (nie rot)
+function mrCmp(cur,prev,fmt,unit){
+  if(cur==null||prev==null||prev===0&&cur===0)return '';
+  var d=cur-prev; if(Math.abs(d)<0.05)return '<span class="lp-mu" style="font-size:11px">wie im Vormonat</span>';
+  var t=fmt(Math.abs(d))+(unit||'');
+  return d>0?'<span style="font-size:11px;color:var(--c-ok)">▲ +'+t+' zum Vormonat</span>':'<span class="lp-mu" style="font-size:11px">▼ −'+t+' zum Vormonat</span>';
+}
+function mrTile(ico,label,val,cmp){ return '<div class="lp-inner mr-tile"><div class="lp-mu" style="font-size:11px"><i class="ti ti-'+ico+'"></i> '+label+'</div><div class="lp-mono" style="font-size:20px;margin:2px 0">'+val+'</div><div>'+(cmp||'&nbsp;')+'</div></div>'; }
+function mrHTML(ym){
+  var s=mrStats(ym), p=mrStats(mrShift(ym,-1)), atMax=ym>=today().slice(0,7);
+  var h='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px"><span class="lp-cap"><i class="ti ti-calendar-stats"></i> MONATSRÜCKBLICK</span>'
+    +'<span class="lp-row" style="gap:6px"><button type="button" class="wp-pill" data-mr="nav" data-n="-1"><i class="ti ti-chevron-left"></i></button><span class="lp-mono" style="font-size:14px;min-width:120px;text-align:center">'+mrName(ym)+' '+ym.slice(0,4)+'</span><button type="button" class="wp-pill" data-mr="nav" data-n="1"'+(atMax?' disabled':'')+'><i class="ti ti-chevron-right"></i></button></span></div>';
+  if(!mrHasData(s))return h+'<div class="lp-mu" style="padding:6px 0">Für diesen Monat gibt es noch keine Daten.</div></div>';
+  h+='<div class="mr-grid">'
+    +mrTile('book','Gelernt',mrH(s.lernMin),mrCmp(s.lernMin/60,p.lernMin/60,function(x){return nrF(x,1);},' h'))
+    +mrTile('checklist','Etappen erledigt',s.etappen,mrCmp(s.etappen,p.etappen,function(x){return nrF(x,0);}))
+    +mrTile('moon-stars','Schlaf Ø',s.schlaf!=null?nrF(s.schlaf,1)+' h':'–',mrCmp(s.schlaf,p.schlaf,function(x){return nrF(x,1);},' h'))
+    +mrTile('bolt','Energie Ø',s.energie!=null?nrF(s.energie,1)+' / 5':'–',mrCmp(s.energie,p.energie,function(x){return nrF(x,1);}))
+    +mrTile('barbell','Sport',s.sportMin?s.sportMin+' Min':'–',(s.sportTage?s.sportTage+' Tage · ':'')+mrCmp(s.sportMin,p.sportMin,function(x){return nrF(x,0);},' Min'))
+    +mrTile('star','XP',fmtCH(s.xp),mrCmp(s.xp,p.xp,function(x){return fmtCH(x);}))
+    +mrTile('plane','Meilen netto',(s.meilen>=0?'+':'')+fmtCH(s.meilen),'<span class="lp-mu" style="font-size:11px">+'+fmtCH(s.mPlus)+' · Abzüge '+fmtCH(s.mMinus)+'</span>')
+    +mrTile('flame','Längste Streak',s.streak+' Tage',mrCmp(s.streak,p.streak,function(x){return nrF(x,0);},' Tage'))
+    +'</div>';
+  if(s.faecher.length)h+='<div class="lp-cap" style="margin:12px 0 4px">LERNSTUNDEN PRO FACH</div>'+s.faecher.map(function(f){ var pct=s.faecher[0].min?Math.round(f.min/s.faecher[0].min*100):0; return '<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px">'+lpEsc(f.name)+'</span><span class="ck-track" style="width:32%;height:6px;margin:0 8px"><i style="width:'+pct+'%"></i></span><span class="lp-mono lp-mu" style="font-size:12px">'+mrH(f.min)+'</span></div>'; }).join('');
+  if(s.best)h+='<div class="hg-ln"><span>Bester Tag</span><span class="lp-mono">'+lpFmt(s.best.datum)+' · +'+fmtCH(s.best.xp)+' XP</span></div>';
+  if(s.einl.length)h+='<div class="hg-ln"><span>Eingelöste Belohnungen</span><span class="lp-mu" style="text-align:right;font-size:12px">'+s.einl.map(function(x){return lpEsc(x.text)+' ('+fmtCH(x.mi)+')';}).join(', ')+'</span></div>';
+  if(s.abz.length)h+='<div class="hg-ln"><span>Neue Abzeichen</span><span class="lp-mu" style="text-align:right;font-size:12px">'+s.abz.map(function(x){return lpEsc(x.name);}).join(', ')+'</span></div>';
+  if(s.vs.length)h+='<div class="lp-cap" style="margin:12px 0 4px">VORSÄTZE</div>'+s.vs.map(function(v){ var all=v.ok===v.of; return '<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px">'+lpEsc(v.name)+'</span><span class="lp-mono" style="font-size:12px;color:'+(all?'var(--c-ok)':'var(--c-muted)')+'">'+v.ok+' von '+v.of+' erreicht</span></div>'; }).join('');
+  h+='<div class="lp-row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="lp-btn gray" data-mr="copy" data-ym="'+ym+'"><i class="ti ti-copy"></i> Als Text kopieren</button></div></div>';
+  return h;
+}
+function mrText(ym,kurz){
+  var s=mrStats(ym), p=mrStats(mrShift(ym,-1)), L=['MONATSRÜCKBLICK '+mrName(ym).toUpperCase()+' '+ym.slice(0,4)];
+  if(!mrHasData(s))return L.concat(['Keine Daten.']).join('\n');
+  L.push('Gelernt: '+mrH(s.lernMin)+' (Vormonat '+mrH(p.lernMin)+') · Etappen erledigt: '+s.etappen);
+  L.push('Schlaf Ø: '+(s.schlaf!=null?nrF(s.schlaf,1)+' h':'–')+' · Energie Ø: '+(s.energie!=null?nrF(s.energie,1)+'/5':'–')+' · Sport: '+s.sportMin+' Min an '+s.sportTage+' Tagen');
+  L.push('XP: +'+fmtCH(s.xp)+' · Meilen netto: '+(s.meilen>=0?'+':'')+fmtCH(s.meilen)+' · Längste Streak: '+s.streak+' Tage');
+  if(kurz)return L.join('\n');
+  if(s.faecher.length)L.push('Lernstunden pro Fach: '+s.faecher.map(function(f){return f.name+' '+mrH(f.min);}).join(', '));
+  if(s.best)L.push('Bester Tag: '+lpFmt(s.best.datum)+' (+'+fmtCH(s.best.xp)+' XP)');
+  if(s.einl.length)L.push('Eingelöst: '+s.einl.map(function(x){return x.text;}).join(', '));
+  if(s.abz.length)L.push('Neue Abzeichen: '+s.abz.map(function(x){return x.name;}).join(', '));
+  if(s.vs.length)L.push('Vorsätze: '+s.vs.map(function(v){return v.name+' '+v.ok+'/'+v.of;}).join(', '));
+  return L.join('\n');
+}
+function mrMount(){
+  var el=document.getElementById('trk-root'); if(!el)return;
+  var old=document.getElementById('mr-root'); if(old)old.remove();
+  if((TRK_UI.view||'heute')!=='verlauf')return;
+  var h=document.createElement('div'); h.id='mr-root'; h.className='lp'; h.innerHTML=mrHTML(MR.ym||mrPrevMonth(today()));
+  el.insertBefore(h,el.children[1]||null);
+}
+var _trkRender_mr=trkRender;
+trkRender=function(){ _trkRender_mr(); try{ mrMount(); }catch(e){} };
+
+// Cockpit-Karte in den ersten Tagen des Monats (schliessbar)
+var _ckRender_mr=ckRender;
+ckRender=function(){
+  _ckRender_mr();
+  try{
+    var root=document.getElementById('ck-root'), td=today(); if(!root||+td.slice(8)>7||document.getElementById('mr-ck'))return;
+    var ym=mrPrevMonth(td); if(localStorage.getItem('sos_mr_x_'+ym)==='1')return;
+    var s=mrStats(ym); if(!mrHasData(s))return;
+    var c=document.createElement('div'); c.id='mr-ck'; c.className='lp lp-cd'; c.style.marginBottom='12px';
+    c.innerHTML='<div class="lp-row" style="justify-content:space-between;align-items:flex-start"><span class="lp-cap"><i class="ti ti-calendar-stats"></i> DEIN '+mrName(ym).toUpperCase()+'</span><button type="button" class="lp-x" data-mr="dismiss" data-ym="'+ym+'" aria-label="schliessen">×</button></div>'
+      +'<div class="lp-row" style="gap:16px;flex-wrap:wrap;margin:8px 0"><span><b class="lp-mono" style="font-size:18px">'+mrH(s.lernMin)+'</b> <span class="lp-mu" style="font-size:12px">gelernt</span></span>'
+      +(s.schlaf!=null?'<span><b class="lp-mono" style="font-size:18px">'+nrF(s.schlaf,1)+' h</b> <span class="lp-mu" style="font-size:12px">Schlaf Ø</span></span>':'')
+      +(s.xp?'<span><b class="lp-mono" style="font-size:18px">+'+fmtCH(s.xp)+'</b> <span class="lp-mu" style="font-size:12px">XP</span></span>':'')+'</div>'
+      +'<button type="button" class="lp-btn gray" data-mr="open" data-ym="'+ym+'">Rückblick öffnen</button>';
+    root.insertBefore(c,root.firstChild);
+  }catch(e){}
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-mr]'); if(!el||el.disabled)return; ev.preventDefault();
+  var a=el.getAttribute('data-mr'), ym=el.getAttribute('data-ym');
+  switch(a){
+    case 'nav': MR.ym=mrShift(MR.ym||mrPrevMonth(today()),+el.getAttribute('data-n')); var cur=today().slice(0,7); if(MR.ym>cur)MR.ym=cur; return mrMount();
+    case 'copy': var tx=mrText(ym); try{ navigator.clipboard.writeText(tx).then(function(){ showToast('Rückblick kopiert ✓','ok'); },function(){ showToast('Kopieren nicht möglich.'); }); }catch(e){ showToast('Kopieren nicht möglich.'); } return;
+    case 'dismiss': localStorage.setItem('sos_mr_x_'+ym,'1'); var c=document.getElementById('mr-ck'); if(c)c.remove(); return;
+    case 'open': MR.ym=ym; goSec('verlauf'); return;
+  }
+});
+function mrCompact(mon){ try{ var ym=mrPrevMonth(mon); if(!mrHasData(mrStats(ym)))return ''; return mrText(ym,true); }catch(e){ return ''; } }
 
 // ═══════════════════════════════════════════════════════════
 // LERNPLAN-MODUL — Fach → Thema → Etappe → Checkpoints (D.lp). Ersetzt den alten Themenplan.
