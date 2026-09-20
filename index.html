@@ -10625,6 +10625,79 @@ ckAgenda=function(){
 };
 
 // ═══════════════════════════════════════════════════════════
+// PPL-LERNPLAN: offene PPL-Module sind Fächer im Lernplan (Themen, Etappen, Planung, ✦-Vorschläge, Prüfungsdatum)
+// ═══════════════════════════════════════════════════════════
+var PP_PRE='PPL · ';
+function ppMods(){ return (D.ppl&&Array.isArray(D.ppl.module))?D.ppl.module:[]; }
+function ppName(m){ return PP_PRE+m.name; }
+function ppRegister(){ ppMods().forEach(function(m){ var n=ppName(m); if((m.status!=='bestanden'||lpFach(n,false))&&ALL_FAECHER.indexOf(n)<0)ALL_FAECHER.push(n); }); }
+function ppActivate(m){
+  ppRegister(); var L=lpEnsure(), n=ppName(m), cur=lpAktiveFaecher().slice(); if(cur.indexOf(n)<0)cur.push(n);
+  L.settings.aktiveFaecher=ALL_FAECHER.filter(function(x){return cur.indexOf(x)>=0;}); lpFach(n,true);
+  ppSync(); ppMigrateLegacy(m); saveD();
+}
+// Alte PPL-Aufgabenlisten (D.ppl.lernplan) als Themen übernehmen; die Originale bleiben als «migriert»
+function ppMigrateLegacy(m){
+  var L=lpEnsure(), f=lpFach(ppName(m),true), n=0;
+  (D.ppl.lernplan||[]).forEach(function(t){
+    if(t.modul!==m.name||t.migriert)return; t.migriert=true;
+    if(t.status==='Erledigt')return; var id='pplt:'+t.id; if(L.themen.some(function(x){return x.id===id;}))return;
+    var maxR=L.themen.filter(function(x){return x.fachId===f.id;}).reduce(function(a,x){return Math.max(a,x.reihenfolge||0);},0);
+    L.themen.push({id:id,fachId:f.id,name:t.thema,modus:'konzept',minimum:'Thema verstanden und Aufgaben gelöst',aufwandMin:0,meilenstein:t.bis||'',reihenfolge:maxR+1,ts:Date.now()}); n++;
+  });
+  return n;
+}
+// Prüfungsdatum: Fach ↔ PPL-Modul in beide Richtungen (die zuletzt geänderte Seite gewinnt)
+function ppSync(){
+  var ch=false;
+  ppMods().forEach(function(m){
+    if(m.status==='bestanden')return; var f=lpFach(ppName(m),!!m.pruefDatum); if(!f)return;
+    var known=m.pdKnown||'', mv=m.pruefDatum||'', fv=f.pruefung||'';
+    if(fv!==known&&fv!==mv){ m.pruefDatum=fv; m.pdKnown=fv; ch=true; }
+    else if(mv!==fv){ f.pruefung=mv; lpTouch(f); m.pdKnown=mv; ch=true; }
+    else if(known!==fv){ m.pdKnown=fv; ch=true; }
+  });
+  (D.deadlines||[]).forEach(function(d){ if(String(d.id).indexOf('ppl-')===0&&!d.migriert){ d.migriert=true; d.updatedAt=Date.now(); ch=true; } });
+  if(ch)saveD(); return ch;
+}
+syncPplDeadline=function(){ /* Prüfungsdatum lebt jetzt im Fach (Lernplan); ppSync hält beide Seiten gleich */ };
+var _exSync_pp=exSync; exSync=function(){ var r=_exSync_pp(); try{ ppSync(); }catch(e){} return r; };
+
+function ppBox(m){
+  var n=ppName(m), f=lpFach(n,false), themen=f?lpThemenOf(f.id):[], et=0, done=0;
+  themen.forEach(function(t){ var l=lpEtappenOf(t.id); et+=l.length; done+=l.filter(function(e){return e.erledigt;}).length; });
+  var akt=lpAktiveFaecher().indexOf(n)>=0;
+  return '<div class="lp"><div class="lp-inner" style="margin-bottom:8px"><div class="lp-cap" style="margin-bottom:4px">LERNPLAN</div>'
+    +'<div class="lp-mu" style="font-size:12px;margin-bottom:8px">'+(themen.length?themen.length+(themen.length===1?' Thema':' Themen')+' · '+done+' von '+et+' Etappen erledigt'+(akt?'':' · im Lernplan pausiert'):'Noch kein Lernplan. Lege Themen und Etappen an, dann plant Study OS Lernblöcke (✦) bis zur Prüfung.')+'</div>'
+    +'<button type="button" class="lp-btn fill" data-pp="open" data-name="'+lpEsc(m.name)+'">'+(themen.length?'Lernplan öffnen':'Lernplan anlegen')+'</button></div></div>';
+}
+var _renderPPL_pp=renderPPL;
+renderPPL=function(){
+  try{ ppRegister(); ppSync(); }catch(e){}
+  _renderPPL_pp();
+  try{
+    var open=document.getElementById('ppl-open-modules'); if(!open)return; var mods=ppMods().filter(function(m){return m.status!=='bestanden';});
+    Array.prototype.forEach.call(open.querySelectorAll(':scope > .card'),function(card,i){
+      var m=mods[i]; if(!m)return; var t=card.querySelector('[id^="ppl-tasks-"]'), add=card.querySelector('.add-row');
+      if(t)t.style.display='none'; if(add)add.style.display='none';
+      var old=card.querySelector('.pp-box'); if(old)old.remove();
+      var b=document.createElement('div'); b.className='pp-box'; b.innerHTML=ppBox(m); card.appendChild(b);
+      var ds=card.querySelector('.ppl-datum'); if(ds&&ds.previousElementSibling==null&&false){}
+    });
+  }catch(e){}
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-pp]'); if(!el)return; ev.preventDefault();
+  if(el.getAttribute('data-pp')==='open'){
+    var m=ppMods().find(function(x){return x.name===el.getAttribute('data-name');}); if(!m)return;
+    ppActivate(m); goSec('lernplan');
+    var n=ppName(m), f=lpFach(n,false); if(!f||!lpThemenOf(f.id).length){ LP_UI.formThema=n; }
+    try{ lpRender(); }catch(e){}
+  }
+});
+function ppInit(){ try{ ppRegister(); ppSync(); }catch(e){} }
+
+// ═══════════════════════════════════════════════════════════
 // LERNPLAN-MODUL — Fach → Thema → Etappe → Checkpoints (D.lp). Ersetzt den alten Themenplan.
 // Der Timer-Status liegt bewusst NICHT in D, sondern in localStorage 'sos_lp_timer': ein laufender
 // Timer darf nie per Cloud-Sync auf ein anderes Gerät gelangen. Jede änderbare Entität trägt ein
@@ -15880,6 +15953,7 @@ cl2Init();
 pdInit();
 pwInit();
 exInit();
+ppInit();
 
 // Auto-refresh Scores und LivCounter
 setInterval(function(){renderLivCounter();renderDayTimer();renderFocus();},60000);
