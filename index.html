@@ -10164,6 +10164,21 @@ function pwSyncSchedule(force){
   },force?200:20000);
 }
 function pwU8(b64){ var s=(b64+'===='.slice(0,(4-b64.length%4)%4)).replace(/-/g,'+').replace(/_/g,'/'), r=atob(s), a=new Uint8Array(r.length); for(var i=0;i<r.length;i++)a[i]=r.charCodeAt(i); return a; }
+async function pwMissingFiles(){
+  var list=['sw.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/apple-touch-icon.png'], miss=[];
+  for(var i=0;i<list.length;i++){ try{ var r=await fetch(list[i],{method:'HEAD',cache:'no-store'}); if(!r.ok)miss.push(list[i]); }catch(e){ miss.push(list[i]); } }
+  return miss;
+}
+function pwWaitActive(reg){
+  return new Promise(function(resolve,reject){
+    var done=false, tm, fin=function(f,v){ if(done)return; done=true; clearTimeout(tm); f(v); };
+    tm=setTimeout(async function(){ var m=await pwMissingFiles(); fin(reject,new Error('Der Service Worker wird nicht aktiv'+(m.length?'. Auf GitHub fehlen: '+m.join(', '):' (Zustand: '+(reg.installing?'installing':reg.waiting?'waiting':reg.active?'active':'unbekannt')+')')+'.')); },12000);
+    var watch=function(w){ if(!w)return false; if(w.state==='activated'){ fin(resolve,reg); return true; } w.addEventListener('statechange',async function(){ if(w.state==='activated')fin(resolve,reg); else if(w.state==='redundant'){ var m=await pwMissingFiles(); fin(reject,new Error('Die Installation des Service Workers ist fehlgeschlagen'+(m.length?'. Auf GitHub fehlen: '+m.join(', '):' (sw.js prüfen)')+'.')); } }); return true; };
+    if(reg.active&&reg.active.state==='activated'){ fin(resolve,reg); return; }
+    watch(reg.installing||reg.waiting||reg.active);
+    navigator.serviceWorker.ready.then(function(r){ fin(resolve,r); });
+  });
+}
 function pwTimeout(p,ms,what){ return Promise.race([p,new Promise(function(_,rej){ setTimeout(function(){ rej(new Error(what+' antwortet nicht (Zeitüberschreitung).')); },ms); })]); }
 async function pwEnable(){
   var w=pwWorker(), step=function(s){ PW.msg=s; pwRenderHg(); };
@@ -10177,7 +10192,7 @@ async function pwEnable(){
     step('2/4 Service Worker …');
     var reg=await navigator.serviceWorker.getRegistration();
     if(!reg){ try{ reg=await navigator.serviceWorker.register('sw.js'); }catch(e){ throw new Error('sw.js konnte nicht geladen werden ('+((e&&e.message)||e)+'). Ist die Datei sw.js im selben Ordner wie index.html hochgeladen?'); } }
-    reg=await pwTimeout(navigator.serviceWorker.ready,10000,'Der Service Worker (Datei sw.js vorhanden und hochgeladen?)');
+    reg=await pwWaitActive(reg);
     step('3/4 Worker verbinden …');
     var vr; try{ vr=await pwTimeout(fetch(w+'/vapid'),12000,'Der Worker'); }catch(e){ throw new Error('Worker nicht erreichbar oder blockiert: '+((e&&e.message)||e)+' Prüfe die Adresse und ALLOWED_ORIGIN ('+location.origin+').'); }
     if(!vr.ok)throw new Error('Worker antwortet mit '+vr.status+(vr.status===403?' — ALLOWED_ORIGIN im Worker muss genau '+location.origin+' lauten.':'.'));
@@ -10196,6 +10211,7 @@ async function pwDisable(){
   localStorage.removeItem('sos_push_on'); localStorage.removeItem('sos_push_hash'); PW.msg='Auf diesem Gerät ausgeschaltet.'; pwRenderHg();
 }
 async function pwTest(){
+  if(localStorage.getItem('sos_push_on')!=='1'){ PW.msg='Für den Test muss dieses Gerät zuerst aktiviert sein («Auf diesem Gerät aktivieren»).'; return pwRenderHg(); }
   try{ var r=await fetch(pwWorker()+'/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:pwId()})}), j=await r.json(); PW.msg=(j.result==='ok')?'Test gesendet — die Meldung sollte gleich erscheinen.':(j.error?'Fehler: '+j.error:'Ergebnis: '+j.result); }catch(e){ PW.msg='Worker nicht erreichbar.'; }
   pwRenderHg();
 }
@@ -10215,8 +10231,8 @@ function hgPushInner(){
     +'<div class="hg-ln"><span>Adresse des Workers</span><span class="lp-row" style="gap:6px;flex:1;justify-content:flex-end"><input class="lp-in lp-mono" id="pw-worker" placeholder="https://studyos-push.NAME.workers.dev" value="'+lpEsc(w)+'" style="flex:1;min-width:180px;max-width:320px"><button type="button" class="lp-btn gray" data-pw="worker-save">Speichern</button></span></div>'
     +'<div class="hg-ln"><span>Erlaubte Seite (im Worker als <span class="lp-mono">ALLOWED_ORIGIN</span> eintragen)</span><span class="lp-mono lp-mu" style="word-break:break-all;text-align:right;font-size:11px">'+lpEsc(location.origin)+'</span></div>'
     +'<div class="hg-ln"><span>Dieses Gerät</span><span class="lp-mono lp-mu">'+lpEsc(pwStatusText())+'</span></div>'
-    +'<div class="hg-ln"><span>Service Worker (sw.js)</span><span class="lp-mono lp-mu" style="text-align:right;font-size:11px">'+lpEsc(!('serviceWorker' in navigator)?'nicht unterstützt':PW.swErr?'Fehler: '+PW.swErr:(PW.reg?'registriert':'wird geladen …'))+'</span></div>'
-    +'<div class="lp-row" style="flex-wrap:wrap;margin-top:8px">'+(on?'<button type="button" class="lp-btn fill" data-pw="test">Test senden</button><button type="button" class="lp-btn gray" data-pw="disable">Auf diesem Gerät ausschalten</button>':'<button type="button" class="lp-btn fill" data-pw="enable">Auf diesem Gerät aktivieren</button>')+'</div>'
+    +'<div class="hg-ln"><span>Service Worker (sw.js)</span><span class="lp-mono lp-mu" style="text-align:right;font-size:11px">'+lpEsc(!('serviceWorker' in navigator)?'nicht unterstützt':PW.swErr?'Fehler: '+PW.swErr:(PW.reg?(PW.reg.active?'aktiv':PW.reg.installing?'wird installiert …':PW.reg.waiting?'wartet …':'registriert'):'wird geladen …'))+'</span></div>'
+    +'<div class="lp-row" style="flex-wrap:wrap;margin-top:8px">'+(on?'<button type="button" class="lp-btn fill" data-pw="test">Test senden</button><button type="button" class="lp-btn gray" data-pw="disable">Auf diesem Gerät ausschalten</button>':'<button type="button" class="lp-btn fill" data-pw="enable">Auf diesem Gerät aktivieren</button><button type="button" class="lp-btn gray" data-pw="test">Test senden</button>')+'</div>'
     +(PW.msg?'<div class="lp-mu" style="margin-top:8px;font-size:12px">'+lpEsc(PW.msg)+'</div>':'')+'</div>'
     +'<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">WAS ERINNERT DICH</div>'
     +pwRow('tagesabschluss','Tagesabschluss',pwTimeIn('tagesabschluss','zeit',R.tagesabschluss.zeit))
