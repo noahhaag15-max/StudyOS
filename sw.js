@@ -1,5 +1,5 @@
 /* Study OS — Service Worker: App-Shell offline, Push-Erinnerungen. Daten bleiben lokal (localStorage). */
-const VERSION = '2026-09-21-1';
+const VERSION = '2026-09-21-2';
 const SHELL_CACHE = 'studyos-shell-' + VERSION;
 const RUNTIME_CACHE = 'studyos-runtime';
 const CONFIG_CACHE = 'studyos-config';
@@ -7,7 +7,8 @@ const SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon-192
 
 self.addEventListener('install', (e) => {
   // Kein skipWaiting: die Seite entscheidet über das Update (nie mitten in einer Eingabe).
-  e.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL)));
+  // Fehlende Einzeldateien (z. B. ein nicht hochgeladenes Icon) dürfen die Installation nicht verhindern.
+  e.waitUntil(caches.open(SHELL_CACHE).then((c) => Promise.all(SHELL.map((u) => c.add(u).catch(() => null)))));
 });
 self.addEventListener('message', (e) => { if (e.data === 'SKIP_WAITING') self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
