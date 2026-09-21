@@ -1849,7 +1849,7 @@ select, input[type="text"], input[type="date"], input[type="datetime-local"], in
 .ck-pill { display: flex; align-items: center; gap: 8px; background: var(--lp-bg); border: 1px solid var(--lp-border); border-radius: 99px; padding: 6px 12px; }
 .ck-pill.rang { border-color: color-mix(in srgb, var(--c-uni) 45%, transparent); padding: 5px 14px 5px 5px; cursor: pointer; }
 .ck-track { height: 12px; background: var(--lp-border); border-radius: 99px; margin-top: 6px; overflow: hidden; }
-.ck-track i { display: block; height: 100%; border-radius: 99px; }
+.ck-track i { display: block; height: 100%; border-radius: 99px; background: var(--c-accent); }
 .ck-win { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; background: color-mix(in srgb, var(--c-ok) 10%, transparent); color: var(--c-ok); border: 1px solid color-mix(in srgb, var(--c-ok) 35%, transparent); border-radius: 99px; padding: 3px 10px; }
 .ck-go { font-family: var(--sans); background: var(--c-accent); color: var(--lp-bg); border: none; border-radius: 99px; padding: 9px 18px; font-size: 12px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .ck-go:hover { opacity: .88; }
@@ -4334,6 +4334,7 @@ function buche(o){
   var id=o.id||uid()+Date.now().toString(36);
   var e={id:id,ts:Date.now(),datum:datum,xp:xp,meilen:mi,text:o.text||'',quelle:o.quelle||'auto',gruppe:o.gruppe||''};
   var i=D.buchungen.findIndex(function(b){return b.id===id;});
+  if(i>=0&&o.still){ var q=D.buchungen[i]; if(q.xp===xp&&q.meilen===mi&&q.text===e.text&&q.datum===datum&&(q.gruppe||'')===e.gruppe)return q; }
   if(i>=0)D.buchungen[i]=e; else D.buchungen.push(e);
   saveD(); spielCheckRang();
   return e;
@@ -4458,24 +4459,24 @@ function spielTagesbilanz(date){
   var xp=0, mi=0; L.forEach(function(l){ if(l.einheit==='XP'){ xp+=l.betrag; mi+=l.betrag; } else mi+=l.betrag; });
   return {zeilen:L,xp:xp,meilen:mi,abschluss:ab,counts:c,faktor:f,geschlossen:closed};
 }
-function spielBucheTag(date){
-  var S=spielEnsure(), b=spielTagesbilanz(date), keys=(S.tage[date]&&S.tage[date].keys)||[], neu=[];
+// XP und Meilen werden laufend über den Tag gebucht; der Tagesabschluss gibt am Ende den Abschluss-Bonus obendrauf.
+function spielBucheTag(date,abschluss){
+  var S=spielEnsure(), b=spielTagesbilanz(date), old=S.tage[date], keys=(old&&old.keys)||[], neu=[];
   b.zeilen.forEach(function(l){
-    buche({id:'tag:'+date+':'+l.k,betrag:l.betrag,einheit:l.einheit,text:l.label,datum:date,quelle:'auto',gruppe:l.gruppe}); neu.push(l.k);
+    buche({id:'tag:'+date+':'+l.k,betrag:l.betrag,einheit:l.einheit,text:l.label,datum:date,quelle:'auto',gruppe:l.gruppe,still:true}); neu.push(l.k);
   });
-  keys.forEach(function(k){ if(neu.indexOf(k)<0)buche({id:'tag:'+date+':'+k,betrag:0,einheit:'XP',text:'(entfallen)',datum:date,quelle:'auto'}); });
-  buche({id:'tag:'+date+':abschluss',betrag:b.abschluss,einheit:'XP',text:'Tagesabschluss',datum:date,quelle:'auto',gruppe:'Rhythmus'});
-  neu.push('abschluss');
-  S.tage[date]=Object.assign(S.tage[date]||{},{keys:neu});
+  keys.forEach(function(k){ if(neu.indexOf(k)<0&&k!=='abschluss')buche({id:'tag:'+date+':'+k,betrag:0,einheit:'XP',text:'(entfallen)',datum:date,quelle:'auto',still:true}); });
+  if(abschluss||(old&&old.ts)){ buche({id:'tag:'+date+':abschluss',betrag:b.abschluss,einheit:'XP',text:'Tagesabschluss',datum:date,quelle:'auto',gruppe:'Rhythmus',still:true}); neu.push('abschluss'); }
+  if(neu.length||old)S.tage[date]=Object.assign(old||{},{keys:neu});
 }
 function spielTagAbschliessen(date){
   var S=spielEnsure();
-  spielBucheTag(date);
+  spielBucheTag(date,true);
   S.tage[date].ts=Date.now();
   var st=spielStreak(date); if(st>(S.rekord||0))S.rekord=st;
   saveD(); spielCheckRang(); spielCheckAbzeichen();
 }
-function spielRebuche(date){ var S=spielEnsure(); if(S.tage[date]&&S.tage[date].ts)spielBucheTag(date); }
+function spielRebuche(date){ var st=spielStart(); if(!date||(st&&date<st)||date>today())return; spielBucheTag(date); }
 
 // ── Sync-Merge (aus safeMergeD) ──
 function spielMergeIncoming(inc){
@@ -4523,7 +4524,7 @@ function renderLounge(){
   var rows=D.buchungen.filter(function(b){return b.datum>=mon&&b.datum<=end&&(b.xp||b.meilen);}).sort(function(a,b){return (b.datum>a.datum?1:b.datum<a.datum?-1:0)||(b.ts-a.ts);});
   h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:8px;flex-wrap:wrap"><span class="lp-cap">MEILEN-JOURNAL</span>'
     +'<div class="lp-row lp-mu"><button type="button" class="lp-x" data-sos="jr-nav" data-n="-1">‹</button><span class="lp-mono">'+lpFmtShort(mon)+' – '+lpFmtShort(end)+'</span><button type="button" class="lp-x" data-sos="jr-nav" data-n="1">›</button></div></div>';
-  if(!rows.length)h+='<div class="lp-mu">Keine Buchungen in dieser Woche. Automatische Buchungen entstehen beim Tagesabschluss.</div>';
+  if(!rows.length)h+='<div class="lp-mu">Keine Buchungen in dieser Woche. Automatische Buchungen entstehen laufend über den Tag, der Tagesabschluss gibt am Ende einen Bonus.</div>';
   rows.forEach(function(b){
     var q=b.quelle==='debriefing'?'<i class="ti ti-message-circle" title="Debriefing"></i> ':'';
     h+='<div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:12px">'+q+lpEsc(b.text)+'</div><div class="lp-mu lp-mono">'+lpFmt(b.datum)+' · '+lpEsc(b.quelle==='auto'?'automatisch':b.quelle==='einloesung'?'Einlösung':b.quelle)+'</div></div>'
@@ -4962,7 +4963,7 @@ function wpAction(a,el){
     case 'ta-fin':
       var d=WP_TA.date, bil=spielTagesbilanz(d);
       spielTagAbschliessen(d); wpTaClose(); wpRender();
-      var netto=bil.meilen+bil.abschluss; showToast('Tag abgeschlossen ✓  '+(netto>=0?'+':'')+netto+' Meilen','ok');
+      var netto=bil.meilen+bil.abschluss; showToast('Tag abgeschlossen ✓  +'+bil.abschluss+' obendrauf · Tag gesamt '+(netto>=0?'+':'')+netto+' Meilen','ok');
       if(document.getElementById('sec-lounge').style.display!=='none')renderLounge(); return;
     case 'ed-close': return wpEditorClose();
     case 'ed-save': return wpEditorSave();
@@ -5800,7 +5801,7 @@ function ckToggleTask(id){
   if(b){ b.status=nun?'ok':'offen'; lpTouch(b); }
   saveD(); if(b)spielRebuche(b.tag); spielRebuche(today());
   ckRender(); try{ wpRenderBacklog(); }catch(e){}
-  if(nun)showToast('Aufgabe erledigt ✓ +'+punkteAt(today()).wochenaufgabe+' XP beim Tagesabschluss','ok');
+  if(nun)showToast('Aufgabe erledigt ✓ +'+punkteAt(today()).wochenaufgabe+' XP','ok');
 }
 
 // ── Schnellerfassen + Inbox ──
@@ -6594,7 +6595,7 @@ function vsHabitsOffen(){
 function vsRender(){
   var root=document.getElementById('vs-root'); if(!root)return; vsEnsure();
   var l=D.vorsaetze, off=vsHabitsOffen();
-  var h='<div class="lp-row" style="justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px"><div><div class="lp-cap">VORSÄTZE</div><div class="lp-mu" style="font-size:12px">Eigene Ziele mit Meilen pro Mal. Verbucht wird beim Tagesabschluss, nie mit Abzug.</div></div><button type="button" class="lp-btn fill" data-vs="new"><i class="ti ti-plus"></i> Neuer Vorsatz</button></div>';
+  var h='<div class="lp-row" style="justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px"><div><div class="lp-cap">VORSÄTZE</div><div class="lp-mu" style="font-size:12px">Eigene Ziele mit Meilen pro Mal. Verbucht wird laufend über den Tag, nie mit Abzug.</div></div><button type="button" class="lp-btn fill" data-vs="new"><i class="ti ti-plus"></i> Neuer Vorsatz</button></div>';
   if(!l.length)h+='<div class="lp-cd lp-mu">Noch keine Vorsätze. Über «Neuer Vorsatz» oder den + Knopf unten rechts anlegen.</div>';
   else h+='<div class="vs-grid">'+l.map(vsCardHTML).join('')+'</div>';
   var dr=(D.inbox||[]).filter(function(x){return x.typVorschlag==='vorsatz';});
@@ -6975,7 +6976,7 @@ function renderLounge(){
   var rows=D.buchungen.filter(function(b){return b.datum>=mon&&b.datum<=end&&(b.xp||b.meilen);}).sort(function(a,b){return (b.datum>a.datum?1:b.datum<a.datum?-1:0)||(b.ts-a.ts);});
   h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px"><span class="lp-cap">MEILEN-JOURNAL</span>'
     +'<div class="lp-row lp-mu"><button type="button" class="lp-x" data-sos="jr-nav" data-n="-1">‹</button><span class="lp-mono">'+lpFmtShort(mon)+' – '+lpFmtShort(end)+'</span><button type="button" class="lp-x" data-sos="jr-nav" data-n="1">›</button></div></div>';
-  if(!rows.length)h+='<div class="lp-mu">Keine Buchungen in dieser Woche. Automatische Buchungen entstehen beim Tagesabschluss.</div>';
+  if(!rows.length)h+='<div class="lp-mu">Keine Buchungen in dieser Woche. Automatische Buchungen entstehen laufend über den Tag, der Tagesabschluss gibt am Ende einen Bonus.</div>';
   rows.forEach(function(b){
     var q=b.quelle==='debriefing'?'<i class="ti ti-message-circle" title="Debriefing"></i> ':b.quelle==='einloesung'?'<i class="ti ti-star" title="Einlösung"></i> ':'';
     h+='<div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:12px">'+q+lpEsc(b.text)+'</div><div class="lp-mu lp-mono">'+lpFmt(b.datum)+' · '+lpEsc(b.quelle==='auto'?'automatisch':b.quelle==='einloesung'?'Einlösung':b.quelle)+'</div></div>'
@@ -8079,7 +8080,7 @@ function entRender(){
     fav.innerHTML=h;
   }
 }
-document.addEventListener('click',function(ev){ var b=ev.target.closest&&ev.target.closest('[data-ent]'); if(!b)return; ENT_UI.tab=b.getAttribute('data-ent'); entRender(); });
+document.addEventListener('click',function(ev){ var b=ev.target.closest&&ev.target.closest('.ent-tabs [data-ent]'); if(!b)return; ENT_UI.tab=b.getAttribute('data-ent'); entRender(); });
 var _renderFussball_p8=renderFussball; renderFussball=function(){ _renderFussball_p8(); try{ if(document.getElementById('ent-fav'))entRender(); }catch(e){} };
 var _renderNfl_p8=renderNfl; renderNfl=function(){ _renderNfl_p8(); try{ if(document.getElementById('ent-fav'))entRender(); }catch(e){} };
 
@@ -9457,16 +9458,26 @@ function clArbeitFix(){
   var root=document.getElementById('arb-root'); if(!root)return;
   Array.prototype.forEach.call(root.querySelectorAll('.ar-two'),function(e){ e.style.display='none'; });
   var host=document.getElementById('cl-arb-tasks');
-  if(!host){ host=document.createElement('div'); host.id='cl-arb-tasks'; var anchor=root.querySelector('.ar-dienste')||root.querySelector('#arb-dienste'); if(anchor&&anchor.parentNode)anchor.parentNode.insertBefore(host,anchor); else root.appendChild(host); }
+  if(!host){ host=document.createElement('div'); host.id='cl-arb-tasks'; var anchor=root.querySelector('.ar-wichtig'); if(anchor&&anchor.parentNode){ host.style.marginTop='12px'; anchor.parentNode.insertBefore(host,anchor.nextSibling); } else root.appendChild(host); }
   var td=today(), tasks=clTasks().filter(function(t){return clBer(t)==='arbeit';});
-  var open=tasks.filter(function(t){return !ckTaskDone(t);}).sort(function(a,b){return (clDate(a)||'9999')>(clDate(b)||'9999')?1:-1;}), done=tasks.length-open.length;
-  var h='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:8px"><span class="lp-cap">AUFGABEN · ARBEIT</span><span class="lp-mu" style="cursor:pointer;font-size:11px" data-sos="tab" data-tab="aufgaben">Backlog öffnen</span></div>';
-  if(!open.length)h+='<div class="lp-mu" style="font-size:12px;margin-bottom:8px">Keine offenen Aufgaben.'+(done?' ('+done+' erledigt)':'')+'</div>';
-  open.slice(0,12).forEach(function(t){ var d=clDate(t); h+='<div class="hg-ln cl-tk"><button type="button" class="ck-box" data-cl="toggle-arb" data-id="'+lpEsc(t.id)+'" aria-label="abhaken"></button><span style="flex:1;min-width:0;font-size:13px">'+lpEsc(t.name)+'</span>'+(d?'<span class="lp-mono lp-mu" style="font-size:10px">'+lpEsc(lpFmtShort(d))+'</span>':'')+'</div>'; });
-  if(open.length>12)h+='<div class="lp-mu" style="font-size:11px">+'+(open.length-12)+' weitere im Backlog</div>';
-  h+='<div class="lp-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><input class="lp-in" id="cl-ar-name" placeholder="Neue Arbeitsaufgabe …" style="flex:1;min-width:160px" data-clenter="add-arb"><input class="lp-in lp-mono" type="date" id="cl-ar-date"><button type="button" class="lp-btn fill" data-cl="add-arb">+</button></div></div>';
+  var open=tasks.filter(function(t){return !ckTaskDone(t);}).sort(function(a,b){return (clDate(a)||'9999')>(clDate(b)||'9999')?1:-1;});
+  var doneL=tasks.filter(function(t){return ckTaskDone(t);}).sort(function(a,b){return (b.erledigtAm||'')>(a.erledigtAm||'')?1:-1;});
+  var row=function(t,dn){ var d=clDate(t), id=lpEsc(t.id);
+    return '<div class="hg-ln cl-tk'+(dn?' done':'')+'"><button type="button" class="ck-box'+(dn?' on':'')+'" data-cl="toggle-arb" data-id="'+id+'" aria-label="'+(dn?'wieder öffnen':'abhaken')+'"></button>'
+      +'<div style="min-width:0;flex:1"><div style="font-size:13px;word-break:break-word">'+lpEsc(t.name||'(ohne Titel)')+'</div>'+(t.notizen?'<div class="lp-mu" style="font-size:10px;word-break:break-word">'+lpEsc(t.notizen)+'</div>':'')+'</div>'
+      +(d?'<span class="lp-mono lp-mu" style="font-size:10px">'+lpEsc(lpFmtShort(d))+'</span>':'')
+      +'<button type="button" class="lp-x" data-cl="edit" data-id="'+id+'" aria-label="bearbeiten"><i class="ti ti-pencil"></i></button><button type="button" class="lp-x" data-cl="del" data-id="'+id+'" aria-label="löschen">×</button></div>'; };
+  var h='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:8px"><span class="lp-cap">AUFGABEN &amp; PENDENZEN · ARBEIT</span><span class="lp-mu" style="cursor:pointer;font-size:11px" data-sos="tab" data-tab="aufgaben">Backlog öffnen</span></div>';
+  if(!open.length)h+='<div class="lp-mu" style="font-size:12px;margin-bottom:8px">Keine offenen Aufgaben.</div>';
+  open.forEach(function(t){ h+=row(t,false); });
+  h+='<div class="lp-row" style="gap:8px;flex-wrap:wrap;margin-top:8px"><input class="lp-in" id="cl-ar-name" placeholder="Neue Arbeitsaufgabe …" style="flex:1;min-width:160px" data-clenter="add-arb"><input class="lp-in lp-mono" type="date" id="cl-ar-date"><button type="button" class="lp-btn fill" data-cl="add-arb">+</button></div>'
+    +(doneL.length?'<details data-ab-done style="margin-top:10px"'+(CL.abDone?' open':'')+'><summary class="lp-mu" style="cursor:pointer;font-size:12px">'+doneL.length+' erledigt anzeigen</summary>'+doneL.slice(0,40).map(function(t){ return row(t,true); }).join('')+'</details>':'')+'</div>';
   host.innerHTML=h;
 }
+document.addEventListener('toggle',function(ev){ var d=ev.target; if(d&&d.hasAttribute&&d.hasAttribute('data-ab-done'))CL.abDone=d.open; },true);
+// Nach Bearbeiten, Löschen, Rückgängig usw. die Arbeitsliste neu zeichnen
+var _ckRender_ab=ckRender;
+ckRender=function(){ var r=_ckRender_ab.apply(this,arguments); try{ if(document.getElementById('cl-arb-tasks'))clArbeitFix(); }catch(e){} return r; };
 var _renderArbeit_cl=renderArbeit;
 renderArbeit=function(){ _renderArbeit_cl(); try{ clArbeitFix(); }catch(e){} };
 var _clAction_base=clAction;
@@ -9554,7 +9565,7 @@ loBadgesHTML=function(){
   } else h+='<div class="lp-mu" style="margin-bottom:8px">Noch keine Trophäen — die ersten sind nah:</div>';
   if(cand.length){
     h+='<div class="lp-cap" style="margin:12px 0 6px">NÄCHSTE ZIELE</div>';
-    cand.slice(0,3).forEach(function(c){ h+='<div class="lp-inner" style="margin-bottom:6px"><div class="lp-row" style="justify-content:space-between;gap:8px"><span style="font-size:13px"><i class="ti ti-'+lpEsc(c.b.icon||'medal')+'"></i> '+lpEsc(c.b.name)+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+fmtCH(Math.round(c.v))+' / '+fmtCH(c.need)+'</span></div><div class="lp-mu" style="font-size:11px">'+lpEsc(c.b.beschr||'')+'</div><div class="ck-track" style="height:6px;margin-top:4px"><i style="width:'+Math.round(c.r*100)+'%"></i></div></div>'; });
+    cand.slice(0,3).forEach(function(c){ h+='<div class="lp-inner" style="margin-bottom:6px"><div class="lp-row" style="justify-content:space-between;gap:8px"><span style="font-size:13px"><i class="ti ti-'+lpEsc(c.b.icon||'medal')+'"></i> '+lpEsc(c.b.name)+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+fmtCH(Math.round(c.v))+' / '+fmtCH(c.need)+'</span></div><div class="lp-mu" style="font-size:11px">'+lpEsc(c.b.beschr||'')+'</div><div class="ck-track" style="height:6px;margin-top:4px"><i style="width:'+Math.round(c.r*100)+'%;background:#ffd54a"></i></div></div>'; });
   }
   h+='<details id="cl-all-badges" style="margin-top:10px"><summary class="lp-mu" style="cursor:pointer;font-size:12px">Alle Abzeichen anzeigen</summary><div style="margin-top:8px">'+_loBadgesHTML_cl()+'</div></details>';
   return h;
@@ -10800,15 +10811,15 @@ icsFile=function(file){
 
 
 // ═══════════════════════════════════════════════════════════
-// SPIELANZEIGE: XP/Meilen-Vorschau im Cockpit («wird beim Tagesabschluss gutgeschrieben») + Trophäen nach Datenänderungen prüfen
+// SPIELANZEIGE: XP/Meilen laufend über den Tag im Cockpit + Trophäen und Tagesbuchung nach Datenänderungen prüfen
 // ═══════════════════════════════════════════════════════════
 var _ckHeaderHTML_tk=ckHeaderHTML;
 ckHeaderHTML=function(){
   var h=_ckHeaderHTML_tk.apply(this,arguments);
   try{
     var re=/<span class="lp-mono" style="font-size:11px;color:var\(--c-ok\)">\+\d+ XP<\/span>/; if(!h||!re.test(h))return h;
-    var td=today(), bil=spielTagesbilanz(td), S=spielEnsure(), closed=!!(S.tage[td]&&S.tage[td].ts), xp=Math.max(0,bil.xp), mi=bil.meilen, ab=bil.abschluss||0;
-    var cap=closed?'gutgeschrieben ✓':'Vorschau · wird beim Tagesabschluss gutgeschrieben'+(ab?' (+'+ab+' für den Abschluss)':'');
+    var td=today(), bil=spielTagesbilanz(td), S=spielEnsure(), closed=!!(S.tage[td]&&S.tage[td].ts), ab=bil.abschluss||0, xp=Math.max(0,bil.xp)+(closed?ab:0), mi=bil.meilen+(closed?ab:0);
+    var cap=closed?'Tag abgeschlossen ✓':'gutgeschrieben · der Tagesabschluss gibt am Ende +'+ab+' obendrauf';
     return h.replace(re,'<span style="display:block;text-align:right"><span class="lp-mono" style="font-size:11px"><span style="color:var(--c-ok)">+'+xp+' XP</span> <span class="lp-mu">·</span> <span style="color:'+(mi>0?'var(--c-ok)':'var(--lp-muted)')+'">'+(mi>0?'+':'')+mi+' Meilen</span></span>'
       +'<span class="lp-mu" style="display:block;font-size:10px;margin-top:2px">'+cap+'</span></span>');
   }catch(e){ return h; }
@@ -10819,6 +10830,7 @@ var TK={t:0,last:0,busy:false};
 function tkRun(){
   TK.t=0; if(TK.busy||spielVorStart())return;
   TK.busy=true; TK.last=Date.now();
+  try{ spielRebuche(today()); }catch(e){}
   try{ spielCheckAbzeichen(); }catch(e){}
   TK.busy=false;
 }
