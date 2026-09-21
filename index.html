@@ -1850,6 +1850,8 @@ select, input[type="text"], input[type="date"], input[type="datetime-local"], in
 .ck-pill.rang { border-color: color-mix(in srgb, var(--c-uni) 45%, transparent); padding: 5px 14px 5px 5px; cursor: pointer; }
 .ck-track { height: 12px; background: var(--lp-border); border-radius: 99px; margin-top: 6px; overflow: hidden; }
 .ck-track i { display: block; height: 100%; border-radius: 99px; background: var(--c-accent); }
+.jz-lnk { background: none; border: 0; color: var(--lp-muted); font-size: 11px; text-decoration: underline; cursor: pointer; padding: 2px 0; font-family: inherit; }
+.jz-lnk:hover { color: var(--lp-text); }
 .ck-win { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; background: color-mix(in srgb, var(--c-ok) 10%, transparent); color: var(--c-ok); border: 1px solid color-mix(in srgb, var(--c-ok) 35%, transparent); border-radius: 99px; padding: 3px 10px; }
 .ck-go { font-family: var(--sans); background: var(--c-accent); color: var(--lp-bg); border: none; border-radius: 99px; padding: 9px 18px; font-size: 12px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .ck-go:hover { opacity: .88; }
@@ -3370,7 +3372,7 @@ var D = {
 // nichts, was nur lokal existiert, geht verloren. Einzige Ausnahme: bewusst lokal gelöschte
 // Einträge können durch einen älteren Snapshot wieder auftauchen — das ist der bewusste
 // Kompromiss (lieber ein Karteileichen-Eintrag zurück als echte Daten verloren).
-var MERGE_ARRAY_COLLECTIONS = ['spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
+var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
 // wplan & track sind hier bewusst NICHT drin — die brauchen einen ECHTEN Tiefen-Merge (siehe
 // mergeWplan/mergeTrack unten), weil ihre Werte pro Woche/Tag komplexe, häufig aktiv bearbeitete
 // Strukturen sind. Ein einfacher Object.assign auf oberster Ebene hätte (und hat!) eine ganze
@@ -5650,8 +5652,16 @@ function ckJetztHTML(){
       btn='<button type="button" class="ck-go" data-lpa="lm-start" data-id="'+lpEsc(e2.id)+'"><i class="ti ti-player-play"></i> Lernmodus starten</button>'; }
     else {
       sub=lpEsc(kat.name)+' · '+b.start+'–'+b.ende+' · <span style="color:var(--c-ok)">+'+P.block_ok+' XP</span>'+(c.laufend?'':' · <span class="lp-mono">'+(lpT2M(b.ende)<=ckNowMin()?'geplant ':'startet ')+b.start+'</span>');
-      btn=wpIsRoutine(b)?'<button type="button" class="ck-go" data-wp="ta-routine" data-id="'+lpEsc(b.id)+'"><i class="ti ti-list-check"></i> Routine abhaken</button>'
-        :'<button type="button" class="ck-go" data-ck="blk-done" data-id="'+lpEsc(b.id)+'"><i class="ti ti-check"></i> '+(wpNeedsData(b)?'Abschliessen':'Erledigt')+'</button>';
+      var isR=wpIsRoutine(b), bid=lpEsc(b.id), started=!!b.gestartet, gs=started?new Date(b.gestartet):null;
+      var doneBtn=isR?'<button type="button" class="ck-go" data-wp="ta-routine" data-id="'+bid+'"><i class="ti ti-list-check"></i> Routine abhaken</button>'
+        :'<button type="button" class="ck-go" data-ck="blk-done" data-id="'+bid+'"><i class="ti ti-check"></i> '+(wpNeedsData(b)?'Abschliessen':'Erledigt')+'</button>';
+      if(started){
+        sub+=' · <span class="lp-mono" style="color:var(--c-accent)">läuft seit '+wpM2T(gs.getHours()*60+gs.getMinutes())+'</span>';
+        btn=doneBtn+'<div style="margin-top:6px"><button type="button" class="jz-lnk" data-ck="blk-unstart" data-id="'+bid+'">doch nicht dran</button></div>';
+      } else {
+        btn='<button type="button" class="ck-go" data-ck="blk-start" data-id="'+bid+'"><i class="ti ti-player-play"></i> Ich bin dran</button>'
+          +'<div style="margin-top:6px"><button type="button" class="jz-lnk" '+(isR?'data-wp="ta-routine"':'data-ck="blk-done"')+' data-id="'+bid+'">schon erledigt?</button></div>';
+      }
     }
     h='<div class="lp-row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><div class="lp-cap">JETZT</div><div style="font-size:19px;font-weight:500;margin-top:5px"><i class="ck-dot" style="background:'+wpKatHex(kat)+'"></i>'+lpEsc(titel)+'</div><div class="lp-mu" style="margin-top:3px">'+sub+'</div></div>'
       +'<div style="text-align:right">'+btn+(c.danach?'<div class="lp-mu" style="margin-top:6px">danach: '+lpEsc(c.danach.start)+' '+lpEsc(c.danach.titel)+'</div>':'')+'</div></div>';
@@ -10840,6 +10850,145 @@ saveD=function(){
   try{ if(!TK.t&&!TK.busy&&spielStart())TK.t=setTimeout(tkRun,Math.max(1500,4000-(Date.now()-TK.last))); }catch(e){}
   return r;
 };
+
+// ═══════════════════════════════════════════════════════════
+// COCKPIT/ABSCHLUSS: «Ich bin dran» in der Jetzt-Karte, Rang-Übersicht (Klick auf den Rang), Snack-Kalorien im Tagesabschluss
+// ═══════════════════════════════════════════════════════════
+// Jetzt-Karte: erst «Ich bin dran» drücken, dann erscheint «Erledigt» (wirkt nur auf den Block, keine Punkte)
+var _ckAction_jz=ckAction;
+ckAction=function(a,el){
+  if(a==='blk-start'||a==='blk-unstart'){
+    var b=wpFind(el.getAttribute('data-id')); if(!b)return;
+    if(a==='blk-start')b.gestartet=Date.now(); else delete b.gestartet;
+    lpTouch(b); saveD(); return ckRender();
+  }
+  return _ckAction_jz.apply(this,arguments);
+};
+
+// Rang-Übersicht: alle Level, wo du stehst und was noch kommt
+function rkHTML(){
+  var R=spielRang(), S=spielEnsure(), hist={}; S.rangHistorie.forEach(function(x){ hist[x.rang]=x.datum; });
+  var h='<div class="lp-cap">RÄNGE</div><div style="font-size:20px;font-weight:500;margin:4px 0">'+lpEsc(R.name)+'</div>'
+    +'<div class="lp-mu lp-mono" style="font-size:12px">'+fmtCH(R.xp)+' XP'+(R.next?' · noch '+fmtCH(Math.max(0,R.next.xp-R.xp))+' bis «'+lpEsc(R.next.name)+'»':' · höchster Rang erreicht')+'</div>'
+    +'<div class="ck-track" style="height:8px;margin:10px 0 12px"><i style="width:'+Math.round(R.pct*100)+'%;background:var(--c-uni)"></i></div>';
+  R.liste.forEach(function(r,i){
+    var cur=i===R.idx, past=i<R.idx, rest=Math.max(0,r.xp-R.xp);
+    h+='<div class="lp-row rk-row'+(cur?' cur':'')+'" data-rk-cur="'+(cur?1:0)+'" style="justify-content:space-between;gap:8px;padding:7px 10px;border-radius:8px;margin-bottom:4px;'+(cur?'border:1px solid var(--c-uni);background:color-mix(in srgb,var(--c-uni) 12%,transparent)':'border:1px solid transparent')+'">'
+      +'<span style="min-width:0;flex:1;font-size:13px;'+(past||cur?'':'color:var(--lp-muted)')+'">'+(past?'<i class="ti ti-check" style="color:var(--c-ok)"></i> ':cur?'<i class="ti ti-plane" style="color:var(--c-uni)"></i> ':'')+lpEsc(r.name)+'</span>'
+      +'<span class="lp-mono lp-mu" style="font-size:11px;text-align:right">'+fmtCH(r.xp)+' XP'
+      +(cur?' · <b style="color:var(--c-uni);font-weight:500">du bist hier</b>':past?(hist[r.name]?' · '+lpEsc(lpFmtShort(hist[r.name])):''):' · noch '+fmtCH(rest))+'</span></div>';
+  });
+  h+='<div class="lp-row" style="justify-content:space-between;margin-top:12px"><button type="button" class="lp-btn gray" data-rk="lounge">Zur Lounge</button><button type="button" class="lp-btn fill" data-rk="close">Schliessen</button></div>';
+  return h;
+}
+function rkOpen(){
+  var m=syModal('rk-modal',rkHTML()), cur=m.querySelector('[data-rk-cur="1"]'); if(cur&&cur.scrollIntoView)cur.scrollIntoView({block:'center'});
+}
+function rkClose(){ var m=document.getElementById('rk-modal'); if(m)m.remove(); }
+var _ckHeaderHTML_jz=ckHeaderHTML;
+ckHeaderHTML=function(){
+  var h=_ckHeaderHTML_jz.apply(this,arguments);
+  return h?h.replace('<div class="ck-pill rang" data-sos="nav" data-area="lounge">','<div class="ck-pill rang" data-rk="open" role="button" tabindex="0" title="Ränge ansehen" style="cursor:pointer">'):h;
+};
+document.addEventListener('click',function(ev){
+  var m=document.getElementById('rk-modal'); if(m&&ev.target===m){ rkClose(); return; }
+  var el=ev.target.closest&&ev.target.closest('[data-rk]'); if(!el)return; ev.preventDefault();
+  var a=el.getAttribute('data-rk');
+  if(a==='open')rkOpen();
+  else if(a==='close')rkClose();
+  else if(a==='lounge'){ rkClose(); var b=document.querySelector('.sb-item[data-area="lounge"]'); if(b)b.click(); }
+});
+document.addEventListener('keydown',function(ev){
+  if(ev.key==='Escape'&&document.getElementById('rk-modal'))rkClose();
+  else if(ev.key==='Enter'&&ev.target&&ev.target.getAttribute&&ev.target.getAttribute('data-rk')==='open'){ ev.preventDefault(); rkOpen(); }
+});
+
+// Tagesabschluss: zusätzlich nach Snacks und Getränken zwischendurch fragen (kcal)
+function taSnackEntry(d){ var day=D.track&&D.track[d]; return ((day&&day.meals)||[]).find(function(m){ return m&&m.taSnack; })||null; }
+function taKcalRest(d){ var day=D.track&&D.track[d], k=0; ((day&&day.meals)||[]).forEach(function(m){ if(m&&!m.taSnack)k+=+m.kcal||0; }); return Math.round(k); }
+function taSnackSave(){
+  var inp=document.getElementById('ta-snack'), d=(typeof WP_TA!=='undefined'&&WP_TA)?WP_TA.date:null; if(!inp||!d)return;
+  var v=Math.max(0,Math.min(9999,Math.round(+inp.value)||0)), e=taSnackEntry(d);
+  if(v>0){ if(e){ if(e.kcal===v)return; e.kcal=v; } else { var day=getDayFor(d); day.meals=day.meals||[]; day.meals.push({name:'Snacks & Getränke',kcal:v,typ:'Snack',taSnack:true}); } }
+  else if(e){ var dd=getDayFor(d); dd.meals=dd.meals.filter(function(m){return !m.taSnack;}); }
+  else return;
+  saveD();
+}
+var _wpTaRender_jz=wpTaRender;
+wpTaRender=function(){
+  _wpTaRender_jz.apply(this,arguments);
+  try{
+    var host=document.getElementById('wp-ta'), d=WP_TA&&WP_TA.date; if(!host||!d||host.querySelector('#ta-snack-row'))return;
+    var box=host.querySelector('.lp-inner'); if(!box)return;
+    var e=taSnackEntry(d), rest=taKcalRest(d), sn=e?e.kcal:0;
+    box.insertAdjacentHTML('beforebegin','<div class="lp-inner" id="ta-snack-row" style="margin-top:8px"><div class="lp-cap" style="margin-bottom:4px">KALORIEN</div>'
+      +'<div class="lp-mu" style="font-size:12px;margin-bottom:6px">Eingetragen: <span class="lp-mono">'+fmtCH(rest)+' kcal</span>. Was kam sonst noch dazu (Snacks, Getränke zwischendurch)?</div>'
+      +'<div class="lp-row" style="gap:8px;flex-wrap:wrap"><input class="lp-in lp-mono" type="number" min="0" max="9999" step="10" inputmode="numeric" id="ta-snack" placeholder="0" value="'+(sn||'')+'" style="width:110px" aria-label="Snacks und Getränke in kcal"/><span class="lp-mu">kcal</span>'
+      +'<span class="lp-mono lp-mu" style="margin-left:auto;font-size:12px">Total <b id="ta-kcal-tot" style="font-weight:500;color:var(--lp-text)">'+fmtCH(rest+sn)+'</b> kcal</span></div></div>');
+  }catch(x){}
+};
+document.addEventListener('input',function(ev){ if(ev.target&&ev.target.id==='ta-snack'){ var t=document.getElementById('ta-kcal-tot'), d=WP_TA&&WP_TA.date; if(t&&d)t.textContent=fmtCH(taKcalRest(d)+Math.max(0,Math.round(+ev.target.value)||0)); } });
+document.addEventListener('change',function(ev){ if(ev.target&&ev.target.id==='ta-snack')taSnackSave(); });
+document.addEventListener('click',function(ev){ var el=ev.target.closest&&ev.target.closest('[data-wp="ta-fin"],[data-wp="ta-close"]'); if(el)taSnackSave(); },true);
+
+// ═══════════════════════════════════════════════════════════
+// HALL OF FAME (Tippspiel): abgeglichene Tipps per Knopfdruck festhalten, Ansicht als Tab in Freizeit › Entertainment
+// ═══════════════════════════════════════════════════════════
+SY_LIST_LABEL.hallOfFame='Hall of Fame';
+function hofList(){ if(!Array.isArray(D.hallOfFame))D.hallOfFame=[]; return D.hallOfFame; }
+function hofFind(spielId){ return hofList().find(function(x){return x&&x.spielId===spielId;})||null; }
+function hofKind(e){ var t=e.tipp||{}, r=e.res||{}; return (t.h===r.h&&t.g===r.g)?'exakt':(Math.sign(t.h-t.g)===Math.sign(r.h-r.g)?'tendenz':'daneben'); }
+function hofToggle(spielId){
+  var ex=hofFind(spielId);
+  if(ex){ hofRemove(ex.id); return; }
+  var s=mdFind(spielId); if(!s||!s.tipp||!s.res)return;
+  hofList().push({id:'hof:'+s.id,spielId:s.id,heim:s.heim||'',gast:s.gast||'',typ:s.typ||'',date:s.date||'',time:s.time||'',tipp:{h:s.tipp.h,g:s.tipp.g},res:{h:s.res.h,g:s.res.g},pts:s.pts||0,updatedAt:Date.now()});
+  saveD(); showToast('In die Hall of Fame aufgenommen 🏆','ok'); hofRefresh();
+}
+function hofRemove(id){
+  var snap=hofList().find(function(x){return x.id===id;}); if(!snap)return;
+  markDeleted(id); D.hallOfFame=D.hallOfFame.filter(function(x){return x.id!==id;}); saveD(); hofRefresh();
+  pdUndoPush('Aus der Hall of Fame entfernt',function(){ if(!hofList().some(function(x){return x.id===id;}))D.hallOfFame.push(snap); if(D.tombstones)delete D.tombstones[id]; saveD(); hofRefresh(); });
+}
+function hofRefresh(){ try{ mdRender(); }catch(e){} try{ entRender(); }catch(e){} }
+// Knopf in der Tipp-Zeile, sobald das Resultat abgeglichen ist
+var _mdTippHTML_hof=mdTippHTML;
+mdTippHTML=function(s,kind){
+  var h=_mdTippHTML_hof.apply(this,arguments);
+  if(!h||!s||!s.tipp||!s.res)return h;
+  var id=lpEsc(s.id), inn=!!hofFind(s.id);
+  var btn='<button type="button" class="lp-btn '+(inn?'fill':'gray')+'" style="padding:3px 10px;font-size:11px;margin-left:8px" data-md="hof" data-id="'+id+'" title="'+(inn?'Aus der Hall of Fame entfernen':'In die Hall of Fame aufnehmen')+'"><i class="ti ti-trophy"></i> '+(inn?'In der Hall of Fame':'Hall of Fame')+'</button>';
+  return h.replace(/<\/div>$/,btn+'</div>');
+};
+function hofHTML(){
+  var l=hofList().slice().sort(function(a,b){ return (b.date||'')>(a.date||'')?1:(b.date||'')<(a.date||'')?-1:(b.updatedAt||0)-(a.updatedAt||0); });
+  var ex=l.filter(function(e){return hofKind(e)==='exakt';}).length;
+  var h='<div class="lp-mu" style="font-size:12px;margin-bottom:10px">Deine festgehaltenen Tipps. Aufnehmen geht in der Tipp-Zeile eines Spiels, sobald das Resultat bestätigt ist (Knopf «Hall of Fame»).</div>';
+  if(!l.length)return h+'<div class="lp-cd lp-mu" style="font-size:13px">Noch leer. Bestätige das Resultat bei einem getippten Spiel und tippe auf «Hall of Fame».</div>';
+  h+='<div class="lp-row" style="gap:8px;flex-wrap:wrap;margin-bottom:10px"><span class="ck-pill lp-mono" style="font-size:12px"><i class="ti ti-trophy"></i> '+l.length+(l.length===1?' Eintrag':' Einträge')+'</span><span class="ck-pill lp-mono" style="font-size:12px"><i class="ti ti-target"></i> '+ex+' exakt</span></div>';
+  l.forEach(function(e){
+    var k=hofKind(e), lbl=k==='exakt'?'exakt getippt':k==='tendenz'?'richtige Tendenz':'knapp daneben';
+    h+='<div class="en-g'+(k==='exakt'?' fav':'')+'"><div class="en-top"><span class="en-ico">🏆</span><div style="flex:1;min-width:0"><div class="en-teams">'+lpEsc(e.heim)+' <span>vs</span> '+lpEsc(e.gast)+'</div>'
+      +'<div class="en-meta">'+lpEsc(e.typ||'')+(e.typ?' · ':'')+'Tipp '+e.tipp.h+':'+e.tipp.g+' · Resultat '+e.res.h+':'+e.res.g+'</div></div>'
+      +'<div class="en-when"><b class="'+(k==='exakt'?'today':'')+'">'+lbl+'</b><small>'+lpEsc(lpFmt(e.date))+(e.pts?' · +'+e.pts+' XP':'')+'</small></div>'
+      +'<button type="button" class="lp-x" data-hof="del" data-id="'+lpEsc(e.id)+'" title="Aus der Hall of Fame entfernen">✕</button></div></div>';
+  });
+  return h;
+}
+function hofDecorate(){
+  var fav=document.getElementById('ent-fav'), tabs=document.querySelector('#ent-top .ent-tabs'); if(!fav||!tabs)return;
+  if(!tabs.querySelector('[data-ent="hof"]'))tabs.insertAdjacentHTML('beforeend','<button type="button" class="'+(ENT_UI.tab==='hof'?'on':'')+'" data-ent="hof"><i class="ti ti-trophy"></i> Hall of Fame</button>');
+  var pane=document.getElementById('ent-hof');
+  if(!pane){ pane=document.createElement('div'); pane.id='ent-hof'; pane.className='ent-pane lp'; pane.setAttribute('data-pane','hof'); fav.parentNode.insertBefore(pane,fav.nextSibling); }
+  var on=ENT_UI.tab==='hof'; pane.style.display=on?'':'none'; if(on)pane.innerHTML=hofHTML();
+}
+var _entRender_hof=entRender;
+entRender=function(){ _entRender_hof.apply(this,arguments); try{ hofDecorate(); }catch(e){} };
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-hof],[data-md="hof"]'); if(!el)return;
+  if(el.getAttribute('data-md')==='hof'){ hofToggle(el.getAttribute('data-id')); return; }
+  if(el.getAttribute('data-hof')==='del')hofRemove(el.getAttribute('data-id'));
+});
 
 // ═══════════════════════════════════════════════════════════
 // LERNPLAN-MODUL — Fach → Thema → Etappe → Checkpoints (D.lp). Ersetzt den alten Themenplan.
