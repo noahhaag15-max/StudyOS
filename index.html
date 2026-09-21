@@ -10698,6 +10698,101 @@ document.addEventListener('click',function(ev){
 function ppInit(){ try{ ppRegister(); ppSync(); }catch(e){} }
 
 // ═══════════════════════════════════════════════════════════
+// ICS-EXPORT: Wochenplan der angezeigten Woche als .ics (zum Weitergeben an Claude). Nur lesend, ändert keine Daten.
+// ═══════════════════════════════════════════════════════════
+var XP_STATUS={offen:'offen',ok:'erledigt',teil:'teilweise erledigt',nein:'nicht gemacht',verschoben:'verschoben'};
+var XP_TZ=['BEGIN:VTIMEZONE','TZID:Europe/Zurich','BEGIN:DAYLIGHT','TZOFFSETFROM:+0100','TZOFFSETTO:+0200','TZNAME:CEST','DTSTART:19700329T020000','RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU','END:DAYLIGHT',
+  'BEGIN:STANDARD','TZOFFSETFROM:+0200','TZOFFSETTO:+0100','TZNAME:CET','DTSTART:19701025T030000','RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU','END:STANDARD','END:VTIMEZONE'];
+function xpEsc(s){ return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n'); }
+function xpFold(line){
+  var out=[], cur='', bytes=0;
+  for(var i=0;i<line.length;i++){
+    var ch=line.charAt(i), cp=line.charCodeAt(i), n;
+    if(cp>=0xD800&&cp<=0xDBFF&&i+1<line.length)ch+=line.charAt(++i);
+    try{ n=unescape(encodeURIComponent(ch)).length; }catch(e){ n=3; }
+    if(bytes+n>75){ out.push(cur); cur=' '; bytes=1; }
+    cur+=ch; bytes+=n;
+  }
+  out.push(cur); return out.join('\r\n');
+}
+function xpD(d){ return String(d).slice(0,10).replace(/-/g,''); }
+function xpDT(d,t){ var p=String(t||'00:00').split(':'); return xpD(d)+'T'+('0'+(+p[0]||0)).slice(-2)+('0'+(+p[1]||0)).slice(-2)+'00'; }
+function xpStamp(ms){ return new Date(ms).toISOString().replace(/[-:]/g,'').replace(/\.\d+Z$/,'Z'); }
+function xpUid(id){ return String(id).replace(/[^A-Za-z0-9:_.\-]/g,'_')+'@studyos'; }
+function xpBlockEv(b,now){
+  var s=lpT2M(b.start), e=lpT2M(b.ende); if(e<=s)e=Math.min(s+15,1439);
+  var kat=wpKat(b.kategorie), rew=b.typ==='belohnung', d=b.daten||{}, st=b.status||'offen', desc=[], er=[], cl=(b.checkliste||[]).filter(function(c){ return c&&c.text; }), ver=st==='verschoben';
+  desc.push('Kategorie: '+((kat&&kat.name)||b.kategorie||''));
+  desc.push('Typ: '+(rew?'Belohnung':b.typ==='fix'?'Fix-Block (Stundenplan/Termin)':b.typ==='fenster'?'Fenster (ohne Wertung)':'Aufgabe'));
+  if(!rew)desc.push('Status: '+(XP_STATUS[st]||st));
+  if(ver&&b.verschobenNach)desc.push('Verschoben nach: '+lpFmt(b.verschobenNach));
+  if(rew&&b.preis)desc.push('Eingelöst für: '+b.preis+' Meilen');
+  if(d.was)er.push(d.was); if(d.kcal)er.push(d.kcal+' kcal'); if(d.uebung)er.push(d.uebung); if(d.minuten)er.push(d.minuten+' Min'); if(d.stunden)er.push(lpDec(d.stunden)+' h');
+  if(er.length)desc.push('Erfasst: '+er.join(' · '));
+  if(cl.length)desc.push('Checkliste:\n'+cl.map(function(c){ return (c.done?'[x] ':'[ ] ')+(c.text||''); }).join('\n'));
+  var L=['BEGIN:VEVENT','UID:'+xpUid(b.id),'DTSTAMP:'+now,'DTSTART;TZID=Europe/Zurich:'+xpDT(b.tag,b.start),'DTEND;TZID=Europe/Zurich:'+xpDT(b.tag,wpM2T(e)),
+    'SUMMARY:'+xpEsc((rew?'★ ':'')+(b.titel||'(ohne Titel)')),'CATEGORIES:'+xpEsc((kat&&kat.name)||b.kategorie||'')];
+  if(b.ort)L.push('LOCATION:'+xpEsc(b.ort));
+  L.push('DESCRIPTION:'+xpEsc(desc.join('\n')),'STATUS:'+(ver?'CANCELLED':'CONFIRMED'),'TRANSP:'+(ver||b.typ==='fenster'?'TRANSPARENT':'OPAQUE'));
+  if(typeof b.ts==='number')L.push('LAST-MODIFIED:'+xpStamp(b.ts));
+  L.push('END:VEVENT'); return L;
+}
+function xpAllDay(id,von,bis,summary,desc,cat,now){
+  var L=['BEGIN:VEVENT','UID:'+xpUid(id),'DTSTAMP:'+now,'DTSTART;VALUE=DATE:'+xpD(von),'DTEND;VALUE=DATE:'+xpD(lpAdd(bis,1)),'SUMMARY:'+xpEsc(summary)];
+  if(cat)L.push('CATEGORIES:'+xpEsc(cat));
+  if(desc)L.push('DESCRIPTION:'+xpEsc(desc));
+  L.push('TRANSP:TRANSPARENT','END:VEVENT'); return L;
+}
+function xpBuild(mon){
+  var sun=lpAdd(mon,6), now=xpStamp(Date.now()), kw=getKW(new Date(mon+'T00:00:00Z')), yr=lpAdd(mon,3).slice(0,4), ev=[], nb=0, ns=0, nt=0, i;
+  var byStart=function(a,b){ return lpT2M(a.start)-lpT2M(b.start); };
+  for(i=0;i<7;i++){ wpBlocksOn(lpAdd(mon,i)).slice().sort(byStart).forEach(function(b){ ev=ev.concat(xpBlockEv(b,now)); nb++; }); }
+  spList().forEach(function(s){
+    if(!s||!s.von||!s.bis||s.bis<mon||s.von>sun)return;
+    var von=s.von>mon?s.von:mon, bis=s.bis<sun?s.bis:sun, typ=spTyp(s.typ)[1];
+    ev=ev.concat(xpAllDay('sp-'+s.id+'-'+von,von,bis,typ+(s.titel?': '+s.titel:''),'Zeitspanne ('+typ+') '+lpFmt(s.von)+' – '+lpFmt(s.bis)+(s.notiz?'\n'+s.notiz:''),'Zeitspanne',now)); ns++;
+  });
+  clTasks().forEach(function(t){
+    var f=clDate(t); if(!f||f<mon||f>sun)return;
+    var done=ckTaskDone(t), desc=['Bereich: '+clBerLbl(clBer(t)),'Status: '+(done?'erledigt'+(t.erledigtAm?' am '+lpFmt(t.erledigtAm):''):'offen')];
+    if(t.wdh&&typeof pdWdhLabel==='function')desc.push('Wiederholt: '+pdWdhLabel(t.wdh));
+    if(t.notizen)desc.push('Notiz: '+t.notizen);
+    ev=ev.concat(xpAllDay('task-'+t.id,f,f,'Aufgabe fällig: '+(t.name||'(ohne Titel)'),desc.join('\n'),'Backlog',now)); nt++;
+  });
+  var L=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Study OS//Wochenplan Export//DE','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-STUDYOS-EXPORT:wochenplan','X-WR-CALNAME:Study OS Wochenplan KW'+kw+' '+yr,'X-WR-TIMEZONE:Europe/Zurich'].concat(XP_TZ,ev,['END:VCALENDAR']);
+  return {text:L.map(xpFold).join('\r\n')+'\r\n',name:'wochenplan-KW'+kw+'-'+yr+'.ics',kw:kw,blocks:nb,spannen:ns,aufgaben:nt};
+}
+function xpCopy(txt){
+  var fb=function(){ var ta=document.createElement('textarea'); ta.value=txt; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); var ok=false; try{ ok=document.execCommand('copy'); }catch(e){} ta.remove(); showToast(ok?'.ics-Text kopiert ✓':'Kopieren nicht möglich.',ok?'ok':undefined); };
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){ showToast('.ics-Text kopiert ✓','ok'); },fb); else fb();
+}
+var _wpRender_xp=wpRender;
+wpRender=function(){
+  _wpRender_xp.apply(this,arguments);
+  try{
+    var root=document.getElementById('wp-root'), b=root&&root.querySelector('[data-wp="vorlagen"]'); if(!b||root.querySelector('[data-xp]'))return;
+    b.insertAdjacentHTML('afterend','<button type="button" class="wp-pill" data-xp="download" title="Wochenplan dieser Woche als .ics-Datei herunterladen (z. B. für Claude)"><i class="ti ti-calendar-share"></i> .ics</button>'
+      +'<button type="button" class="wp-pill" data-xp="copy" title=".ics-Inhalt als Text kopieren" aria-label=".ics als Text kopieren"><i class="ti ti-copy"></i></button>');
+  }catch(e){}
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-xp]'); if(!el)return; ev.preventDefault();
+  var r; try{ r=xpBuild(WP_UI.week||lpMonday(today())); }catch(e){ showToast('Export fehlgeschlagen: '+e.message); return; }
+  if(el.getAttribute('data-xp')==='copy'){ xpCopy(r.text); return; }
+  var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([r.text],{type:'text/calendar;charset=utf-8'})); a.download=r.name;
+  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+  showToast(r.name+' exportiert ✓ ('+r.blocks+' Blöcke, '+r.spannen+' Zeitspannen, '+r.aufgaben+' Aufgaben)','ok');
+});
+// Eigene Exporte nicht als Stundenplan einlesen (würde Blöcke doppeln)
+var _icsFile_xp=icsFile;
+icsFile=function(file){
+  var rd=new FileReader();
+  rd.onload=function(){ if(/X-STUDYOS-EXPORT/.test(String(rd.result))){ showToast('Das ist ein Export aus Study OS, kein Stundenplan. Nicht eingelesen.'); return; } _icsFile_xp(file); };
+  rd.readAsText(file);
+};
+
+
+// ═══════════════════════════════════════════════════════════
 // LERNPLAN-MODUL — Fach → Thema → Etappe → Checkpoints (D.lp). Ersetzt den alten Themenplan.
 // Der Timer-Status liegt bewusst NICHT in D, sondern in localStorage 'sos_lp_timer': ein laufender
 // Timer darf nie per Cloud-Sync auf ein anderes Gerät gelangen. Jede änderbare Entität trägt ein
