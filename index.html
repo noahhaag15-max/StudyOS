@@ -3378,7 +3378,7 @@ var D = {
 // nichts, was nur lokal existiert, geht verloren. Einzige Ausnahme: bewusst lokal gelöschte
 // Einträge können durch einen älteren Snapshot wieder auftauchen — das ist der bewusste
 // Kompromiss (lieber ein Karteileichen-Eintrag zurück als echte Daten verloren).
-var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
+var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','lpAufgaben','lpLabs','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
 // wplan & track sind hier bewusst NICHT drin — die brauchen einen ECHTEN Tiefen-Merge (siehe
 // mergeWplan/mergeTrack unten), weil ihre Werte pro Woche/Tag komplexe, häufig aktiv bearbeitete
 // Strukturen sind. Ein einfacher Object.assign auf oberster Ebene hätte (und hat!) eine ganze
@@ -11097,13 +11097,15 @@ function lpSorted(list){ return list.slice().sort(function(a,b){return (a.reihen
 function lpThemenOf(fachId){ return lpSorted(lpEnsure().themen.filter(function(t){return t.fachId===fachId;})); }
 function lpEtappenOf(themaId){ return lpSorted(lpEnsure().etappen.filter(function(e){return e.themaId===themaId;})); }
 function lpModus(t){
-  if(t&&(t.modus==='drill'||t.modus==='konzept'))return t.modus;
+  if(t&&(t.modus==='drill'||t.modus==='konzept'||t.modus==='pool'))return t.modus;
   var f=t?lpFachById(t.fachId):null;
   return (f&&f.modusDefault)||'drill';
 }
 function lpEtappeDone(e,modus){ return modus==='drill'?(e.stufe||0)>=2:!!e.erledigt; }
 function lpThemaProg(t){
-  var m=lpModus(t), es=lpEtappenOf(t.id);
+  var m=lpModus(t);
+  if(m==='pool'){ var al=lpAufgabenOf(t.id), n=al.length, d=al.filter(function(a){return a.status==='sitzt'||a.status==='pruefungsfest';}).length; return {done:d,total:n,pct:n?Math.round(d/n*100):0}; }
+  var es=lpEtappenOf(t.id);
   var d=es.filter(function(e){return lpEtappeDone(e,m);}).length;
   return {done:d,total:es.length,pct:es.length?Math.round(d/es.length*100):0};
 }
@@ -11289,7 +11291,8 @@ function lpThemaFormHTML(fachName,t){
     +'<div class="lp-fld"><label>Name</label><input class="lp-in"'+attr('name')+' value="'+(edit?lpEsc(t.name):'')+'" placeholder="z.B. Integrationsmethoden"/></div>'
     +'<div class="lp-fld"><label>Modus</label><div class="lp-seg" data-k="modus" data-val="'+modus+'"'+(edit?' data-id="'+id+'"':'')+'>'
     +'<button type="button" class="'+(modus==='drill'?'on':'')+'" data-lpa="seg" data-val="drill">Drill</button>'
-    +'<button type="button" class="'+(modus==='konzept'?'on':'')+'" data-lpa="seg" data-val="konzept">Konzept</button></div></div>'
+    +'<button type="button" class="'+(modus==='konzept'?'on':'')+'" data-lpa="seg" data-val="konzept">Konzept</button>'
+    +'<button type="button" class="'+(modus==='pool'?'on':'')+'" data-lpa="seg" data-val="pool">Aufgaben-Pool</button></div></div>'
     +'<div class="lp-fld"><label>Minimum-Ziel</label><input class="lp-in"'+attr('minimum')+' value="'+(edit?lpEsc(t.minimum||''):'')+'" placeholder="Was muss mindestens sitzen? z.B. 3 Aufgaben ohne Hilfe"/></div>'
     +'<div class="lp-fld"><label>Aufwand (Std)</label><input class="lp-in lp-mono" type="number" min="0" step="0.5" style="max-width:90px"'+(edit?' data-lpc="th.aufwandStd" data-id="'+id+'" value="'+(t.aufwandMin?t.aufwandMin/60:'')+'"':' data-k="aufwand"')+'/>'
     +'<label style="margin-left:8px">Meilenstein</label><input class="lp-in" type="date"'+attr('meilenstein')+(edit?' value="'+lpEsc(t.meilenstein||'')+'"':'')+'/></div>';
@@ -11311,6 +11314,7 @@ function lpThemaFormHTML(fachName,t){
 function lpThemaOpenHTML(t,f){
   var m=lpModus(t), es=lpEtappenOf(t.id), id=lpEsc(t.id);
   if(LP_UI.editTh===t.id)return '<div class="lp-tbody">'+lpThemaFormHTML(f?f.fach:'',t)+'</div>';
+  if(m==='pool')return lpPoolThemaHTML(t,f);
   var sum=es.reduce(function(a,e){return a+(e.dauerMin||0);},0);
   var h='<div class="lp-tbody">'
     +'<div class="lp-mu" style="margin-bottom:2px">'+(t.minimum?'🎯 Minimum: '+lpEsc(t.minimum):'🎯 Minimum fehlt — unter «Thema bearbeiten» ergänzen')+'</div>'
@@ -11377,8 +11381,10 @@ function lpFachViewHTML(name){
     var fm=(f&&f.modusDefault)||(LP_DRILL_FAECHER.indexOf(name)>=0?'drill':'konzept');
     h+='<div class="lp-inner lp-fld" style="margin-bottom:8px;flex-wrap:wrap"><label>Prüfung</label><input class="lp-in" type="date" data-lpc="fach.pruefung" data-lpfach="'+en+'" value="'+lpEsc(f?f.pruefung:'')+'"/>'
       +'<label style="margin-left:8px">Puffer (Tage)</label><input class="lp-in lp-mono" type="number" min="0" max="60" style="max-width:70px" data-lpc="fach.pufferTage" data-lpfach="'+en+'" value="'+(f&&f.pufferTage!=null?f.pufferTage:8)+'"/>'
-      +'<label style="margin-left:8px">Standard-Modus</label><select class="lp-in" data-lpc="fach.modusDefault" data-lpfach="'+en+'"><option value="drill"'+(fm==='drill'?' selected':'')+'>Drill</option><option value="konzept"'+(fm==='konzept'?' selected':'')+'>Konzept</option></select></div>';
+      +'<label style="margin-left:8px">Standard-Modus</label><select class="lp-in" data-lpc="fach.modusDefault" data-lpfach="'+en+'"><option value="drill"'+(fm==='drill'?' selected':'')+'>Drill</option><option value="konzept"'+(fm==='konzept'?' selected':'')+'>Konzept</option></select>'
+      +'<label style="margin-left:8px">Labs</label><select class="lp-in" data-lpc="fach.labs" data-lpfach="'+en+'"><option value="0"'+(f&&f.labs?'':' selected')+'>Aus</option><option value="1"'+(f&&f.labs?' selected':'')+'>An</option></select></div>';
   }
+  if(f&&f.labs)h+=lpLabsHTML(f);
   if(themen.length)h+=lpFachRouteHTML(f,themen)+lpFachLegendHTML();
   if(LP_UI.formThema===name)h+=lpThemaFormHTML(name,null);
   if(!themen.length&&LP_UI.formThema!==name)h+='<div class="lp-mu" style="padding:6px 0">Noch keine Themen. Oben mit «＋ Thema» das erste anlegen.</div>';
@@ -11411,6 +11417,11 @@ function lpSettingsHTML(){
   h+=row('Timebox Drill (Min)','<input class="lp-v" type="number" min="5" max="90" data-lpc="set.timeboxMin" value="'+s.timeboxMin+'"/>');
   h+=row('Sperrzeiten (Min · 5 Level)','<input class="lp-v" data-lpc="set.srSperrzeiten" value="'+lpEsc((s.srSperrzeiten||LP_DEFAULT_SETTINGS.srSperrzeiten).join('·'))+'" style="width:150px"/>');
   h+='<div class="lp-mu" style="margin:-4px 0 8px;font-size:11px">Neu · Falsch beantwortet · Einmal richtig · Zweimal richtig · Prüfungsfest — z. B. 420 = 7 Std., 1440 = 1 Tag, 7200 = 5 Tage.</div>';
+  h+=row('Aufgaben-Pool: Intervalle nach «Sicher» (Tage)','<input class="lp-v" data-lpc="set.poolSicher" value="'+lpEsc((s.poolSicher||LP_DEFAULT_SETTINGS.poolSicher).join('·'))+'" style="width:110px"/>');
+  h+=row('Aufgaben-Pool: Wdh. nach Zäh/Hilfe/Nicht gelöst (Tage)','<input class="lp-v lp-mono" type="number" min="1" style="width:44px" data-lpc="set.poolZaeh" value="'+(s.poolZaeh||LP_DEFAULT_SETTINGS.poolZaeh)+'"/> <input class="lp-v lp-mono" type="number" min="1" style="width:44px" data-lpc="set.poolHilfe" value="'+(s.poolHilfe||LP_DEFAULT_SETTINGS.poolHilfe)+'"/> <input class="lp-v lp-mono" type="number" min="1" style="width:44px" data-lpc="set.poolFalsch" value="'+(s.poolFalsch||LP_DEFAULT_SETTINGS.poolFalsch)+'"/>');
+  h+=row('«Sitzt» ab · Konzept-Hinweis ab','<input class="lp-v lp-mono" type="number" min="1" style="width:44px" data-lpc="set.poolSitztAb" value="'+(s.poolSitztAb||LP_DEFAULT_SETTINGS.poolSitztAb)+'"/> <input class="lp-v lp-mono" type="number" min="1" style="width:44px" data-lpc="set.poolHinweisAb" value="'+(s.poolHinweisAb||LP_DEFAULT_SETTINGS.poolHinweisAb)+'"/>');
+  h+=row('Labs: Festigen-Intervalle (Tage)','<input class="lp-v" data-lpc="set.labIntervalle" value="'+lpEsc((s.labIntervalle||LP_DEFAULT_SETTINGS.labIntervalle).join('·'))+'" style="width:90px"/>');
+  h+=row('Labs: Fehler bei Wdh. setzt Zähler auf 0','<button type="button" class="lp-sw'+(s.labStreng?' on':'')+'" data-lpa="set-lab-streng" aria-label="streng"><i></i></button>');
   h+=row('Puffer vor Prüfung (Tage)','<input class="lp-v" type="number" min="0" max="60" data-lpc="set.pufferTage" value="'+s.pufferTage+'"/>');
   h+=row('Bildschirm wach halten','<button type="button" class="lp-sw'+(s.wakeLock?' on':'')+'" data-lpa="set-wake" aria-label="Bildschirm wach halten"><i></i></button>');
   h+='<div class="lp-st" style="border:none;display:block"><div style="margin-bottom:6px">Fächer im Lernplan</div><div class="lp-row" style="flex-wrap:wrap;gap:6px">'
@@ -11581,6 +11592,7 @@ function lpAction(a,el){
     case 'konzept-etappen':
       t=lpThema(id); if(!t)return; lpAddKonzeptEtappen(t); LP_UI.selEt=null; saveD(); return lpRender();
     case 'set-wake': L.settings.wakeLock=!L.settings.wakeLock; saveD(); return lpRender();
+    case 'set-lab-streng': L.settings.labStreng=!L.settings.labStreng; saveD(); return lpRender();
     case 'set-fach':
       var fn=el.getAttribute('data-lpfach'), cur=lpAktiveFaecher().slice(), ix=cur.indexOf(fn);
       if(ix>=0){ if(cur.length<=1){showToast('Mindestens ein Fach muss aktiv bleiben.');return;} cur.splice(ix,1); } else cur.push(fn);
@@ -11597,7 +11609,14 @@ function lpChange(el){
   if(kind==='fach'){
     var f=lpFach(el.getAttribute('data-lpfach'),true);
     if(fld==='pufferTage')v=Math.max(0,parseInt(v,10)||0);
+    else if(fld==='labs')v=v==='1';
     f[fld]=v; lpTouch(f); rerender=true;
+  } else if(kind==='lab'){
+    var lb=lpLabs().find(function(x){return x.id===id;}); if(!lb)return;
+    if(fld==='anzahl'){ lb.anzahl=Math.max(0,parseInt(v,10)||0); lb.falsch=[]; rerender=true; }
+    else if(fld==='punkte'){ lb.punkte=v===''?null:Math.max(0,parseInt(v,10)||0); }
+    else lb[fld]=v;
+    lpTouch(lb);
   } else if(kind==='th'){
     var t=lpThema(id); if(!t)return;
     if(fld==='aufwandStd'){ t.aufwandMin=Math.round((parseFloat(String(v).replace(',','.'))||0)*60); }
@@ -11618,7 +11637,13 @@ function lpChange(el){
     cp.text=v; cp.ts=Date.now(); lpTouch(e2);
   } else if(kind==='set'){
     var S=L.settings;
-    if(fld==='srIntervalle'){
+    if(fld==='poolSicher'||fld==='labIntervalle'){
+      var arrP=v.split(/[\s,;·]+/).map(Number).filter(function(n){return n>0;});
+      S[fld]=arrP.length?arrP:LP_DEFAULT_SETTINGS[fld].slice();
+      el.value=S[fld].join('·');
+    } else if(fld==='poolZaeh'||fld==='poolHilfe'||fld==='poolFalsch'||fld==='poolSitztAb'||fld==='poolHinweisAb'){
+      S[fld]=Math.max(1,parseInt(v,10)||LP_DEFAULT_SETTINGS[fld]);
+    } else if(fld==='srIntervalle'){
       var arr=v.split(/[\s,;·]+/).map(Number).filter(function(n){return n>0;});
       S.srIntervalle=arr.length?arr:LP_DEFAULT_SETTINGS.srIntervalle.slice();
       el.value=S.srIntervalle.join('·');
@@ -16743,6 +16768,176 @@ document.addEventListener('click',function(ev){
       }
       return;
     case 'export': ev.preventDefault(); return lbExportRun(el.getAttribute('data-v'));
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
+// AUFGABEN-POOL (Analysis) & LABS (Programming) — Paket 1: Datenmodell, Erfassen, 4-Ergebnis-Logik,
+// Themen-Balken, Lab-Phasen. Noch NICHT dabei: Lernmodus-Timer-Einbindung, Freies Üben,
+// Prüfungssimulation, automatische Wochenplan-Blöcke, Tempo-Rechnung für Pool-Fächer.
+// ═══════════════════════════════════════════════════════════
+// Eigene Lernplan-Einstellungen (L.settings), nicht die allgemeine Hangar-cfg — gleiche Ecke wie die
+// Sperrzeiten der Etappen, mit eigener Zeile im Lernplan-Einstellungen-Panel weiter unten.
+Object.assign(LP_DEFAULT_SETTINGS,{poolSicher:[7,14,30],poolZaeh:3,poolHilfe:1,poolFalsch:1,poolSitztAb:2,poolHinweisAb:3,labIntervalle:[1,2,4],labStreng:false});
+
+// ── Aufgaben-Pool: Daten ──
+function lpAufgaben(){ if(!Array.isArray(D.lpAufgaben))D.lpAufgaben=[]; return D.lpAufgaben; }
+function lpAufgabenOf(themaId){ return lpAufgaben().filter(function(a){return a.themaId===themaId;}); }
+var AP_STATUS_LABEL={neu:'Neu',ueben:'Am Üben',sitzt:'Sitzt',pruefungsfest:'Prüfungsfest'};
+var AP_STATUS_VAR={neu:'var(--lp-new)',ueben:'var(--lp-review)',sitzt:'var(--lp-ok)',pruefungsfest:'var(--lp-master)'};
+function apParse(text){
+  var m=/^(.*?):\s*(.+)$/.exec((text||'').trim()); if(!m)return null;
+  var quelle=m[1].trim(), spec=m[2].trim(), out=[]; if(!quelle||!spec)return null;
+  spec.split(',').forEach(function(part){
+    part=part.trim(); if(!part)return;
+    var rl=/^(\d+)([a-z])\s*-\s*(?:(\d+))?([a-z])$/i.exec(part), rn=/^(\d+)\s*-\s*(\d+)$/.exec(part);
+    if(rl&&(!rl[3]||+rl[3]===+rl[1])){ var n1=+rl[1], c1=rl[2].toLowerCase().charCodeAt(0), c2=rl[4].toLowerCase().charCodeAt(0); for(var c=c1;c<=c2&&c-c1<30;c++)out.push(n1+String.fromCharCode(c)); }
+    else if(rn){ var a=+rn[1], b=+rn[2]; for(var i=a;i<=b&&i-a<300;i++)out.push(String(i)); }
+    else out.push(part);
+  });
+  return out.length?{quelle:quelle,nummern:out}:null;
+}
+function apAdd(themaId,quelle,nummern,kern){
+  var l=lpAufgaben();
+  nummern.forEach(function(nr){ l.push({id:uid(),themaId:themaId,quelle:quelle,nummer:nr,kern:kern!==false,status:'neu',log:[],sicherInFolge:0,srIndex:0,naechsteWdh:null,nichtGeloest:0,ts:Date.now()}); });
+  saveD();
+}
+function apEtaPuffer(themaId){ var t=lpThema(themaId), f=t?lpFachById(t.fachId):null, td=today(); return !!(f&&f.pruefung&&td>=lpAdd(f.pruefung,-(f.pufferTage==null?8:f.pufferTage))); }
+function apApplyResult(a,res){
+  var S=lpEnsure().settings, td=today(), iv=S.poolSicher||LP_DEFAULT_SETTINGS.poolSicher;
+  if(!Array.isArray(a.log))a.log=[]; a.log.push({datum:td,ergebnis:res});
+  if(res==='sicher'){
+    a.sicherInFolge=(a.sicherInFolge||0)+1; var idx=Math.min(a.srIndex||0,iv.length-1);
+    a.naechsteWdh=lpAdd(td,iv[idx]); a.srIndex=(a.srIndex||0)+1;
+    if(a.sicherInFolge>=(+S.poolSitztAb||2)&&a.status!=='pruefungsfest')a.status='sitzt';
+    if(a.status==='sitzt'&&apEtaPuffer(a.themaId))a.status='pruefungsfest';
+  } else if(res==='zaeh'){ a.naechsteWdh=lpAdd(td,S.poolZaeh); if(a.status==='neu')a.status='ueben'; }
+  else if(res==='hilfe'){ a.sicherInFolge=0; a.srIndex=0; a.naechsteWdh=lpAdd(td,S.poolHilfe); a.status='ueben'; }
+  else { a.sicherInFolge=0; a.srIndex=0; a.naechsteWdh=lpAdd(td,S.poolFalsch); a.status='ueben'; a.nichtGeloest=(a.nichtGeloest||0)+1; }
+  lpTouch(a); saveD();
+}
+function apThemaBalken(themaId){
+  var list=lpAufgabenOf(themaId), n=list.length; if(!n)return '<div class="lp-mu" style="font-size:12px">Noch keine Aufgaben — unten mit der Schnelleingabe anlegen.</div>';
+  var c={neu:0,ueben:0,sitzt:0,pruefungsfest:0}; list.forEach(function(a){c[a.status||'neu']++;});
+  return '<div class="ck-track" style="height:10px;display:flex;overflow:hidden;border-radius:99px">'+['neu','ueben','sitzt','pruefungsfest'].map(function(s){ return c[s]?'<i style="width:'+(c[s]/n*100)+'%;background:'+AP_STATUS_VAR[s]+';display:block;height:100%"></i>':''; }).join('')+'</div>'
+    +'<div class="lp-mu" style="font-size:10px;margin-top:3px">'+n+' Aufgaben · '+c.sitzt+' sitzt · '+c.pruefungsfest+' prüfungsfest</div>';
+}
+function apRowHTML(a){
+  var due=a.naechsteWdh&&a.naechsteWdh<=today();
+  return '<div class="lp-inner" style="margin-bottom:5px"><div class="lp-row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><span style="font-size:13px;min-width:0"><b style="font-weight:500">'+lpEsc(a.quelle)+' · '+lpEsc(a.nummer)+'</b>'+(a.kern?'':' <span class="lp-mu" style="font-size:10px">optional</span>')+'</span>'
+    +'<span class="lp-tag" style="background:color-mix(in srgb,'+AP_STATUS_VAR[a.status]+' 18%,transparent);color:'+AP_STATUS_VAR[a.status]+'">'+AP_STATUS_LABEL[a.status]+'</span></div>'
+    +(due?'<div class="lp-mu" style="font-size:10px;margin-top:2px;color:var(--lp-accent)">fällig</div>':(a.naechsteWdh?'<div class="lp-mu" style="font-size:10px;margin-top:2px">nächste Wdh. '+lpFmtShort(a.naechsteWdh)+'</div>':''))
+    +'<div class="lp-row" style="gap:4px;margin-top:6px;flex-wrap:wrap"><button type="button" class="lp-btn ok" data-ap="log" data-res="sicher" data-id="'+a.id+'">✓ Sicher</button><button type="button" class="lp-btn review" data-ap="log" data-res="zaeh" data-id="'+a.id+'">✓ Zäh</button><button type="button" class="lp-btn gray" data-ap="log" data-res="hilfe" data-id="'+a.id+'">~ Mit Hilfe</button><button type="button" class="lp-btn danger" data-ap="log" data-res="falsch" data-id="'+a.id+'">✗ Nicht gelöst</button><button type="button" class="lp-x" data-ap="del" data-id="'+a.id+'" style="margin-left:auto">✕</button></div></div>';
+}
+function apHinweisHTML(themaId){
+  var n=0; lpAufgabenOf(themaId).forEach(function(a){n+=a.nichtGeloest||0;});
+  if(n<(+lpEnsure().settings.poolHinweisAb||3))return '';
+  return '<div class="lp-inner" style="margin-bottom:10px;border-color:var(--c-work)"><i class="ti ti-bulb" style="color:var(--c-work)"></i> Mehrere Aufgaben dieses Themas laufen schlecht ('+n+'× nicht gelöst) — eventuell hilft zuerst ein Konzeptblock statt weiterer Rechenaufgaben.</div>';
+}
+function lpPoolThemaHTML(t,f){
+  var id=lpEsc(t.id), list=lpAufgabenOf(t.id);
+  var due=list.filter(function(a){return a.naechsteWdh&&a.naechsteWdh<=today();}).sort(function(a,b){return (a.naechsteWdh||'')<(b.naechsteWdh||'')?-1:1;});
+  var neu=list.filter(function(a){return a.status==='neu'&&!due.some(function(d){return d.id===a.id;});}).sort(function(a,b){return (b.kern?1:0)-(a.kern?1:0);});
+  var rest=list.filter(function(a){return due.indexOf(a)<0&&neu.indexOf(a)<0;});
+  var h='<div class="lp-tbody">'+(t.minimum?'<div class="lp-mu" style="margin-bottom:6px">🎯 Minimum: '+lpEsc(t.minimum):'<div class="lp-mu" style="margin-bottom:6px">🎯 Minimum fehlt — unter «Thema bearbeiten» ergänzen')+'</div>'
+    +apThemaBalken(t.id)+'<div style="margin-top:10px"></div>'+apHinweisHTML(t.id);
+  if(due.length)h+='<div class="lp-cap" style="margin:10px 0 6px">FÄLLIG · '+due.length+'</div>'+due.map(apRowHTML).join('');
+  if(neu.length)h+='<div class="lp-cap" style="margin:10px 0 6px">NEU · '+neu.length+'</div>'+neu.slice(0,8).map(apRowHTML).join('')+(neu.length>8?'<div class="lp-mu" style="font-size:11px">+'+(neu.length-8)+' weitere</div>':'');
+  if(rest.length)h+='<details style="margin-top:8px"><summary class="lp-mu" style="cursor:pointer;font-size:11px">'+rest.length+' weitere anzeigen</summary>'+rest.map(apRowHTML).join('')+'</details>';
+  h+='<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">SCHNELLEINGABE</div><div class="lp-mu" style="font-size:11px;margin-bottom:6px">z. B. «Serie 5: 1-12» oder «Serie 5: 3a-3f» oder «Buch S. 84: 1,4,7»</div>'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap"><input class="lp-in" id="ap-q-'+id+'" placeholder="Serie 5: 1-12" style="flex:1;min-width:180px"/><label class="lp-mu" style="font-size:11px"><input type="checkbox" id="ap-kern-'+id+'" checked/> Kern</label><button type="button" class="lp-btn fill" data-ap="add" data-id="'+id+'">Anlegen</button></div>'
+    +'<div class="lp-mu" id="ap-preview-'+id+'" style="font-size:11px;margin-top:6px"></div></div>'
+    +'<div class="lp-row" style="margin-top:10px"><button type="button" class="lp-btn gray" data-lpa="edit-th" data-id="'+id+'">✎ Thema bearbeiten</button></div></div>';
+  return h;
+}
+document.addEventListener('input',function(ev){
+  var el=ev.target; if(!el.id||el.id.indexOf('ap-q-')!==0)return;
+  var themaId=el.id.slice(5), prev=document.getElementById('ap-preview-'+themaId); if(!prev)return;
+  var p=apParse(el.value); prev.textContent=p?p.nummern.length+' Aufgaben: '+p.quelle+' — '+p.nummern.join(', '):(el.value.trim()?'Format: «Quelle: Nummern», z. B. «Serie 5: 1-12»':'');
+});
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-ap]'); if(!el)return; ev.preventDefault();
+  var a=el.getAttribute('data-ap'), id=el.getAttribute('data-id');
+  switch(a){
+    case 'log': var au=lpAufgaben().find(function(x){return x.id===id;}); if(!au)return; apApplyResult(au,el.getAttribute('data-res')); return lpRender();
+    case 'del': if(!confirm('Aufgabe löschen?'))return; D.lpAufgaben=lpAufgaben().filter(function(x){return x.id!==id;}); markDeleted(id); saveD(); return lpRender();
+    case 'add':
+      var inp=document.getElementById('ap-q-'+id), p=apParse(inp.value); if(!p){ showToast('Format: «Quelle: Nummern», z. B. «Serie 5: 1-12».'); return; }
+      var kern=document.getElementById('ap-kern-'+id); apAdd(id,p.quelle,p.nummern,!kern||kern.checked); inp.value=''; showToast(p.nummern.length+' Aufgaben angelegt ✓','ok'); return lpRender();
+  }
+});
+
+
+// ── Labs (Programming): Erstlösung, Festigen 0/3, Rückwärtsplanung ──
+function lpLabs(){ if(!Array.isArray(D.lpLabs))D.lpLabs=[]; return D.lpLabs; }
+function lpLabsOf(fachId){ return lpLabs().filter(function(l){return l.fachId===fachId;}).sort(function(a,b){return (a.nummer||0)-(b.nummer||0);}); }
+var LAB_STATUS_VAR={offen:'var(--lp-new)',inArbeit:'var(--lp-review)',geloest:'var(--lp-ok)',voll:'var(--lp-master)'};
+function labStatusLabel(l){ if(l.status==='voll')return 'Voll (3/3)'; if(l.status==='geloest')return 'Gelöst · '+(l.festigenZaehler||0)+'/3'; if(l.status==='inArbeit')return 'In Arbeit'; return 'Offen'; }
+function labSpaetesterStart(l){
+  if(!l.abgabeDatum)return null;
+  var iv=lpEnsure().settings.labIntervalle||LP_DEFAULT_SETTINGS.labIntervalle, tage=1+iv.reduce(function(a,n){return a+n;},0);
+  return lpAdd(l.abgabeDatum,-tage);
+}
+function labNew(fachId,nummer,titel,themaId){
+  var l={id:uid(),fachId:fachId,themaId:themaId||'',nummer:nummer,titel:titel||('Lab '+nummer),anzahl:0,falsch:[],abgabeDatum:'',punkte:null,status:'offen',durchgaenge:[],festigenZaehler:0,ts:Date.now()};
+  lpLabs().push(l); saveD(); return l;
+}
+function labDurchgang(l,falscheNummern){
+  var td=today(), alleKorrekt=!falscheNummern.length, heuteSchon=(l.durchgaenge||[]).some(function(d){return d.datum===td;});
+  l.durchgaenge=l.durchgaenge||[]; l.durchgaenge.push({datum:td,alleKorrekt:alleKorrekt,falscheNummern:falscheNummern.slice()}); l.falsch=falscheNummern.slice();
+  if(l.status==='offen')l.status='inArbeit';
+  if(alleKorrekt){
+    if(l.status==='inArbeit'){ l.status='geloest'; l.festigenZaehler=0; }
+    else if(l.status==='geloest'&&!heuteSchon){ l.festigenZaehler=Math.min(3,(l.festigenZaehler||0)+1); if(l.festigenZaehler>=3)l.status='voll'; }
+  } else if(l.status==='geloest'&&lpEnsure().settings.labStreng){ l.festigenZaehler=0; }
+  lpTouch(l); saveD();
+}
+function labNaechsteWdh(l){
+  if(l.status!=='geloest')return null;
+  var korrekt=(l.durchgaenge||[]).filter(function(d){return d.alleKorrekt;});
+  var letzte=korrekt.length?korrekt[korrekt.length-1].datum:today(), iv=lpEnsure().settings.labIntervalle||LP_DEFAULT_SETTINGS.labIntervalle;
+  return lpAdd(letzte,iv[Math.min(l.festigenZaehler||0,iv.length-1)]);
+}
+function labCardHTML(l){
+  var id=lpEsc(l.id), spaet=labSpaetesterStart(l), knapp=spaet&&spaet<=lpAdd(today(),2)&&l.status==='offen', ueberfaellig=spaet&&spaet<today()&&l.status!=='voll';
+  var wdh=labNaechsteWdh(l);
+  var h='<div class="lp-cd" style="margin-bottom:10px"><div class="lp-row" style="justify-content:space-between;flex-wrap:wrap;gap:6px"><span style="font-size:14px;font-weight:500">'+lpEsc(l.titel)+'</span>'
+    +'<span class="lp-tag" style="background:color-mix(in srgb,'+LAB_STATUS_VAR[l.status]+' 18%,transparent);color:'+LAB_STATUS_VAR[l.status]+'">'+labStatusLabel(l)+'</span></div>';
+  if(l.abgabeDatum)h+='<div class="lp-mu lp-mono" style="font-size:11px;margin-top:2px">Abgabe '+lpFmtShort(l.abgabeDatum)+(spaet?' · spätester Start '+lpFmtShort(spaet)+(ueberfaellig?' <span style="color:var(--c-danger)">— schon vorbei</span>':''):'')+'</div>';
+  if(wdh)h+='<div class="lp-mu" style="font-size:11px;margin-top:2px">nächste Wiederholung '+lpFmtShort(wdh)+'</div>';
+  if(l.status==='offen'||l.status==='inArbeit'){
+    h+='<div class="lp-mu" style="font-size:11px;margin-top:8px">Anzahl Aufgaben</div><input class="lp-in lp-mono" type="number" min="1" style="width:80px" id="lab-n-'+id+'" value="'+(l.anzahl||'')+'" data-lpc="lab.anzahl" data-id="'+id+'"/>'
+    +'<div class="lp-mu" style="font-size:11px;margin:8px 0 4px">Welche Nummern waren falsch? (leer = alles richtig)</div>'
+    +'<div class="lp-row" style="gap:4px;flex-wrap:wrap" id="lab-grid-'+id+'">'+(l.anzahl?Array.from({length:l.anzahl},function(_,i){ return i+1; }).map(function(n){ return '<button type="button" class="lp-x lab-num'+((l.falsch||[]).indexOf(n)>=0?' on':'')+'" data-lab="num" data-id="'+id+'" data-n="'+n+'" style="width:30px">'+n+'</button>'; }).join(''):'<span class="lp-mu" style="font-size:11px">zuerst Anzahl eintragen</span>')+'</div>'
+    +'<button type="button" class="lp-btn fill" style="margin-top:8px" data-lab="durchgang" data-id="'+id+'">Durchgang speichern</button>';
+  } else if(l.status==='geloest'){
+    h+='<div class="lp-mu" style="font-size:11px;margin:6px 0">Nächste Wiederholung: vollständig richtig lösen, dann zählt der Tag.</div>'
+      +'<button type="button" class="lp-btn ok" data-lab="wdh-ok" data-id="'+id+'">✓ Heute vollständig richtig</button> <button type="button" class="lp-btn danger" data-lab="wdh-falsch" data-id="'+id+'">✗ Fehler drin</button>';
+  } else { h+='<div class="lp-mu" style="font-size:11px;margin-top:6px">Fertig gefestigt.</div>'; }
+  h+='<div class="lp-row" style="gap:8px;margin-top:10px;flex-wrap:wrap;justify-content:space-between"><input class="lp-in lp-mono" type="date" title="Abgabedatum" data-lpc="lab.abgabeDatum" data-id="'+id+'" value="'+(l.abgabeDatum||'')+'" style="max-width:150px"/>'
+    +'<span class="lp-row" style="gap:6px"><input class="lp-in lp-mono" type="number" min="0" max="20" title="Punkte" placeholder="Pkt." data-lpc="lab.punkte" data-id="'+id+'" value="'+(l.punkte!=null?l.punkte:'')+'" style="width:70px"/><button type="button" class="lp-x" data-lab="del" data-id="'+id+'">✕</button></span></div></div>';
+  return h;
+}
+function lpLabsHTML(f){
+  var labs=lpLabsOf(f.id), R=nrRegeln?nrRegeln():null, sum=0; labs.forEach(function(l){sum+=+l.punkte||0;});
+  var h='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span style="font-size:14px;font-weight:500">Labs</span><button type="button" class="lp-btn gray" data-lab="new" data-fach="'+lpEsc(f.id)+'">＋ Lab</button></div>'
+    +(R?'<div class="lp-mu lp-mono" style="margin-bottom:8px">'+sum+' / '+R.labMax+' Punkte erfasst</div>':'')
+    +(labs.length?'':'<div class="lp-mu">Noch keine Labs.</div>')+'</div>';
+  return h+labs.map(labCardHTML).join('');
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lab]'); if(!el)return; ev.preventDefault();
+  var a=el.getAttribute('data-lab'), id=el.getAttribute('data-id');
+  switch(a){
+    case 'new': var fid=el.getAttribute('data-fach'), n=lpLabsOf(fid).length+1; var t=prompt('Titel (leer = «Lab '+n+'»):',''); labNew(fid,n,t&&t.trim()||('Lab '+n)); return lpRender();
+    case 'del': if(!confirm('Lab löschen?'))return; D.lpLabs=lpLabs().filter(function(x){return x.id!==id;}); markDeleted(id); saveD(); return lpRender();
+    case 'num':
+      var l=lpLabs().find(function(x){return x.id===id;}); if(!l)return; var n=+el.getAttribute('data-n'); l.falsch=l.falsch||[];
+      var i=l.falsch.indexOf(n); if(i>=0)l.falsch.splice(i,1); else l.falsch.push(n);
+      el.classList.toggle('on'); return;
+    case 'durchgang': var l2=lpLabs().find(function(x){return x.id===id;}); if(!l2)return; if(!l2.anzahl){ showToast('Bitte zuerst die Anzahl Aufgaben eintragen.'); return; } labDurchgang(l2,l2.falsch||[]); showToast(l2.falsch&&l2.falsch.length?'Durchgang gespeichert, weiter üben.':'Alles richtig ✓','ok'); return lpRender();
+    case 'wdh-ok': var l3=lpLabs().find(function(x){return x.id===id;}); if(!l3)return; labDurchgang(l3,[]); return lpRender();
+    case 'wdh-falsch': var l4=lpLabs().find(function(x){return x.id===id;}); if(!l4)return; var nrs=prompt('Welche Nummern falsch? (mit Komma trennen)',''); labDurchgang(l4,(nrs||'').split(',').map(function(s){return +s.trim();}).filter(Boolean)); return lpRender();
   }
 });
 
