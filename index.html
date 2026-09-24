@@ -16534,9 +16534,9 @@ function lbFormHTML(pre){
   pre=pre||{};
   var chips=(pre.laender||[]).map(function(iso){ return '<span class="wp-pill" data-lb="land-chip" data-iso="'+iso+'">'+lpEsc(lbName(iso))+' <b style="font-weight:400">✕</b></span>'; }).join('');
   return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:8px">'+(LB_UI.editId?'MELDUNG BEARBEITEN':'NEUE MELDUNG')+'</div>'
-    +(pwWorker()?'<div class="lp-inner" style="margin-bottom:10px"><div class="lp-cap" style="margin-bottom:4px">TEXT EINFÜGEN (OPTIONAL)</div>'
+    +(true?'<div class="lp-inner" style="margin-bottom:10px"><div class="lp-cap" style="margin-bottom:4px">TEXT EINFÜGEN (OPTIONAL)</div>'
       +'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Artikeltext einfügen — Land, Datum, Kategorie, Titel, Text, Sicherheit und Tags werden vorgeschlagen, du prüfst und ergänzt (Quelle bleibt immer manuell).</div>'
-      +'<textarea class="lp-in" id="lb-paste" rows="3" style="width:100%" placeholder="Text hier einfügen …"></textarea>'
+      +lbKiKeyHTML()+'<textarea class="lp-in" id="lb-paste" rows="3" style="width:100%" placeholder="Text hier einfügen …"></textarea>'
       +'<div class="lp-row" style="justify-content:space-between;align-items:center;margin-top:6px"><span class="lp-mu" id="lb-extract-status" style="font-size:11px"></span><button type="button" class="lp-btn gray" data-lb="extract">Vorschlag holen</button></div></div>':'')
     +'<div class="lp-fld"><label>Länder</label><div style="flex:1;min-width:0"><div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px" id="lb-land-chips">'+chips+'</div><input class="lp-in" id="lb-land-q" list="lb-land-dl" placeholder="Land tippen und Enter" style="width:100%"/><datalist id="lb-land-dl">'+Object.keys(LB_NAMEN||{}).map(function(iso){return '<option value="'+lpEsc(LB_NAMEN[iso])+'">';}).join('')+'</datalist></div></div>'
     +'<div class="lp-fld"><label>Datum</label><input class="lp-in lp-mono" type="date" id="lb-datum" value="'+(pre.datum||today())+'" style="max-width:150px"/></div>'
@@ -17587,22 +17587,89 @@ function lbExtractFehler(e){
   if(e==='parse'||e==='antwort')return 'Die KI-Antwort war nicht auswertbar — nochmals versuchen oder Felder manuell ausfüllen.';
   return 'Kein Vorschlag möglich ('+(e||'Fehler')+') — Felder manuell ausfüllen.';
 }
+// KI-Schnellerfassung: direkt aus dem Browser an die Anthropic-API (Schlüssel nur lokal auf diesem Gerät, nicht im Sync).
+// Fallback: Cloudflare-Worker /extract, falls einer eingetragen ist und kein Schlüssel vorhanden.
+function lbKiKey(){ try{ return localStorage.getItem('sos-anth')||''; }catch(e){ return ''; } }
+function lbKiKeyHTML(){
+  if(lbKiKey())return '<div class="lp-mu" style="font-size:11px;margin-bottom:6px"><i class="ti ti-key"></i> KI-Schlüssel auf diesem Gerät gespeichert · <span data-lb="ki-key-del" style="cursor:pointer;text-decoration:underline">entfernen</span></div>';
+  return '<div style="margin-bottom:8px"><div class="lp-mu" style="font-size:11px;margin-bottom:4px">Einmalig pro Gerät: Anthropic-API-Schlüssel eintragen (console.anthropic.com › API Keys). Wird nur hier auf dem Gerät gespeichert, nicht synchronisiert.</div>'
+    +'<div class="lp-row" style="gap:6px"><input class="lp-in lp-mono" type="password" id="lb-ki-key" placeholder="sk-ant-…" autocomplete="off" style="flex:1;min-width:0"><button type="button" class="lp-btn gray" data-lb="ki-key-save">Speichern</button></div></div>';
+}
+function lbKiPrompt(){
+  var td=today();
+  return 'Du liest einen eingefügten Nachrichtentext und schlägst daraus eine Meldung für ein privates Lageberichts-Archiv vor. '
+    +'Antworte AUSSCHLIESSLICH mit einem einzigen JSON-Objekt, ohne Erklärung, ohne Markdown-Codeblock, exakt in diesem Format:\n'
+    +'{"laender":["XXX"],"datum":"JJJJ-MM-TT","kategorie":"'+LB_KAT.map(function(k){return k[0];}).join('|')+'","titel":"...","text":"...","sicherheit":"bestaetigt|wahrscheinlich|unbestaetigt","systeme":["..."],"ereignis":"'+LB_EREIGNIS.map(function(k){return k[0];}).join('|')+'|","tags":["..."]}\n\n'
+    +'Regeln:\n'
+    +'- laender: ISO-3166-alpha-3-Codes (z. B. "USA","DEU","CHE"), mindestens eines, alle im Text klar betroffenen Länder.\n'
+    +'- datum: Datum der Meldung/des Ereignisses, falls im Text erkennbar, sonst "'+td+'". Einzelne Stichworte ohne Datum: "'+td+'".\n'
+    +'- kategorie: die am besten passende. "entwicklung" für Rollouts, Erstflüge, Tests und Prototypen (auch ohne Beschaffung), "beschaffung" nur bei Kauf/Bestellung/Lieferung an Streitkräfte, "export" bei Verkauf ins Ausland, "stationierung" bei Verlegung/Stationierung.\n'
+    +'- titel: kurz (max. 80 Zeichen), sachlich, keine Wertung. Übliches Format "ISO/ISO: Kernaussage".\n'
+    +'- text: 2 bis 5 Sätze Zusammenfassung, sachlich, keine eigene Meinung. Bei sehr kurzer Eingabe nur das, was dasteht.\n'
+    +'- sicherheit: "bestaetigt" nur bei klar berichteten Fakten ohne Konjunktiv. "wahrscheinlich" bei "dürfte", "mutmasslich", "Berichten zufolge", "soll". "unbestaetigt" bei Gerüchten oder einer einzelnen unbestätigten Quelle.\n'
+    +'- systeme: konkrete Waffensysteme, Flugzeuge, Schiffe, Fahrzeuge, die im Text NAMENTLICH genannt werden. Leere Liste, wenn keine.\n'
+    +'- ereignis: nur wenn eindeutig, sonst "".\n'
+    +'- tags: nur Einheiten, Programme oder Operationen, die NAMENTLICH genannt werden. Nicht raten.\n'
+    +'- Erfinde keine Fakten. Im Zweifel sicherheit eine Stufe vorsichtiger wählen.';
+}
+function lbKiParse(txt){
+  try{ return JSON.parse(txt); }catch(e){}
+  var m=String(txt||'').match(/\{[\s\S]*\}/); if(m){ try{ return JSON.parse(m[0]); }catch(e){} }
+  return null;
+}
+function lbKiFehler(status,body){
+  var t=JSON.stringify(body||{}).toLowerCase();
+  if(status===401||status===403)return 'Der KI-Schlüssel wird abgelehnt — oben «entfernen» und neu eintragen.';
+  if(status===400&&t.indexOf('credit')>=0)return 'Kein Guthaben mehr beim Anthropic-Konto (console.anthropic.com › Billing).';
+  if(status===429||status===529||status>=500)return 'Die KI ist gerade überlastet — in einer Minute nochmals versuchen.';
+  return 'Kein Vorschlag möglich (Fehler '+status+') — Felder manuell ausfüllen.';
+}
 function lbExtractRun(){
-  var ta=document.getElementById('lb-paste'), status=document.getElementById('lb-extract-status'), w=pwWorker();
+  var ta=document.getElementById('lb-paste'), status=document.getElementById('lb-extract-status'), key=lbKiKey(), w=pwWorker();
   var txt=ta&&ta.value.trim();
-  if(!w){ showToast('Kein Worker konfiguriert (Hangar › Erinnerungen) — Felder manuell ausfüllen.'); return; }
-  if(!txt){ showToast('Bitte zuerst Text einfügen.'); return; }
+  var done=function(msg,ok){ if(status)status.textContent=ok?'':msg; if(msg)showToast(msg,ok?'ok':undefined); };
+  if(!txt){ done('Bitte zuerst Text einfügen.'); return; }
+  var apply=function(j){ var pre=lbSanitizePre(j); if(!pre){ done('Antwort nicht auswertbar — Felder manuell ausfüllen.'); return; } LB_UI.formPre=pre; lbRender(); showToast('Vorschlag übernommen — bitte prüfen und Quelle ergänzen.','ok'); };
   if(status)status.textContent='Lädt …';
+  if(key){
+    fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,system:lbKiPrompt(),messages:[{role:'user',content:txt.slice(0,6000)}]})})
+      .then(function(r){ return r.json().catch(function(){return {};}).then(function(j){ return {ok:r.ok,st:r.status,j:j}; }); })
+      .then(function(res){
+        if(!res.ok){ done(lbKiFehler(res.st,res.j)); return; }
+        var out=(res.j.content||[]).filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
+        var j=lbKiParse(out); if(!j){ done('Die KI-Antwort war nicht auswertbar — nochmals versuchen.'); return; }
+        if(status)status.textContent=''; apply(j);
+      })
+      .catch(function(){ done('Keine Verbindung zur KI — Internet prüfen oder Felder manuell ausfüllen.'); });
+    return;
+  }
+  if(!w){ done('Zuerst oben den KI-Schlüssel eintragen.'); var k=document.getElementById('lb-ki-key'); if(k)k.focus(); return; }
   fetch(w+'/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt})})
     .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
     .then(function(res){
-      if(status)status.textContent='';
-      if(!res.ok||res.j.error){ var st2=document.getElementById('lb-extract-status'), msg=lbExtractFehler(res.j&&res.j.error); if(st2)st2.textContent=msg; showToast(msg); return; }
-      var pre=lbSanitizePre(res.j); if(!pre){ showToast('Antwort nicht auswertbar — Felder manuell ausfüllen.'); return; }
-      LB_UI.formPre=pre; lbRender(); showToast('Vorschlag übernommen — bitte prüfen und Quelle ergänzen.','ok');
+      if(!res.ok||res.j.error){ done(lbExtractFehler(res.j&&res.j.error)); return; }
+      if(status)status.textContent=''; apply(res.j);
     })
-    .catch(function(){ if(status)status.textContent=''; showToast('Worker nicht erreichbar — Felder manuell ausfüllen.'); });
+    .catch(function(){ done('Worker nicht erreichbar — Felder manuell ausfüllen.'); });
 }
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return;
+  var a=el.getAttribute('data-lb');
+  if(a==='ki-key-save'){
+    ev.preventDefault(); var inp=document.getElementById('lb-ki-key'), v=(inp&&inp.value||'').trim();
+    if(!/^sk-ant-/.test(v)){ showToast('Das sieht nicht nach einem Anthropic-Schlüssel aus (beginnt mit «sk-ant-»).'); return; }
+    var ta=document.getElementById('lb-paste'), keep=ta?ta.value:'';
+    try{ localStorage.setItem('sos-anth',v); }catch(e){ showToast('Speichern nicht möglich (Browser-Speicher blockiert).'); return; }
+    lbRender(); var ta2=document.getElementById('lb-paste'); if(ta2)ta2.value=keep; showToast('KI-Schlüssel gespeichert ✓','ok'); return;
+  }
+  if(a==='ki-key-del'){
+    ev.preventDefault(); if(!confirm('KI-Schlüssel von diesem Gerät entfernen?'))return;
+    var ta3=document.getElementById('lb-paste'), keep3=ta3?ta3.value:'';
+    try{ localStorage.removeItem('sos-anth'); }catch(e){}
+    lbRender(); var ta4=document.getElementById('lb-paste'); if(ta4)ta4.value=keep3; return;
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 // AUFGABEN-POOL (Analysis) & LABS (Programming) — Paket 1: Datenmodell, Erfassen, 4-Ergebnis-Logik,
