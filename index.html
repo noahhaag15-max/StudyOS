@@ -18152,6 +18152,43 @@ document.addEventListener('click',function(ev){
   }
 });
 
+// ═══ LABS KOMPAKT — eine Zeile pro Lab in einer gemeinsamen Karte, Details erst auf Antippen ═══
+var LAB_EXP={};
+var _labCardHTML_voll=labCardHTML;
+function labPunkteHTML(l){
+  var z=l.status==='voll'?3:l.status==='geloest'?(l.festigenZaehler||0):0, c=LAB_STATUS_VAR[l.status]||'var(--lp-muted)';
+  if(l.status!=='geloest'&&l.status!=='voll')return '';
+  return '<span title="Festigen '+z+'/3" style="letter-spacing:1px;color:'+c+';font-size:10px">'+'●●●'.slice(0,z)+'<span style="opacity:.3">'+'●●●'.slice(0,3-z)+'</span></span>';
+}
+labCardHTML=function(l){
+  var id=lpEsc(l.id), c=LAB_STATUS_VAR[l.status]||'var(--lp-muted)';
+  if(LAB_EXP[l.id]){
+    var h=_labCardHTML_voll(l).replace('<div class="lp-cd" style="margin-bottom:10px">','<div class="lp-inner" style="margin:6px 0 8px;border-left:3px solid '+c+'">')
+      .replace('<span style="font-size:14px;font-weight:500">','<span data-lab="exp" data-id="'+id+'" style="font-size:14px;font-weight:500;cursor:pointer"><i class="ti ti-chevron-up" style="font-size:12px;opacity:.6"></i> ');
+    return h;
+  }
+  var wdh=labNaechsteWdh(l), td=today(), faellig=wdh&&wdh<=td, meta=[];
+  if(l.status==='offen'||l.status==='inArbeit'){ if(l.abgabeDatum)meta.push('Abgabe '+lpFmtShort(l.abgabeDatum)); var dg=(l.durchgaenge||[]).length; if(dg)meta.push(dg+' Durchg.'); }
+  else if(wdh)meta.push(faellig?'<span style="color:var(--c-accent)">Wdh. fällig</span>':'Wdh. '+lpFmtShort(wdh));
+  if(l.punkte!=null&&l.punkte!=='')meta.push(l.punkte+' Pkt.');
+  return '<div class="lp-row" data-lab="exp" data-id="'+id+'" style="gap:8px;align-items:center;padding:7px 2px;border-top:1px solid var(--lp-border);cursor:pointer">'
+    +'<span style="width:7px;height:7px;border-radius:50%;background:'+c+';flex-shrink:0"></span>'
+    +'<span style="flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+lpEsc(l.titel)+'</span>'
+    +labPunkteHTML(l)
+    +'<span class="lp-mono lp-mu" style="font-size:10px;white-space:nowrap">'+meta.join(' · ')+'</span>'
+    +'<i class="ti ti-chevron-down" style="font-size:12px;opacity:.5"></i></div>';
+};
+lpLabsHTML=function(f){
+  var labs=lpLabsOf(f.id), R=nrRegeln?nrRegeln():null, sum=0; labs.forEach(function(l){sum+=+l.punkte||0;});
+  var offen=labs.filter(function(l){return l.status!=='voll';}).length;
+  return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:14px;font-weight:500">Labs <span class="lp-mu lp-mono" style="font-size:11px;font-weight:400">'+(labs.length?offen+' offen'+(R?' · '+sum+'/'+R.labMax+' Pkt.':''):'')+'</span></span><button type="button" class="lp-btn gray" data-lab="new" data-fach="'+lpEsc(f.id)+'">＋ Lab</button></div>'
+    +(labs.length?labs.map(labCardHTML).join(''):'<div class="lp-mu" style="font-size:12px">Noch keine Labs.</div>')+'</div>';
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lab="exp"]'); if(!el)return; ev.preventDefault();
+  var id=el.getAttribute('data-id'); LAB_EXP[id]=!LAB_EXP[id]; lpRender();
+});
+
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
