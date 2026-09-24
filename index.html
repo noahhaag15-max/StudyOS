@@ -16515,6 +16515,10 @@ function lbFormHTML(pre){
   pre=pre||{};
   var chips=(pre.laender||[]).map(function(iso){ return '<span class="wp-pill" data-lb="land-chip" data-iso="'+iso+'">'+lpEsc(lbName(iso))+' <b style="font-weight:400">✕</b></span>'; }).join('');
   return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:8px">NEUE MELDUNG</div>'
+    +(pwWorker()?'<div class="lp-inner" style="margin-bottom:10px"><div class="lp-cap" style="margin-bottom:4px">TEXT EINFÜGEN (OPTIONAL)</div>'
+      +'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Artikeltext einfügen — Land, Datum, Kategorie, Titel, Text, Sicherheit und Tags werden vorgeschlagen, du prüfst und ergänzt (Quelle bleibt immer manuell).</div>'
+      +'<textarea class="lp-in" id="lb-paste" rows="3" style="width:100%" placeholder="Text hier einfügen …"></textarea>'
+      +'<div class="lp-row" style="justify-content:space-between;align-items:center;margin-top:6px"><span class="lp-mu" id="lb-extract-status" style="font-size:11px"></span><button type="button" class="lp-btn gray" data-lb="extract">Vorschlag holen</button></div></div>':'')
     +'<div class="lp-fld"><label>Länder</label><div style="flex:1;min-width:0"><div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px" id="lb-land-chips">'+chips+'</div><input class="lp-in" id="lb-land-q" list="lb-land-dl" placeholder="Land tippen und Enter" style="width:100%"/><datalist id="lb-land-dl">'+Object.keys(LB_NAMEN||{}).map(function(iso){return '<option value="'+lpEsc(LB_NAMEN[iso])+'">';}).join('')+'</datalist></div></div>'
     +'<div class="lp-fld"><label>Datum</label><input class="lp-in lp-mono" type="date" id="lb-datum" value="'+(pre.datum||today())+'" style="max-width:150px"/></div>'
     +'<div class="lp-fld"><label>Kategorie</label><select class="lp-in" id="lb-kat">'+LB_KAT.map(function(k){return '<option value="'+k[0]+'"'+(pre.kategorie===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></div>'
@@ -16569,7 +16573,7 @@ function lbRender(){
     +'<button type="button" class="lp-btn fill" data-lb="form-open"><i class="ti ti-plus"></i> Meldung erfassen</button></div>';
   var openMeld=LB_UI.openMeld?lbMeldungen().find(function(m){return m.id===LB_UI.openMeld;}):null;
   if(openMeld){ el.innerHTML=h+lbMeldungOpenHTML(openMeld); return; }
-  if(LB_UI.form){ el.innerHTML=h+lbFormHTML(); return; }
+  if(LB_UI.form){ el.innerHTML=h+lbFormHTML(LB_UI.formPre); return; }
   if(LB_UI.tab==='dossier'&&LB_UI.land){ el.innerHTML=h+lbDossierHTML(LB_UI.land); return; }
   h+=lbTabsHTML();
   if(LB_UI.tab==='zeitstrahl'){ el.innerHTML=h+lbZeitstrahlHTML(); return; }
@@ -16612,8 +16616,8 @@ document.addEventListener('click',function(ev){
     case 'meld-open': LB_UI.openMeld=id; return lbRender();
     case 'meld-close': LB_UI.openMeld=null; return lbRender();
     case 'meld-del': if(!confirm('Meldung löschen?'))return; D.lbMeldungen=lbMeldungen().filter(function(m){return m.id!==id;}); markDeleted(id); LB_UI.openMeld=null; saveD(); return lbRender();
-    case 'form-open': LB_UI.form=true; return lbRender();
-    case 'form-close': LB_UI.form=false; return lbRender();
+    case 'form-open': LB_UI.form=true; LB_UI.formPre=null; return lbRender();
+    case 'form-close': LB_UI.form=false; LB_UI.formPre=null; return lbRender();
     case 'form-save': return lbFormSave();
     case 'land-chip': el.remove(); return;
   }
@@ -16768,8 +16772,37 @@ document.addEventListener('click',function(ev){
       }
       return;
     case 'export': ev.preventDefault(); return lbExportRun(el.getAttribute('data-v'));
+    case 'extract': ev.preventDefault(); return lbExtractRun();
   }
 });
+function lbSanitizePre(d){
+  if(!d||typeof d!=='object')return null;
+  var out={};
+  out.laender=Array.isArray(d.laender)?d.laender.map(function(s){return String(s||'').toUpperCase().trim();}).filter(function(s){return /^[A-Z]{3}$/.test(s)&&LB_NAMEN&&LB_NAMEN[s];}):[];
+  out.datum=/^\d{4}-\d{2}-\d{2}$/.test(d.datum)?d.datum:today();
+  out.kategorie=LB_KAT.some(function(k){return k[0]===d.kategorie;})?d.kategorie:LB_KAT[0][0];
+  out.sicherheit=LB_SICHER.some(function(k){return k[0]===d.sicherheit;})?d.sicherheit:'unbestaetigt';
+  out.titel=String(d.titel||'').slice(0,200);
+  out.text=String(d.text||'').slice(0,4000);
+  out.tags=Array.isArray(d.tags)?d.tags.map(function(t){return String(t||'').trim();}).filter(Boolean).slice(0,15):[];
+  return out;
+}
+function lbExtractRun(){
+  var ta=document.getElementById('lb-paste'), status=document.getElementById('lb-extract-status'), w=pwWorker();
+  var txt=ta&&ta.value.trim();
+  if(!w){ showToast('Kein Worker konfiguriert (Hangar › Erinnerungen) — Felder manuell ausfüllen.'); return; }
+  if(!txt){ showToast('Bitte zuerst Text einfügen.'); return; }
+  if(status)status.textContent='Lädt …';
+  fetch(w+'/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt})})
+    .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
+    .then(function(res){
+      if(status)status.textContent='';
+      if(!res.ok||res.j.error){ showToast('Kein Vorschlag möglich ('+(res.j&&res.j.error||'Fehler')+') — Felder manuell ausfüllen.'); return; }
+      var pre=lbSanitizePre(res.j); if(!pre){ showToast('Antwort nicht auswertbar — Felder manuell ausfüllen.'); return; }
+      LB_UI.formPre=pre; lbRender(); showToast('Vorschlag übernommen — bitte prüfen und Quelle ergänzen.','ok');
+    })
+    .catch(function(){ if(status)status.textContent=''; showToast('Worker nicht erreichbar — Felder manuell ausfüllen.'); });
+}
 
 // ═══════════════════════════════════════════════════════════
 // AUFGABEN-POOL (Analysis) & LABS (Programming) — Paket 1: Datenmodell, Erfassen, 4-Ergebnis-Logik,
