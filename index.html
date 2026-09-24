@@ -11171,44 +11171,51 @@ function lpRing(pct,size){
 }
 function lpCut(s,n){ s=String(s||''); return s.length>n?s.slice(0,n-1)+'…':s; }
 
-// Flugroute: Etappen = Waypoints, Prüfung = Zielflughafen, gestrichelte Pufferstrecke dazwischen
+// Flugroute eines Themas: Etappen = Waypoints, Ziel = «Fertig». Sind alle Etappen erledigt, landet der Flieger am Ziel.
 function lpRouteHTML(t,es,modus,f){
   var cur=lpCurrentEtappe(t), sel=lpSelectedEtappe(t), n=es.length;
-  var pr=(f&&f.pruefung)?lpFmtShort(f.pruefung):'—';
-  var W=Math.max(640,n*105+175), x0=30, xe=W-170, px=W-40;
+  var done=!!(n&&t&&lpThemaProg(t).pct>=100);
+  var M='var(--lp-master)', endCol=done?M:'var(--lp-muted)';
+  var W=Math.max(640,n*105+175), x0=46, xe=W-170, px=W-40;
   var xs=es.map(function(e,i){ return n===1?x0:x0+i*(xe-x0)/(n-1); });
   var lastX=n?xs[n-1]:x0;
   var h='<div class="lp-route-h"><div style="overflow-x:auto"><svg viewBox="0 0 '+W+' 110" width="100%" style="display:block;margin:6px 0 4px;min-width:'+(W>640?Math.round(W*.85):0)+'px" font-family="Space Mono,monospace" font-size="11">'
-    +(n>1?'<line x1="'+x0+'" y1="50" x2="'+lastX+'" y2="50" style="stroke:var(--lp-accent)" stroke-width="1.5" opacity=".5"/>':'')
-    +'<line x1="'+lastX+'" y1="50" x2="'+(px)+'" y2="50" style="stroke:var(--lp-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>';
+    +(n>1?'<line x1="'+x0+'" y1="50" x2="'+lastX+'" y2="50" style="stroke:'+(done?M:'var(--lp-accent)')+'" stroke-width="'+(done?2.5:1.5)+'" opacity="'+(done?.9:.5)+'"/>':'')
+    +(done?'<line x1="'+lastX+'" y1="50" x2="'+px+'" y2="50" style="stroke:'+M+'" stroke-width="2.5" opacity=".9"/>'
+          :'<line x1="'+lastX+'" y1="50" x2="'+px+'" y2="50" style="stroke:var(--lp-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>');
   es.forEach(function(e,i){
-    var x=xs[i], isCur=cur&&cur.id===e.id, isSel=sel&&sel.id===e.id;
+    var x=xs[i], isCur=!done&&cur&&cur.id===e.id, isSel=sel&&sel.id===e.id;
     h+='<g data-lpa="sel-et" data-id="'+lpEsc(e.id)+'" style="cursor:pointer"><title>'+lpEsc(e.titel)+'</title><rect x="'+(x-46)+'" y="20" width="92" height="70" fill="transparent"/>'
       +(isSel?'<circle cx="'+x+'" cy="50" r="12.5" fill="none" style="stroke:var(--lp-accent)" stroke-width="1" opacity=".55"/>':'')
       +'<circle cx="'+x+'" cy="50" r="8" style="fill:var(--lp-bg);stroke:'+lpStufeVar(e,modus)+'" stroke-width="2.5"/>'
       +'<text x="'+x+'" y="80" text-anchor="middle" style="fill:'+(isCur||isSel?'var(--lp-text)':'var(--lp-muted)')+'">'+lpEsc(lpCut(e.titel,11))+'</text>'
       +(isCur?'<text x="'+x+'" y="30" text-anchor="middle" style="fill:var(--lp-accent)" font-size="16">✈</text>':'')+'</g>';
   });
-  h+='<text x="'+((lastX+px)/2)+'" y="40" text-anchor="middle" style="fill:var(--lp-muted)">Puffer</text>'
-    +'<rect x="'+(px-8)+'" y="42" width="16" height="16" rx="3" fill="none" style="stroke:var(--lp-danger)" stroke-width="2"/>'
-    +'<text x="'+px+'" y="80" text-anchor="middle" style="fill:var(--lp-danger)">Prüfung</text>'
-    +'<text x="'+px+'" y="98" text-anchor="middle" style="fill:var(--lp-muted)">'+lpEsc(pr)+'</text></svg></div></div>';
+  h+=(done?'<circle cx="'+px+'" cy="50" r="16" fill="none" style="stroke:'+M+'" stroke-width="1" opacity=".45"/>'
+          +'<rect x="'+(px-9)+'" y="41" width="18" height="18" rx="4" style="fill:'+M+';stroke:'+M+'" stroke-width="2"/>'
+          +'<text x="'+px+'" y="54.5" text-anchor="middle" style="fill:var(--lp-bg)" font-size="12" font-weight="700">✓</text>'
+          +'<text x="'+px+'" y="26" text-anchor="middle" style="fill:'+M+'" font-size="16">✈</text>'
+         :'<rect x="'+(px-8)+'" y="42" width="16" height="16" rx="3" fill="none" style="stroke:'+endCol+'" stroke-width="2"/>')
+    +'<text x="'+px+'" y="80" text-anchor="middle" style="fill:'+endCol+'"'+(done?' font-weight="700"':'')+'>'+(done?'Fertig ✓':'Fertig')+'</text></svg></div></div>';
   // Mobile (< 700 px): Route vertikal
-  var ys=es.map(function(e,i){return 30+i*54;}), lastY=n?ys[n-1]:30, py=lastY+92, H=py+30;
+  var ys=es.map(function(e,i){return 30+i*54;}), lastY=n?ys[n-1]:30, py=lastY+72, H=py+30;
   h+='<div class="lp-route-v"><svg viewBox="0 0 320 '+H+'" width="100%" style="display:block;margin:6px 0 4px" font-family="Space Mono,monospace" font-size="11">'
-    +(n>1?'<line x1="60" y1="30" x2="60" y2="'+lastY+'" style="stroke:var(--lp-accent)" stroke-width="1.5" opacity=".5"/>':'')
-    +'<line x1="60" y1="'+lastY+'" x2="60" y2="'+py+'" style="stroke:var(--lp-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>';
+    +(n>1?'<line x1="60" y1="30" x2="60" y2="'+lastY+'" style="stroke:'+(done?M:'var(--lp-accent)')+'" stroke-width="'+(done?2.5:1.5)+'" opacity="'+(done?.9:.5)+'"/>':'')
+    +(done?'<line x1="60" y1="'+lastY+'" x2="60" y2="'+py+'" style="stroke:'+M+'" stroke-width="2.5" opacity=".9"/>'
+          :'<line x1="60" y1="'+lastY+'" x2="60" y2="'+py+'" style="stroke:var(--lp-muted)" stroke-width="1.5" stroke-dasharray="5 4"/>');
   es.forEach(function(e,i){
-    var y=ys[i], isCur=cur&&cur.id===e.id, isSel=sel&&sel.id===e.id;
+    var y=ys[i], isCur=!done&&cur&&cur.id===e.id, isSel=sel&&sel.id===e.id;
     h+='<g data-lpa="sel-et" data-id="'+lpEsc(e.id)+'" style="cursor:pointer"><title>'+lpEsc(e.titel)+'</title><rect x="0" y="'+(y-24)+'" width="320" height="48" fill="transparent"/>'
       +(isSel?'<circle cx="60" cy="'+y+'" r="12.5" fill="none" style="stroke:var(--lp-accent)" stroke-width="1" opacity=".55"/>':'')
       +'<circle cx="60" cy="'+y+'" r="8" style="fill:var(--lp-bg);stroke:'+lpStufeVar(e,modus)+'" stroke-width="2.5"/>'
       +'<text x="82" y="'+(y+4)+'" style="fill:'+(isCur||isSel?'var(--lp-text)':'var(--lp-muted)')+'">'+lpEsc(lpCut(e.titel,26))+'</text>'
       +(isCur?'<text x="18" y="'+(y+6)+'" style="fill:var(--lp-accent)" font-size="16">✈</text>':'')+'</g>';
   });
-  h+='<text x="72" y="'+(lastY+50)+'" style="fill:var(--lp-muted)">Puffer</text>'
-    +'<rect x="52" y="'+(py-8)+'" width="16" height="16" rx="3" fill="none" style="stroke:var(--lp-danger)" stroke-width="2"/>'
-    +'<text x="82" y="'+(py+4)+'" style="fill:var(--lp-danger)">Prüfung '+lpEsc(pr)+'</text></svg></div>';
+  h+=(done?'<rect x="51" y="'+(py-9)+'" width="18" height="18" rx="4" style="fill:'+M+';stroke:'+M+'" stroke-width="2"/>'
+          +'<text x="60" y="'+(py+4.5)+'" text-anchor="middle" style="fill:var(--lp-bg)" font-size="12" font-weight="700">✓</text>'
+          +'<text x="18" y="'+(py+6)+'" style="fill:'+M+'" font-size="16">✈</text>'
+         :'<rect x="52" y="'+(py-8)+'" width="16" height="16" rx="3" fill="none" style="stroke:'+endCol+'" stroke-width="2"/>')
+    +'<text x="82" y="'+(py+4)+'" style="fill:'+endCol+'"'+(done?' font-weight="700"':'')+'>'+(done?'Fertig ✓':'Fertig')+'</text></svg></div>';
   return h;
 }
 function lpLegendHTML(modus){
@@ -11330,14 +11337,14 @@ function lpThemaOpenHTML(t,f){
     +'<button type="button" class="lp-btn gray" data-lpa="edit-th" data-id="'+id+'">✎ Thema bearbeiten</button></div></div>';
   return h;
 }
-// Fach-Ebene, gleiche Optik wie die Etappen-Flugroute: Themen statt Etappen, endet an der Prüfung oder «Fertig»
+// Fach-Ebene, gleiche Optik wie die Etappen-Flugroute: Themen statt Etappen, endet immer an der Prüfung
 function lpFachCurrentThema(themen){ return themen.find(function(t){return lpThemaProg(t).pct<100;})||themen[themen.length-1]||null; }
 function lpThemaVar(t){ var p=lpThemaProg(t).pct; return p>=100?'var(--lp-master)':p>0?'var(--lp-review)':'var(--lp-new)'; }
 function lpFachLegendHTML(){ return '<div class="lp-row lp-mu" style="gap:14px;margin-bottom:10px;flex-wrap:wrap"><span><span style="color:var(--lp-new)">●</span> Offen</span><span><span style="color:var(--lp-review)">●</span> Begonnen</span><span><span style="color:var(--lp-master)">●</span> Abgeschlossen</span></div>'; }
 function lpFachRouteHTML(f,themen){
-  var cur=lpFachCurrentThema(themen), n=themen.length, end=(f&&f.pruefung)?{label:'Prüfung',date:lpFmtShort(f.pruefung)}:{label:'Fertig',date:''};
-  var col=(f&&f.pruefung)?'var(--lp-danger)':'var(--lp-master)';
-  var W=Math.max(640,n*105+175), x0=30, xe=W-170, px=W-40;
+  var cur=lpFachCurrentThema(themen), n=themen.length, end={label:'Prüfung',date:(f&&f.pruefung)?lpFmtShort(f.pruefung):'Datum offen'};
+  var col='var(--lp-danger)';
+  var W=Math.max(640,n*105+175), x0=46, xe=W-170, px=W-40;
   var xs=themen.map(function(t,i){ return n===1?x0:x0+i*(xe-x0)/(n-1); });
   var lastX=n?xs[n-1]:x0;
   var h='<div class="lp-route-h"><div style="overflow-x:auto"><svg viewBox="0 0 '+W+' 110" width="100%" style="display:block;margin:6px 0 4px;min-width:'+(W>640?Math.round(W*.85):0)+'px" font-family="Space Mono,monospace" font-size="11">'
@@ -16979,7 +16986,7 @@ document.addEventListener('click',function(ev){
 function lpLabs(){ if(!Array.isArray(D.lpLabs))D.lpLabs=[]; return D.lpLabs; }
 function lpLabsOf(fachId){ return lpLabs().filter(function(l){return l.fachId===fachId;}).sort(function(a,b){return (a.nummer||0)-(b.nummer||0);}); }
 var LAB_STATUS_VAR={offen:'var(--lp-new)',inArbeit:'var(--lp-review)',geloest:'var(--lp-ok)',voll:'var(--lp-master)'};
-function labStatusLabel(l){ if(l.status==='voll')return 'Voll (3/3)'; if(l.status==='geloest')return 'Gelöst · '+(l.festigenZaehler||0)+'/3'; if(l.status==='inArbeit')return 'In Arbeit'; return 'Offen'; }
+function labStatusLabel(l){ if(l.status==='voll')return 'Voll (3/3)'; if(l.status==='geloest')return 'Gelöst · Festigen '+(l.festigenZaehler||0)+'/3'; if(l.status==='inArbeit')return 'In Arbeit'; return 'Offen'; }
 function labSpaetesterStart(l){
   if(!l.abgabeDatum)return null;
   var iv=lpEnsure().settings.labIntervalle||LP_DEFAULT_SETTINGS.labIntervalle, tage=1+iv.reduce(function(a,n){return a+n;},0);
@@ -17012,28 +17019,68 @@ function labCardHTML(l){
     +'<span class="lp-tag" style="background:color-mix(in srgb,'+LAB_STATUS_VAR[l.status]+' 18%,transparent);color:'+LAB_STATUS_VAR[l.status]+'">'+labStatusLabel(l)+'</span></div>';
   if(l.abgabeDatum)h+='<div class="lp-mu lp-mono" style="font-size:11px;margin-top:2px">Abgabe '+lpFmtShort(l.abgabeDatum)+(spaet?' · spätester Start '+lpFmtShort(spaet)+(ueberfaellig?' <span style="color:var(--c-danger)">— schon vorbei</span>':''):'')+'</div>';
   if(wdh)h+='<div class="lp-mu" style="font-size:11px;margin-top:2px">nächste Wiederholung '+lpFmtShort(wdh)+'</div>';
-  if(l.status==='offen'||l.status==='inArbeit'){
-    h+='<div class="lp-mu" style="font-size:11px;margin-top:8px">Anzahl Aufgaben</div><input class="lp-in lp-mono" type="number" min="1" style="width:80px" id="lab-n-'+id+'" value="'+(l.anzahl||'')+'" data-lpc="lab.anzahl" data-id="'+id+'"/>'
-    +'<div class="lp-mu" style="font-size:11px;margin:8px 0 4px">Welche Nummern waren falsch? (leer = alles richtig)</div>'
+  if(l.status==='offen'||l.status==='inArbeit'||l.status==='geloest'){
+    if(l.status==='geloest')h+='<div class="lp-mu" style="font-size:11px;margin:6px 0 0">Festigen: Lab an 3 verschiedenen Tagen fehlerfrei lösen (pro Tag zählt nur ein Durchgang). Falsche Nummern markieren, sonst leer lassen.</div>';
+    if(l.status!=='geloest'||!l.anzahl)h+='<div class="lp-mu" style="font-size:11px;margin-top:8px">Anzahl Aufgaben</div><input class="lp-in lp-mono" type="number" min="1" style="width:80px" id="lab-n-'+id+'" value="'+(l.anzahl||'')+'" data-lpc="lab.anzahl" data-id="'+id+'"/>';
+    h+='<div class="lp-mu" style="font-size:11px;margin:8px 0 4px">Welche Nummern waren falsch? (leer = alles richtig)</div>'
     +'<div class="lp-row" style="gap:4px;flex-wrap:wrap" id="lab-grid-'+id+'">'+(l.anzahl?Array.from({length:l.anzahl},function(_,i){ return i+1; }).map(function(n){ return '<button type="button" class="lp-x lab-num'+((l.auswahl||[]).indexOf(n)>=0?' on':'')+((l.durchgaenge||[]).length&&(l.falsch||[]).indexOf(n)>=0?' zuletzt':'')+'" data-lab="num" data-id="'+id+'" data-n="'+n+'" style="width:30px"'+((l.falsch||[]).indexOf(n)>=0?' title="im letzten Durchgang falsch"':'')+'>'+n+'</button>'; }).join(''):'<span class="lp-mu" style="font-size:11px">zuerst Anzahl eintragen</span>')+'</div>'
-    +'<div class="lp-row" style="gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><button type="button" class="lp-btn fill" data-lab="durchgang" data-id="'+id+'">Durchgang speichern</button><span class="lp-mu" style="font-size:11px" id="lab-sel-'+id+'">'+labAuswahlText(l)+'</span></div>';
-  } else if(l.status==='geloest'){
-    h+='<div class="lp-mu" style="font-size:11px;margin:6px 0">Nächste Wiederholung: vollständig richtig lösen, dann zählt der Tag.</div>'
-      +'<button type="button" class="lp-btn ok" data-lab="wdh-ok" data-id="'+id+'">✓ Heute vollständig richtig</button> <button type="button" class="lp-btn danger" data-lab="wdh-falsch" data-id="'+id+'">✗ Fehler drin</button>';
+    +'<div class="lp-row" style="gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><button type="button" class="lp-btn fill" data-lab="durchgang" data-id="'+id+'" id="lab-save-'+id+'">'+labSaveText(l)+'</button></div>';
   } else { h+='<div class="lp-mu" style="font-size:11px;margin-top:6px">Fertig gefestigt.</div>'; }
   h+=labVerlaufHTML(l);
   h+='<div class="lp-row" style="gap:8px;margin-top:10px;flex-wrap:wrap;justify-content:space-between"><input class="lp-in lp-mono" type="date" title="Abgabedatum" data-lpc="lab.abgabeDatum" data-id="'+id+'" value="'+(l.abgabeDatum||'')+'" style="max-width:150px"/>'
     +'<span class="lp-row" style="gap:6px"><input class="lp-in lp-mono" type="number" min="0" max="20" title="Punkte" placeholder="Pkt." data-lpc="lab.punkte" data-id="'+id+'" value="'+(l.punkte!=null?l.punkte:'')+'" style="width:70px"/><button type="button" class="lp-x" data-lab="del" data-id="'+id+'">✕</button></span></div></div>';
   return h;
 }
+function labSaveText(l){ var a=(l.auswahl||[]).filter(function(n){return n>=1&&n<=(l.anzahl||0);}); return 'Durchgang speichern · '+(a.length?a.length+' falsch':'alles richtig'); }
+// Status + Festigen-Zähler aus der Liste der Durchgänge neu aufbauen (gleiche Regeln wie labDurchgang)
+function labReplay(l){
+  var dg=l.durchgaenge||[], streng=lpEnsure().settings.labStreng, seen={};
+  l.status='offen'; l.festigenZaehler=0;
+  dg.forEach(function(d){
+    var heuteSchon=!!seen[d.datum]; seen[d.datum]=1;
+    if(l.status==='offen')l.status='inArbeit';
+    if(d.alleKorrekt){
+      if(l.status==='inArbeit'){ l.status='geloest'; l.festigenZaehler=0; }
+      else if(l.status==='geloest'&&!heuteSchon){ l.festigenZaehler=Math.min(3,l.festigenZaehler+1); if(l.festigenZaehler>=3)l.status='voll'; }
+    } else if(l.status==='geloest'&&streng){ l.festigenZaehler=0; }
+  });
+  l.falsch=dg.length?(dg[dg.length-1].falscheNummern||[]).slice():[];
+}
+function labDgWirkung(l){
+  var dg=l.durchgaenge||[], streng=lpEnsure().settings.labStreng, seen={}, st='offen', z=0;
+  return dg.map(function(d){
+    var heuteSchon=!!seen[d.datum]; seen[d.datum]=1; if(st==='offen')st='inArbeit';
+    if(d.alleKorrekt){
+      if(st==='inArbeit'){ st='geloest'; z=0; return 'gelöst'; }
+      if(st==='geloest'&&!heuteSchon){ z=Math.min(3,z+1); if(z>=3)st='voll'; return 'Festigen '+z+'/3'; }
+      if(st==='geloest')return 'zählt nicht · gleicher Tag';
+      return '';
+    }
+    if(st==='geloest'&&streng){ z=0; return 'Festigen zurück auf 0'; }
+    return st==='geloest'?'zählt nicht · mit Fehlern':'';
+  });
+}
+function labDgEdit(id,idx){
+  var l=lpLabs().find(function(x){return x.id===id;}); if(!l)return; var d=(l.durchgaenge||[])[idx]; if(!d)return;
+  var n=Math.max(l.anzahl||0,Math.max.apply(null,[0].concat(d.falscheNummern||[])));
+  LAB_DG_SEL=(d.falscheNummern||[]).slice();
+  syModal('lab-dg','<div class="lp-cap" style="margin-bottom:8px">DURCHGANG VOM '+lpEsc(lpFmt(d.datum))+' KORRIGIEREN</div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Welche Nummern waren falsch? (keine markiert = alles richtig)</div>'
+    +'<div class="lp-row" style="gap:4px;flex-wrap:wrap">'+(n?Array.from({length:n},function(_,i){return i+1;}).map(function(k){ return '<button type="button" class="lp-x lab-num'+(LAB_DG_SEL.indexOf(k)>=0?' on':'')+'" data-lab="dg-num" data-n="'+k+'" style="width:30px">'+k+'</button>'; }).join(''):'<span class="lp-mu" style="font-size:11px">Zuerst im Lab die Anzahl Aufgaben eintragen.</span>')+'</div>'
+    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="lp-btn gray" data-lab="dg-close">Abbrechen</button><button type="button" class="lp-btn fill" data-lab="dg-save" data-id="'+lpEsc(id)+'" data-idx="'+idx+'">Speichern</button></div>');
+}
+var LAB_DG_SEL=[];
 function labAuswahlText(l){ var a=(l.auswahl||[]).slice().sort(function(x,y){return x-y;}); return a.length?a.length+' falsch markiert: '+a.join(', '):'nichts markiert = alles richtig'; }
+var LAB_UI_ALLE={}, LAB_UI_OPEN={};
 function labVerlaufHTML(l){
   var dg=(l.durchgaenge||[]); if(!dg.length)return '';
-  var rows=dg.slice(-5).reverse().map(function(d){
+  var wk=labDgWirkung(l);
+  var rows=dg.map(function(d,i){ return {datum:d.datum,alleKorrekt:d.alleKorrekt,falscheNummern:d.falscheNummern,_i:i,_w:wk[i]}; }).slice(LAB_UI_ALLE[l.id]?0:-5).reverse().map(function(d){
     var n=(d.falscheNummern||[]).slice().sort(function(x,y){return x-y;});
-    return '<div class="lp-row" style="justify-content:space-between;gap:8px;font-size:11px;padding:2px 0"><span class="lp-mono lp-mu">'+lpFmtShort(d.datum)+'</span><span style="flex:1;min-width:0;text-align:right">'+(d.alleKorrekt?'<span style="color:var(--lp-ok)">✓ alles richtig</span>':'<span style="color:var(--lp-review)">'+n.length+(l.anzahl?' / '+l.anzahl:'')+' falsch</span> <span class="lp-mu">· Nr. '+n.join(', ')+'</span>')+'</span></div>';
+    return '<div class="lp-row" style="justify-content:space-between;align-items:center;gap:8px;font-size:11px;padding:2px 0"><span class="lp-mono lp-mu">'+lpFmtShort(d.datum)+'</span>'+(d._w?'<span class="lp-mu" style="font-size:10px;opacity:.8">'+lpEsc(d._w)+'</span>':'')+'<span style="flex:1;min-width:0;text-align:right">'+(d.alleKorrekt?'<span style="color:var(--lp-ok)">✓ alles richtig</span>':'<span style="color:var(--lp-review)">'+n.length+(l.anzahl?' / '+l.anzahl:'')+' falsch</span> <span class="lp-mu">· Nr. '+n.join(', ')+'</span>')+'</span>'
+      +'<button type="button" class="lp-x" data-lab="dg-edit" data-id="'+lpEsc(l.id)+'" data-idx="'+d._i+'" title="korrigieren"><i class="ti ti-pencil"></i></button><button type="button" class="lp-x" data-lab="dg-del" data-id="'+lpEsc(l.id)+'" data-idx="'+d._i+'" title="löschen">✕</button></div>';
   }).join('');
-  return '<details style="margin-top:8px"'+(l.status==='inArbeit'?' open':'')+'><summary class="lp-mu" style="cursor:pointer;font-size:11px">'+dg.length+' Durchg'+(dg.length===1?'ang':'änge')+(dg.length>5?' · letzte 5':'')+'</summary>'+rows+'</details>';
+  return '<details style="margin-top:8px"'+(l.status==='inArbeit'||LAB_UI_ALLE[l.id]||LAB_UI_OPEN[l.id]?' open':'')+'><summary class="lp-mu" style="cursor:pointer;font-size:11px">'+dg.length+' Durchg'+(dg.length===1?'ang':'änge')+(dg.length>5&&!LAB_UI_ALLE[l.id]?' · letzte 5':'')+'</summary>'+rows+(dg.length>5?'<div style="text-align:right"><button type="button" class="lp-x" style="font-size:11px" data-lab="dg-alle" data-id="'+lpEsc(l.id)+'">'+(LAB_UI_ALLE[l.id]?'weniger':'alle '+dg.length+' anzeigen')+'</button></div>':'')+'</details>';
 }
 function lpLabsHTML(f){
   var labs=lpLabsOf(f.id), R=nrRegeln?nrRegeln():null, sum=0; labs.forEach(function(l){sum+=+l.punkte||0;});
@@ -17051,11 +17098,21 @@ document.addEventListener('click',function(ev){
     case 'num':
       var l=lpLabs().find(function(x){return x.id===id;}); if(!l)return; var n=+el.getAttribute('data-n'); l.auswahl=l.auswahl||[];
       var i=l.auswahl.indexOf(n); if(i>=0)l.auswahl.splice(i,1); else l.auswahl.push(n);
-      el.classList.toggle('on',l.auswahl.indexOf(n)>=0); var st=document.getElementById('lab-sel-'+id); if(st)st.textContent=labAuswahlText(l);
+      el.classList.toggle('on',l.auswahl.indexOf(n)>=0); var st=document.getElementById('lab-save-'+id); if(st)st.textContent=labSaveText(l);
       lpTouch(l); saveD(); return;
     case 'durchgang': var l2=lpLabs().find(function(x){return x.id===id;}); if(!l2)return; if(!l2.anzahl){ showToast('Bitte zuerst die Anzahl Aufgaben eintragen.'); return; } var sel=(l2.auswahl||[]).filter(function(n){return n>=1&&n<=l2.anzahl;}).sort(function(x,y){return x-y;}); l2.auswahl=[]; labDurchgang(l2,sel); showToast(sel.length?'Durchgang gespeichert: '+sel.length+' von '+l2.anzahl+' falsch (Nr. '+sel.join(', ')+').':'Durchgang gespeichert: alles richtig ✓','ok'); return lpRender();
-    case 'wdh-ok': var l3=lpLabs().find(function(x){return x.id===id;}); if(!l3)return; labDurchgang(l3,[]); return lpRender();
-    case 'wdh-falsch': var l4=lpLabs().find(function(x){return x.id===id;}); if(!l4)return; var nrs=prompt('Welche Nummern falsch? (mit Komma trennen)',''); labDurchgang(l4,(nrs||'').split(',').map(function(s){return +s.trim();}).filter(Boolean)); return lpRender();
+    case 'dg-alle': LAB_UI_ALLE[id]=!LAB_UI_ALLE[id]; return lpRender();
+    case 'dg-edit': LAB_UI_OPEN[id]=1; return labDgEdit(id,+el.getAttribute('data-idx'));
+    case 'dg-num': var k=+el.getAttribute('data-n'), j=LAB_DG_SEL.indexOf(k); if(j>=0)LAB_DG_SEL.splice(j,1); else LAB_DG_SEL.push(k); el.classList.toggle('on',LAB_DG_SEL.indexOf(k)>=0); return;
+    case 'dg-close': var m=document.getElementById('lab-dg'); if(m)m.remove(); return;
+    case 'dg-save':
+      var l6=lpLabs().find(function(x){return x.id===id;}), d6=l6&&(l6.durchgaenge||[])[+el.getAttribute('data-idx')]; if(!d6)return;
+      d6.falscheNummern=LAB_DG_SEL.slice().sort(function(x,y){return x-y;}); d6.alleKorrekt=!d6.falscheNummern.length;
+      labReplay(l6); lpTouch(l6); saveD(); var m2=document.getElementById('lab-dg'); if(m2)m2.remove(); showToast('Durchgang korrigiert — Status neu berechnet: '+labStatusLabel(l6),'ok'); return lpRender();
+    case 'dg-del':
+      var l7=lpLabs().find(function(x){return x.id===id;}), i7=+el.getAttribute('data-idx'), d7=l7&&(l7.durchgaenge||[])[i7]; if(!d7)return;
+      if(!confirm('Durchgang vom '+lpFmt(d7.datum)+' löschen? Status wird danach neu berechnet.'))return;
+      LAB_UI_OPEN[id]=1; l7.durchgaenge.splice(i7,1); labReplay(l7); lpTouch(l7); saveD(); showToast('Durchgang gelöscht — Status: '+labStatusLabel(l7),'ok'); return lpRender();
   }
 });
 
