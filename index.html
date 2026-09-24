@@ -3380,7 +3380,7 @@ var D = {
 // nichts, was nur lokal existiert, geht verloren. Einzige Ausnahme: bewusst lokal gelöschte
 // Einträge können durch einen älteren Snapshot wieder auftauchen — das ist der bewusste
 // Kompromiss (lieber ein Karteileichen-Eintrag zurück als echte Daten verloren).
-var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','lpAufgaben','lpLabs','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
+var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','lbKonflikte','lpAufgaben','lpLabs','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
 // wplan & track sind hier bewusst NICHT drin — die brauchen einen ECHTEN Tiefen-Merge (siehe
 // mergeWplan/mergeTrack unten), weil ihre Werte pro Woche/Tag komplexe, häufig aktiv bearbeitete
 // Strukturen sind. Ein einfacher Object.assign auf oberster Ebene hätte (und hat!) eine ganze
@@ -16450,11 +16450,11 @@ function lbPaintMap(){
   if(LB_UI.mapColor==='aktivitaet'&&mk){
     Object.keys(byKat).forEach(function(iso){
       var p=host.querySelector('[data-iso="'+iso+'"],#'+iso); if(!p)return;
-      var box; try{ box=p.getBBox(); }catch(e){ return; }
+      var ctr=lbIsoCenter(host,iso); if(!ctr)return;
       var n=Object.keys(byKat[iso]).reduce(function(a,k){return a+byKat[iso][k];},0);
       var top=Object.keys(byKat[iso]).sort(function(a,b){return byKat[iso][b]-byKat[iso][a];})[0];
       var col={beschaffung:'#4d7cff',einsatz:'#a32f3c',uebung:'#2e6b4c',politik:'#8a6a1f',abkommen:'#00cfff',krise:'#ff6b6b',industrie:'#a66bff',unfall:'#ffb020'}[top]||'#00e5ff';
-      var c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',box.x+box.width/2); c.setAttribute('cy',box.y+box.height/2); c.setAttribute('r',Math.min(9,3+n*1.3)); c.setAttribute('fill',col); c.setAttribute('opacity','.85'); c.setAttribute('stroke','#0b1620'); c.setAttribute('stroke-width','.6');
+      var c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',ctr.x); c.setAttribute('cy',ctr.y); c.setAttribute('r',Math.min(9,3+n*1.3)); c.setAttribute('fill',col); c.setAttribute('opacity','.85'); c.setAttribute('stroke','#0b1620'); c.setAttribute('stroke-width','.6');
       mk.appendChild(c);
     });
   }
@@ -16514,6 +16514,7 @@ function lbMeldungOpenHTML(m){
     +(m.tags&&m.tags.length?'<div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-top:10px">'+m.tags.map(function(t){return '<span class="wp-pill">#'+lpEsc(t)+'</span>';}).join('')+'</div>':'')
     +(m.einschaetzung?'<div style="border-left:3px solid var(--lp-accent);padding:8px 12px;margin-top:12px;background:color-mix(in srgb,var(--lp-accent) 8%,transparent)"><div class="lp-cap" style="margin-bottom:4px">EINSCHÄTZUNG</div><div style="font-size:13px;white-space:pre-wrap">'+lpEsc(m.einschaetzung)+'</div></div>':'')
     +'<div class="lp-mu" style="font-size:11px;margin-top:12px">Quelle: '+(m.quelle&&m.quelle.url?'<a href="'+lpEsc(m.quelle.url)+'" target="_blank" rel="noopener">'+lpEsc(m.quelle.name)+'</a>':lpEsc(m.quelle&&m.quelle.name||'—'))+(m.quelle&&m.quelle.datum?' · '+lpEsc(lpFmt(m.quelle.datum)):'')+'</div>'
+    +(lbKonflikte().length?'<div class="lp-fld" style="margin-top:12px"><label>Konflikt</label><select class="lp-in" id="lb-meld-konf" data-mid="'+lpEsc(m.id)+'"><option value="">— keiner —</option>'+lbKonfSorted().map(function(k){return '<option value="'+lpEsc(k.id)+'"'+(m.konfliktId===k.id?' selected':'')+'>'+lpEsc(k.name)+'</option>';}).join('')+'</select></div>':'')
     +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px">'+((m.laender||[]).length>=2?'<button type="button" class="lp-btn gray" data-lb="bez-vorschlag" data-id="'+lpEsc(m.id)+'"><i class="ti ti-link"></i> Beziehung daraus anlegen</button>':'')+'<button type="button" class="lp-btn danger" data-lb="meld-del" data-id="'+lpEsc(m.id)+'">Löschen</button></div></div>';
   return h;
 }
@@ -16528,6 +16529,7 @@ function lbFormHTML(pre){
     +'<div class="lp-fld"><label>Länder</label><div style="flex:1;min-width:0"><div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px" id="lb-land-chips">'+chips+'</div><input class="lp-in" id="lb-land-q" list="lb-land-dl" placeholder="Land tippen und Enter" style="width:100%"/><datalist id="lb-land-dl">'+Object.keys(LB_NAMEN||{}).map(function(iso){return '<option value="'+lpEsc(LB_NAMEN[iso])+'">';}).join('')+'</datalist></div></div>'
     +'<div class="lp-fld"><label>Datum</label><input class="lp-in lp-mono" type="date" id="lb-datum" value="'+(pre.datum||today())+'" style="max-width:150px"/></div>'
     +'<div class="lp-fld"><label>Kategorie</label><select class="lp-in" id="lb-kat">'+LB_KAT.map(function(k){return '<option value="'+k[0]+'"'+(pre.kategorie===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></div>'
+    +(lbKonflikte().length?'<div class="lp-fld"><label>Konflikt</label><select class="lp-in" id="lb-konf"><option value="">— keiner —</option>'+lbKonfSorted().map(function(k){return '<option value="'+lpEsc(k.id)+'"'+(pre.konfliktId===k.id?' selected':'')+'>'+lpEsc(k.name)+'</option>';}).join('')+'</select></div>':'')
     +'<div class="lp-fld"><label>Sicherheit</label><select class="lp-in" id="lb-sicher">'+LB_SICHER.map(function(k){return '<option value="'+k[0]+'"'+(pre.sicherheit===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></div>'
     +'<div class="lp-fld"><label>Titel</label><input class="lp-in" id="lb-titel" value="'+lpEsc(pre.titel||'')+'" style="flex:1"/></div>'
     +'<div class="lp-fld" style="align-items:flex-start"><label>Text</label><textarea class="lp-in" id="lb-text" rows="4" style="flex:1;width:100%">'+lpEsc(pre.text||'')+'</textarea></div>'
@@ -16548,6 +16550,7 @@ function lbFormSave(){
   var tags=(document.getElementById('lb-tags').value||'').split(',').map(function(t){return t.trim();}).filter(Boolean);
   var m={id:uid(),datum:document.getElementById('lb-datum').value||today(),laender:laender,kategorie:document.getElementById('lb-kat').value,titel:titel,text:(document.getElementById('lb-text').value||'').trim(),
     sicherheit:document.getElementById('lb-sicher').value,tags:tags,quelle:{name:qname,url:(document.getElementById('lb-q-url').value||'').trim(),datum:today()},einschaetzung:(document.getElementById('lb-einsch').value||'').trim(),erstellt:today()};
+  var kSel=document.getElementById('lb-konf'); if(kSel&&kSel.value)m.konfliktId=kSel.value;
   lbMeldungen().push(m); laender.forEach(function(iso){ lbLand(iso,true); });
   saveD(); LB_UI.form=false; lbRender(); showToast('Meldung gespeichert ✓','ok');
   if(laender.length>=2)lbBezVorschlag(m);
@@ -16584,9 +16587,9 @@ function lbRender(){
   if(LB_UI.tab==='dossier'&&LB_UI.land){ el.innerHTML=h+lbDossierHTML(LB_UI.land); return; }
   h+=lbTabsHTML();
   if(LB_UI.tab==='zeitstrahl'){ el.innerHTML=h+lbZeitstrahlHTML(); return; }
-  h+='<div class="lp-row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap"><span class="lp-seg"><button type="button" class="'+(LB_UI.mapColor==='level'?'on':'')+'" data-lb="mapcolor" data-v="level">Lage-Level</button><button type="button" class="'+(LB_UI.mapColor==='aktivitaet'?'on':'')+'" data-lb="mapcolor" data-v="aktivitaet">Aktivität</button></span></div>'
+  h+='<div class="lp-row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap"><span class="lp-seg"><button type="button" class="'+(LB_UI.mapColor==='level'?'on':'')+'" data-lb="mapcolor" data-v="level">Lage-Level</button><button type="button" class="'+(LB_UI.mapColor==='aktivitaet'?'on':'')+'" data-lb="mapcolor" data-v="aktivitaet">Aktivität</button><button type="button" class="'+(LB_UI.mapColor==='konflikt'?'on':'')+'" data-lb="mapcolor" data-v="konflikt">Konflikte</button></span>'+lbKonfMapSelectHTML()+'</div>'
     +'<div id="lb-map" style="overflow-x:auto;border-radius:12px;border:1px solid var(--lp-border)"></div>'
-    +'<div class="lp-row lp-mu" style="gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px">'+LB_LEVEL.map(function(x){ return '<span><span style="color:'+x[2]+'">●</span> '+x[1]+'</span>'; }).join('')+'</div>';
+    +lbMapLegendHTML();
   el.innerHTML=h;
   lbLoadSvg();
 }
@@ -16595,7 +16598,7 @@ document.addEventListener('click',function(ev){
   var a=el.getAttribute('data-lb'), iso=el.getAttribute('data-iso'), id=el.getAttribute('data-id');
   switch(a){
     case 'tab': LB_UI.tab=el.getAttribute('data-v'); LB_UI.openMeld=null; LB_UI.form=false; return lbRender();
-    case 'mapcolor': LB_UI.mapColor=el.getAttribute('data-v'); lbPaintMap(); return;
+    case 'mapcolor': LB_UI.mapColor=el.getAttribute('data-v'); return lbRender();
     case 'watchlist': var l=lbLand(iso,true); l.watchlist=!l.watchlist; lbTouch(l); saveD(); return lbRender();
     case 'level': var l2=lbLand(iso,true); if(l2.lageLevel!==el.getAttribute('data-v')){ l2.lageLevel=el.getAttribute('data-v'); l2.levelSeit=today(); lbTouch(l2); saveD(); } return lbRender();
     case 'fuehrung-edit': return lbFuEdit(iso,el.getAttribute('data-rolle'));
@@ -16725,7 +16728,7 @@ function lbExportRun(fmt){
 
 // ── Tabs erweitert (überschreibt die Paket-1-Fassung) ──
 lbTabsHTML=function(){
-  var tabs=[['karte','Karte'],['zeitstrahl','Zeitstrahl'],['register','Register'],['matrix','Beziehungen']];
+  var tabs=[['karte','Karte'],['zeitstrahl','Zeitstrahl'],['register','Register'],['matrix','Beziehungen'],['konflikte','Konflikte']];
   return '<div class="lp-row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px"><div class="lp-seg">'+tabs.map(function(t){ return '<button type="button" class="'+(LB_UI.tab===t[0]?'on':'')+'" data-lb="tab" data-v="'+t[0]+'">'+t[1]+'</button>'; }).join('')+'</div>'
     +'<span class="lp-row" style="gap:6px"><button type="button" class="lp-btn gray" data-lb="export" data-v="md"><i class="ti ti-file-text"></i> Markdown</button><button type="button" class="lp-btn gray" data-lb="export" data-v="csv"><i class="ti ti-table"></i> CSV</button></span></div>';
 };
@@ -16940,6 +16943,268 @@ document.addEventListener('click',function(ev){
       ev.preventDefault(); var l=lbLand(iso), cur=l&&(l.fuehrung||[]).find(function(f){return f.rolle===rolle&&!f.bis;}); if(!cur)return;
       if(!confirm(cur.name+' ('+rolle+') als abgetreten markieren? Bleibt in der Historie.'))return;
       cur.bis=today(); lbTouch(l); saveD(); rm(); return lbRender();
+  }
+});
+
+// ═══ KONFLIKTE — zwei Seiten (Hauptparteien + Unterstützer), Intensität mit Verlauf, Karte/Zeitbalken/Frontansicht ═══
+SY_LIST_LABEL.lbKonflikte='Lagebericht-Konflikte';
+var LB_KONF_INT=[['niedrig','Niedrig','#5f7f8f'],['mittel','Mittel','#c9a227'],['hoch','Hoch','#d9822b'],['krieg','Krieg','#c0392b']];
+var LB_KONF_STATUS=[['aktiv','Aktiv'],['eingefroren','Eingefroren'],['beendet','Beendet']];
+var LB_KSEITE={a:'#e08a2e',b:'#3d7bd9'};
+var LB_KW=null, LB_CENTER={};
+function lbKonflikte(){ if(!Array.isArray(D.lbKonflikte))D.lbKonflikte=[]; return D.lbKonflikte; }
+function lbKonfInt(k){ return LB_KONF_INT.find(function(x){return x[0]===k;})||LB_KONF_INT[0]; }
+function lbKonfIntRank(k){ return LB_KONF_INT.findIndex(function(x){return x[0]===k;}); }
+function lbKonfStufe(k){ var l=(k.intens||[]).slice().sort(function(a,b){return a.datum<b.datum?-1:1;}); return l.length?l[l.length-1].stufe:'niedrig'; }
+function lbKonfSorted(){
+  var so={aktiv:0,eingefroren:1,beendet:2};
+  return lbKonflikte().slice().sort(function(a,b){ return (so[a.status]||0)-(so[b.status]||0)||lbKonfIntRank(lbKonfStufe(b))-lbKonfIntRank(lbKonfStufe(a))||(a.beginn||'').localeCompare(b.beginn||''); });
+}
+function lbKonfSeite(k,side){ var s=(k.seiten&&k.seiten[side])||{}; return {label:s.label||'',haupt:s.haupt||[],unterst:s.unterst||[]}; }
+function lbKonfSeitenLabel(k,side){ var s=lbKonfSeite(k,side); return s.label||s.haupt.map(lbName).join(', ')||(side==='a'?'Seite A':'Seite B'); }
+function lbDays(a,b){ return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5); }
+function lbDauer(k){
+  var d=lbDays(k.beginn||today(),k.ende||today()); if(d<0)return '';
+  if(d>=365)return String(Math.round(d/365*10)/10).replace('.',',')+' Jahre'; if(d>=60)return Math.round(d/30.4)+' Monate'; return d+' Tage';
+}
+function lbKonfInvolved(iso){
+  var out=[]; lbKonflikte().forEach(function(k){ ['a','b'].forEach(function(sd){ var s=lbKonfSeite(k,sd); if(s.haupt.indexOf(iso)>=0)out.push({k:k,side:sd,rolle:'Hauptpartei'}); else if(s.unterst.indexOf(iso)>=0)out.push({k:k,side:sd,rolle:'Unterstützer'}); }); });
+  return out;
+}
+
+// ── Zeitbalken: Intensität als farbige Abschnitte, Meldungen als Punkte ──
+function lbKonfTimelineSVG(k){
+  var st=k.beginn||today(), en=k.ende||today(); if(en<st)en=st;
+  var span=Math.max(1,lbDays(st,en)), W=600, x0=8, x1=W-8, X=function(d){ var v=lbDays(st,d); v=Math.max(0,Math.min(span,v)); return x0+v/span*(x1-x0); };
+  var h='<svg viewBox="0 0 '+W+' 50" width="100%" style="display:block;margin-top:8px" font-family="Space Mono,monospace" font-size="10">'
+    +'<rect x="'+x0+'" y="20" width="'+(x1-x0)+'" height="10" rx="3" style="fill:var(--lp-border)"/>';
+  var iv=(k.intens||[]).slice().sort(function(a,b){return a.datum<b.datum?-1:1;});
+  iv.forEach(function(e,i){ var a=e.datum<st?st:e.datum, b=i+1<iv.length?iv[i+1].datum:en; if(b<=a&&i+1<iv.length)return; var xa=X(a), xb=Math.max(xa+2,X(b)); h+='<rect x="'+xa.toFixed(1)+'" y="20" width="'+(xb-xa).toFixed(1)+'" height="10" style="fill:'+lbKonfInt(e.stufe)[2]+'"><title>'+lpEsc(lbKonfInt(e.stufe)[1]+' ab '+lpFmt(e.datum))+'</title></rect>'; });
+  // Jahresmarken
+  var jahre=span>500;
+  if(jahre){ var y0=+st.slice(0,4)+1, y1=+en.slice(0,4); for(var y=y0;y<=y1;y++){ var xx=X(y+'-01-01'); h+='<line x1="'+xx+'" y1="17" x2="'+xx+'" y2="33" style="stroke:var(--lp-bg)" stroke-width="1.5"/>'+(((y1-y0)<12||y%2===0)&&xx>x0+14&&xx<x1-14?'<text x="'+xx+'" y="46" text-anchor="middle" style="fill:var(--lp-muted)">'+y+'</text>':''); } }
+  lbMeldungen().filter(function(m){return m.konfliktId===k.id;}).forEach(function(m){ var xm=X(m.datum||st); h+='<circle cx="'+xm.toFixed(1)+'" cy="10" r="4.5" style="fill:var(--lp-text);cursor:pointer" opacity=".85" data-lb="meld-open" data-id="'+lpEsc(m.id)+'"><title>'+lpEsc(lpFmt(m.datum)+' · '+m.titel)+'</title></circle>'; });
+  h+=(jahre?'':'<text x="'+x0+'" y="46" style="fill:var(--lp-muted)">'+lpEsc(lpFmt(st))+'</text><text x="'+x1+'" y="46" text-anchor="end" style="fill:var(--lp-muted)">'+(k.ende?lpEsc(lpFmt(k.ende)):'heute')+'</text>')+'</svg>';
+  return h;
+}
+// ── Frontansicht: Seite A ⚔ Seite B ──
+function lbKonfFrontHTML(k){
+  var col=function(side){
+    var s=lbKonfSeite(k,side), c=LB_KSEITE[side];
+    return '<div style="flex:1;min-width:150px;border-'+(side==='a'?'left':'right')+':3px solid '+c+';padding:8px 10px;border-radius:8px;background:color-mix(in srgb,'+c+' 9%,transparent);text-align:'+(side==='a'?'left':'right')+'">'
+      +'<div class="lp-cap" style="color:'+c+';margin-bottom:6px">'+lpEsc(lbKonfSeitenLabel(k,side))+'</div>'
+      +'<div class="lp-row" style="gap:4px;flex-wrap:wrap;justify-content:'+(side==='a'?'flex-start':'flex-end')+'">'+(s.haupt.length?s.haupt.map(function(iso){ return '<span class="wp-pill" data-lb="konf-land" data-iso="'+iso+'" style="cursor:pointer;background:'+c+';border-color:'+c+';color:#0b1620;font-weight:600">'+lpEsc(lbName(iso))+'</span>'; }).join(''):'<span class="lp-mu" style="font-size:11px">keine Staaten erfasst</span>')+'</div>'
+      +(s.unterst.length?'<div class="lp-mu" style="font-size:11px;margin-top:6px">unterstützt von</div><div class="lp-row" style="gap:4px;flex-wrap:wrap;margin-top:3px;justify-content:'+(side==='a'?'flex-start':'flex-end')+'">'+s.unterst.map(function(iso){ return '<span class="wp-pill" data-lb="konf-land" data-iso="'+iso+'" style="cursor:pointer;font-size:11px;border-color:'+c+';color:'+c+'">'+lpEsc(lbName(iso))+'</span>'; }).join('')+'</div>':'')
+      +'</div>';
+  };
+  return '<div class="lp-row" style="gap:8px;align-items:stretch;flex-wrap:wrap;margin-top:10px">'+col('a')+'<div style="align-self:center;font-size:18px;padding:0 2px" aria-hidden="true">⚔</div>'+col('b')+'</div>';
+}
+function lbKonfCardHTML(k){
+  var st=lbKonfStufe(k), iv=lbKonfInt(st), stat=(LB_KONF_STATUS.find(function(x){return x[0]===k.status;})||LB_KONF_STATUS[0])[1];
+  var nM=lbMeldungen().filter(function(m){return m.konfliktId===k.id;}).length;
+  return '<div class="lp-cd" style="margin-bottom:12px'+(k.status==='beendet'?';opacity:.75':'')+'">'
+    +'<div class="lp-row" style="justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start"><div style="min-width:0"><div style="font-size:15px;font-weight:500">'+lpEsc(k.name)+'</div>'
+    +'<div class="lp-mu lp-mono" style="font-size:11px;margin-top:2px">seit '+lpEsc(lpFmt(k.beginn))+(k.ende?' bis '+lpEsc(lpFmt(k.ende)):'')+' · '+lpEsc(lbDauer(k))+' · '+nM+' Meldung'+(nM===1?'':'en')+'</div></div>'
+    +'<div class="lp-row" style="gap:6px;align-items:center"><span class="lp-tag" style="background:color-mix(in srgb,'+iv[2]+' 22%,transparent);color:'+iv[2]+'">'+lpEsc(iv[1])+'</span><span class="lp-tag" style="background:color-mix(in srgb,var(--lp-muted) 16%,transparent);color:var(--lp-muted)">'+lpEsc(stat)+'</span>'
+    +'<button type="button" class="lp-x" data-lb="konf-map" data-id="'+lpEsc(k.id)+'" title="auf der Karte zeigen"><i class="ti ti-map-2"></i></button><button type="button" class="lp-x" data-lb="konf-edit" data-id="'+lpEsc(k.id)+'" title="bearbeiten"><i class="ti ti-pencil"></i></button></div></div>'
+    +lbKonfFrontHTML(k)+lbKonfTimelineSVG(k)
+    +(k.notiz?'<div class="lp-mu" style="font-size:12px;margin-top:6px;white-space:pre-wrap">'+lpEsc(k.notiz)+'</div>':'')+'</div>';
+}
+function lbKonflikteHTML(){
+  var l=lbKonfSorted();
+  var h='<div class="lp-row" style="justify-content:space-between;margin-bottom:10px"><span class="lp-cap">KONFLIKTE · '+l.length+'</span><button type="button" class="lp-btn gray" data-lb="konf-new"><i class="ti ti-plus"></i> Konflikt</button></div>';
+  if(!l.length)return h+'<div class="lp-mu">Noch keine Konflikte erfasst. Mit «+ Konflikt» anlegen — zwei Seiten mit Hauptparteien und Unterstützern, Intensität mit Verlauf.</div>';
+  h+='<div class="lp-row lp-mu" style="gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:11px">'+LB_KONF_INT.map(function(x){return '<span><span style="color:'+x[2]+'">■</span> '+x[1]+'</span>';}).join('')+'<span>● Meldung</span></div>';
+  return h+l.map(lbKonfCardHTML).join('');
+}
+
+// ── Karte ──
+function lbKonfMapSelectHTML(){
+  if(LB_UI.mapColor!=='konflikt'||!lbKonflikte().length)return '';
+  return '<select class="lp-in" id="lb-konf-sel" style="max-width:240px"><option value="">Alle aktiven Konflikte</option>'+lbKonfSorted().map(function(k){return '<option value="'+lpEsc(k.id)+'"'+(LB_UI.konfSel===k.id?' selected':'')+'>'+lpEsc(k.name)+'</option>';}).join('')+'</select>';
+}
+function lbMapLegendHTML(){
+  var wrap=function(x){ return '<div class="lp-row lp-mu" style="gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px">'+x+'</div>'; };
+  if(LB_UI.mapColor==='aktivitaet'){ var kc={beschaffung:'#4d7cff',einsatz:'#a32f3c',uebung:'#2e6b4c',politik:'#8a6a1f',abkommen:'#00cfff',krise:'#ff6b6b',industrie:'#a66bff',unfall:'#ffb020'}; return wrap(LB_KAT.map(function(k){ return '<span><span style="color:'+kc[k[0]]+'">●</span> '+k[1]+'</span>'; }).join('')+'<span>Grösse = Anzahl Meldungen, Farbe = häufigste Kategorie</span>'); }
+  if(LB_UI.mapColor!=='konflikt')return wrap(LB_LEVEL.map(function(x){ return '<span><span style="color:'+x[2]+'">●</span> '+x[1]+'</span>'; }).join(''));
+  if(!lbKonflikte().length)return wrap('<span>Noch keine Konflikte erfasst — im Tab «Konflikte» anlegen.</span>');
+  var k=LB_UI.konfSel&&lbKonflikte().find(function(x){return x.id===LB_UI.konfSel;});
+  if(k)return wrap('<span><span style="color:'+LB_KSEITE.a+'">■</span> '+lpEsc(lbKonfSeitenLabel(k,'a'))+'</span><span><span style="color:'+LB_KSEITE.b+'">■</span> '+lpEsc(lbKonfSeitenLabel(k,'b'))+'</span><span>blass = Unterstützer</span><span>Linie = Hauptgegner</span>');
+  return wrap(LB_KONF_INT.map(function(x){return '<span><span style="color:'+x[2]+'">■</span> '+x[1]+'</span>';}).join('')+'<span>blass = Unterstützer</span><span>Linie = Hauptgegner</span>');
+}
+function lbKonfMapInfo(){
+  var fill={}, lines=[], set=function(iso,col,op,rank){ var f=fill[iso]; if(!f||rank>f.rank)fill[iso]={col:col,op:op,rank:rank}; };
+  var sel=LB_UI.konfSel&&lbKonflikte().find(function(x){return x.id===LB_UI.konfSel;});
+  var ks=sel?[sel]:lbKonflikte().filter(function(k){return k.status!=='beendet';});
+  ks.forEach(function(k){
+    var st=lbKonfStufe(k), r=lbKonfIntRank(st), ic=lbKonfInt(st)[2], A=lbKonfSeite(k,'a'), B=lbKonfSeite(k,'b');
+    ['a','b'].forEach(function(sd){ var S=lbKonfSeite(k,sd), c=sel?LB_KSEITE[sd]:ic;
+      S.unterst.forEach(function(iso){ set(iso,c,.4,sel?1:r-10); });
+      S.haupt.forEach(function(iso){ set(iso,c,1,sel?2:r+10); });
+    });
+    var n=0; A.haupt.forEach(function(a){ B.haupt.forEach(function(b){ if(n++<16)lines.push({a:a,b:b,col:ic,w:1.2+r*.6}); }); });
+  });
+  return {fill:fill,lines:lines};
+}
+function lbIsoCenter(host,iso){
+  if(LB_CENTER[iso])return LB_CENTER[iso];
+  var p=host.querySelector('[data-iso="'+iso+'"],#'+iso); if(!p||!p.ownerSVGElement)return null;
+  var svg=p.ownerSVGElement, subs=(p.getAttribute('d')||'').split(/(?=M)/), tmp=document.createElementNS('http://www.w3.org/2000/svg','path'), best=null, area=-1, res=null;
+  tmp.setAttribute('visibility','hidden'); svg.appendChild(tmp);
+  try{
+    subs.forEach(function(sp){ tmp.setAttribute('d',sp); var b=tmp.getBBox(), a=b.width*b.height; if(a>area){ area=a; best={d:sp,b:b}; } });
+    if(best){
+      tmp.setAttribute('d',best.d); var b=best.b, N=14, pts=[], pt=svg.createSVGPoint?svg.createSVGPoint():null;
+      if(pt&&tmp.isPointInFill){
+        for(var i=0;i<N;i++)for(var j=0;j<N;j++){ pt.x=b.x+(i+.5)*b.width/N; pt.y=b.y+(j+.5)*b.height/N; if(tmp.isPointInFill(pt))pts.push({x:pt.x,y:pt.y}); }
+      }
+      if(pts.length){
+        var mx=0,my=0; pts.forEach(function(q){mx+=q.x;my+=q.y;}); mx/=pts.length; my/=pts.length;
+        pt.x=mx; pt.y=my;
+        if(tmp.isPointInFill(pt))res={x:mx,y:my};
+        else { var bd=1e9; pts.forEach(function(q){ var dd=(q.x-mx)*(q.x-mx)+(q.y-my)*(q.y-my); if(dd<bd){ bd=dd; res={x:q.x,y:q.y}; } }); }
+      } else res={x:b.x+b.width/2,y:b.y+b.height/2};
+    }
+  }catch(e){ res=null; }
+  tmp.remove();
+  if(res)LB_CENTER[iso]=res; return res;
+}
+var _lbPaintMap_k=lbPaintMap;
+lbPaintMap=function(){
+  _lbPaintMap_k();
+  var host=document.getElementById('lb-map'); if(!host)return;
+  var paths=host.querySelectorAll('.c');
+  paths.forEach(function(p){ p.style.fill=''; p.style.fillOpacity=''; });
+  if(LB_UI.mapColor!=='konflikt')return;
+  var mk=host.querySelector('#lb-marks'); if(!mk)return;
+  var info=lbKonfMapInfo(), NS='http://www.w3.org/2000/svg';
+  paths.forEach(function(p){ var iso=p.getAttribute('data-iso')||p.id, f=info.fill[iso]; if(f){ p.style.fill=f.col; p.style.fillOpacity=f.op; } });
+  info.lines.forEach(function(ln){
+    var a=lbIsoCenter(host,ln.a), b=lbIsoCenter(host,ln.b); if(!a||!b)return;
+    var dx=b.x-a.x, dy=b.y-a.y, dist=Math.sqrt(dx*dx+dy*dy), mx=(a.x+b.x)/2, my=(a.y+b.y)/2-Math.min(50,dist*.22);
+    var pa=document.createElementNS(NS,'path'); pa.setAttribute('d','M'+a.x+','+a.y+' Q'+mx+','+my+' '+b.x+','+b.y); pa.setAttribute('fill','none'); pa.setAttribute('stroke',ln.col); pa.setAttribute('stroke-width',ln.w); pa.setAttribute('stroke-linecap','round'); pa.setAttribute('opacity','.95'); pa.setAttribute('pointer-events','none');
+    mk.appendChild(pa);
+    [a,b].forEach(function(pt){ var c=document.createElementNS(NS,'circle'); c.setAttribute('cx',pt.x); c.setAttribute('cy',pt.y); c.setAttribute('r','2.6'); c.setAttribute('fill',ln.col); c.setAttribute('stroke','#0b1620'); c.setAttribute('stroke-width','.8'); c.setAttribute('pointer-events','none'); mk.appendChild(c); });
+  });
+};
+
+// ── Dossier: Karte «Konflikte», nur wenn das Land beteiligt ist ──
+var _lbDossierHTML_k=lbDossierHTML;
+lbDossierHTML=function(iso){
+  var h=_lbDossierHTML_k(iso), inv=lbKonfInvolved(iso); if(!inv.length)return h;
+  var card='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:6px">KONFLIKTE · '+inv.length+'</div>'+inv.map(function(x){
+    var iv=lbKonfInt(lbKonfStufe(x.k)), c=LB_KSEITE[x.side];
+    return '<div class="lp-row" style="justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--lp-border);cursor:pointer" data-lb="konf-goto" data-id="'+lpEsc(x.k.id)+'"><span style="flex:1;min-width:0"><b style="font-weight:500">'+lpEsc(x.k.name)+'</b><div class="lp-mu" style="font-size:11px"><span style="color:'+c+'">■</span> '+lpEsc(x.rolle)+' · '+lpEsc(lbKonfSeitenLabel(x.k,x.side))+'</div></span>'
+      +'<span class="lp-tag" style="align-self:center;background:color-mix(in srgb,'+iv[2]+' 22%,transparent);color:'+iv[2]+'">'+lpEsc(x.k.status==='beendet'?'Beendet':iv[1])+'</span></div>';
+  }).join('')+'</div>';
+  var marker='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">BEZIEHUNGEN';
+  return h.indexOf(marker)>=0?h.replace(marker,card+marker):h+card;
+};
+
+// ── Tab-Rendering ──
+var _lbRender_k=lbRender;
+lbRender=function(){
+  var el=document.getElementById('lb-root'); if(!el)return;
+  if(!LB_NAMEN||LB_UI.openMeld||LB_UI.form||(LB_UI.tab==='dossier'&&LB_UI.land)||LB_UI.tab!=='konflikte')return _lbRender_k();
+  el.innerHTML='<div class="lp-row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:4px"><div><div class="lp-cap">LAGEBERICHT</div><div style="font-size:17px;font-weight:500">Weltlage · '+lbMeldungen().length+' Meldungen</div></div>'
+    +'<button type="button" class="lp-btn fill" data-lb="form-open"><i class="ti ti-plus"></i> Meldung erfassen</button></div>'+lbTabsHTML()+lbKonflikteHTML();
+};
+
+// ── Dialog Konflikt erfassen/bearbeiten ──
+function lbKonfChipsHTML(list){ return (list||[]).map(function(iso){ return '<span class="wp-pill" data-lb="konf-chip" data-iso="'+iso+'" style="cursor:pointer">'+lpEsc(lbName(iso))+' <b style="font-weight:400">✕</b></span>'; }).join(''); }
+function lbKonfIntListHTML(){
+  var l=(LB_KW.intens||[]).slice().sort(function(a,b){return a.datum<b.datum?-1:1;}); LB_KW.intens=l;
+  if(!l.length)return '<div class="lp-mu" style="font-size:11px">Noch kein Eintrag — beim Speichern wird die unten gewählte Stufe ab Beginn eingetragen.</div>';
+  return l.map(function(e,i){ var iv=lbKonfInt(e.stufe); return '<div class="lp-row" style="justify-content:space-between;gap:8px;font-size:12px;padding:2px 0"><span class="lp-mono lp-mu">ab '+lpEsc(lpFmt(e.datum))+'</span><span style="flex:1;color:'+iv[2]+'">■ '+lpEsc(iv[1])+'</span><button type="button" class="lp-x" data-lb="konf-int-del" data-i="'+i+'">✕</button></div>'; }).join('');
+}
+function lbKonfEdit(id){
+  var k=id?lbKonflikte().find(function(x){return x.id===id;}):null;
+  LB_KW=k?JSON.parse(JSON.stringify(k)):{id:'',name:'',beginn:today(),ende:'',status:'aktiv',seiten:{a:{label:'',haupt:[],unterst:[]},b:{label:'',haupt:[],unterst:[]}},intens:[],notiz:''};
+  var W=LB_KW, sideHTML=function(sd){
+    var S=lbKonfSeite(W,sd), c=LB_KSEITE[sd];
+    return '<div style="border-left:3px solid '+c+';padding:6px 0 6px 10px;display:flex;flex-direction:column;gap:6px">'
+      +'<div class="lp-cap" style="color:'+c+'">SEITE '+sd.toUpperCase()+'</div>'
+      +'<input class="lp-in" id="lbk-'+sd+'-label" placeholder="Bezeichnung (optional, z. B. «Ukraine & Unterstützer»)" value="'+lpEsc(S.label)+'">'
+      +'<div class="lp-mu" style="font-size:11px">Hauptparteien</div><div class="lp-row" style="gap:4px;flex-wrap:wrap" id="lbk-'+sd+'-haupt">'+lbKonfChipsHTML(S.haupt)+'</div><input class="lp-in lbk-in" list="lbk-dl" data-target="lbk-'+sd+'-haupt" placeholder="Land tippen und Enter">'
+      +'<div class="lp-mu" style="font-size:11px">Unterstützer</div><div class="lp-row" style="gap:4px;flex-wrap:wrap" id="lbk-'+sd+'-unterst">'+lbKonfChipsHTML(S.unterst)+'</div><input class="lp-in lbk-in" list="lbk-dl" data-target="lbk-'+sd+'-unterst" placeholder="Land tippen und Enter"></div>';
+  };
+  syModal('lb-konf','<div class="lp-cap" style="margin-bottom:8px">'+(k?'KONFLIKT BEARBEITEN':'NEUER KONFLIKT')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<input class="lp-in" id="lbk-name" placeholder="Name (z. B. Russland–Ukraine-Krieg)" value="'+lpEsc(W.name)+'">'
+    +'<div class="lp-row" style="gap:8px;align-items:center;flex-wrap:wrap"><label class="lp-mu" style="font-size:11px">Beginn</label><input class="lp-in lp-mono" type="date" id="lbk-beginn" value="'+lpEsc(W.beginn||'')+'" style="max-width:160px"><label class="lp-mu" style="font-size:11px">Ende</label><input class="lp-in lp-mono" type="date" id="lbk-ende" value="'+lpEsc(W.ende||'')+'" style="max-width:160px"></div>'
+    +'<select class="lp-in" id="lbk-status">'+LB_KONF_STATUS.map(function(x){return '<option value="'+x[0]+'"'+(W.status===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select>'
+    +'<datalist id="lbk-dl">'+Object.keys(LB_NAMEN||{}).map(function(iso){return '<option value="'+lpEsc(LB_NAMEN[iso])+'">';}).join('')+'</datalist>'
+    +sideHTML('a')+sideHTML('b')
+    +'<div class="lp-cap" style="margin-top:4px">INTENSITÄT · VERLAUF</div><div id="lbk-int-list">'+lbKonfIntListHTML()+'</div>'
+    +'<div class="lp-row" style="gap:6px;flex-wrap:wrap;align-items:center"><select class="lp-in" id="lbk-stufe">'+LB_KONF_INT.map(function(x){return '<option value="'+x[0]+'"'+(lbKonfStufe(W)===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select><span class="lp-mu" style="font-size:11px">ab</span><input class="lp-in lp-mono" type="date" id="lbk-idatum" value="'+(k?today():lpEsc(W.beginn||today()))+'" style="max-width:160px"><button type="button" class="lp-btn gray" data-lb="konf-int-add">+ Eintrag</button></div>'
+    +'<textarea class="lp-in" id="lbk-notiz" rows="2" placeholder="Notiz (optional)">'+lpEsc(W.notiz||'')+'</textarea>'
+    +'<div class="lp-mu" id="lbk-err" style="font-size:11px;display:none;color:var(--lp-review)"></div></div>'
+    +'<div class="lp-row" style="justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap">'
+    +(k?'<button type="button" class="lp-btn danger" data-lb="konf-del" data-id="'+lpEsc(k.id)+'">Löschen</button>':'<span></span>')
+    +'<span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-lb="konf-close">Abbrechen</button><button type="button" class="lp-btn fill" data-lb="konf-save">Speichern</button></span></div>');
+  var n=document.getElementById('lbk-name'); if(n&&!k)n.focus();
+}
+function lbKonfChipAdd(inp){
+  var iso=lbIsoFromInput(inp.value); if(!iso){ showToast('Land nicht gefunden.'); return; }
+  var box=document.getElementById(inp.getAttribute('data-target')); if(!box)return;
+  var dlg=document.getElementById('lb-konf'), other=dlg&&dlg.querySelector('[data-lb="konf-chip"][data-iso="'+iso+'"]');
+  if(other&&other.parentNode!==box)other.remove();                       // ein Land steht nur an einer Stelle
+  if(!box.querySelector('[data-iso="'+iso+'"]'))box.insertAdjacentHTML('beforeend',lbKonfChipsHTML([iso]));
+  inp.value='';
+}
+function lbKonfChipsRead(id){ return Array.prototype.map.call(document.querySelectorAll('#'+id+' [data-lb="konf-chip"]'),function(c){return c.getAttribute('data-iso');}); }
+function lbKonfSave(){
+  var err=document.getElementById('lbk-err'), fail=function(t){ err.textContent=t; err.style.display='block'; };
+  var W=LB_KW, name=document.getElementById('lbk-name').value.trim(); if(!name)return fail('Bitte einen Namen eintragen.');
+  var beginn=document.getElementById('lbk-beginn').value||today(), ende=document.getElementById('lbk-ende').value||'';
+  if(ende&&ende<beginn)return fail('Ende liegt vor dem Beginn.');
+  var seiten={}; ['a','b'].forEach(function(sd){ seiten[sd]={label:document.getElementById('lbk-'+sd+'-label').value.trim(),haupt:lbKonfChipsRead('lbk-'+sd+'-haupt'),unterst:lbKonfChipsRead('lbk-'+sd+'-unterst')}; });
+  if(!seiten.a.haupt.length&&!seiten.b.haupt.length&&!seiten.a.unterst.length&&!seiten.b.unterst.length)return fail('Mindestens ein Land eintragen.');
+  if(!(W.intens||[]).length)W.intens=[{datum:beginn,stufe:document.getElementById('lbk-stufe').value}];
+  var k=W.id?lbKonflikte().find(function(x){return x.id===W.id;}):null;
+  if(!k){ k={id:uid()}; lbKonflikte().push(k); }
+  k.name=name; k.beginn=beginn; k.ende=ende; k.status=document.getElementById('lbk-status').value; k.seiten=seiten; k.intens=W.intens; k.notiz=document.getElementById('lbk-notiz').value.trim();
+  if(k.status==='beendet'&&!k.ende)k.ende=today();
+  [].concat(seiten.a.haupt,seiten.a.unterst,seiten.b.haupt,seiten.b.unterst).forEach(function(iso){ lbLand(iso,true); });
+  lbTouch(k); saveD(); var m=document.getElementById('lb-konf'); if(m)m.remove(); LB_KW=null; lbRender(); showToast('Konflikt gespeichert ✓','ok');
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return;
+  var a=el.getAttribute('data-lb'), id=el.getAttribute('data-id'), rm=function(){ var n=document.getElementById('lb-konf'); if(n)n.remove(); LB_KW=null; };
+  switch(a){
+    case 'konf-new': ev.preventDefault(); return lbKonfEdit(null);
+    case 'konf-edit': ev.preventDefault(); return lbKonfEdit(id);
+    case 'konf-close': ev.preventDefault(); return rm();
+    case 'konf-save': ev.preventDefault(); return lbKonfSave();
+    case 'konf-chip': ev.preventDefault(); el.remove(); return;
+    case 'konf-int-add':
+      ev.preventDefault(); if(!LB_KW)return; var d=document.getElementById('lbk-idatum').value||today(), stf=document.getElementById('lbk-stufe').value;
+      LB_KW.intens=(LB_KW.intens||[]).filter(function(e){return e.datum!==d;}); LB_KW.intens.push({datum:d,stufe:stf});
+      document.getElementById('lbk-int-list').innerHTML=lbKonfIntListHTML(); return;
+    case 'konf-int-del': ev.preventDefault(); if(!LB_KW)return; LB_KW.intens.splice(+el.getAttribute('data-i'),1); document.getElementById('lbk-int-list').innerHTML=lbKonfIntListHTML(); return;
+    case 'konf-del':
+      ev.preventDefault(); var k=lbKonflikte().find(function(x){return x.id===id;}); if(!k||!confirm('Konflikt «'+k.name+'» löschen? Zugeordnete Meldungen bleiben erhalten.'))return;
+      D.lbKonflikte=lbKonflikte().filter(function(x){return x.id!==id;}); markDeleted(id); if(LB_UI.konfSel===id)LB_UI.konfSel=''; saveD(); rm(); return lbRender();
+    case 'konf-map': ev.preventDefault(); LB_UI.tab='karte'; LB_UI.mapColor='konflikt'; LB_UI.konfSel=id; return lbRender();
+    case 'konf-goto': ev.preventDefault(); LB_UI.tab='konflikte'; LB_UI.land=null; return lbRender();
+    case 'konf-land': ev.preventDefault(); return lbOpenLand(el.getAttribute('data-iso'));
+  }
+});
+document.addEventListener('keydown',function(ev){
+  if(ev.key!=='Enter'||!ev.target||!ev.target.classList||!ev.target.classList.contains('lbk-in'))return;
+  ev.preventDefault(); if(ev.target.value.trim())lbKonfChipAdd(ev.target);
+});
+document.addEventListener('input',function(ev){
+  if(!ev.target||!ev.target.classList||!ev.target.classList.contains('lbk-in'))return;
+  var v=ev.target.value.trim().toLowerCase(); if(!v)return;
+  if(Object.keys(LB_NAMEN||{}).some(function(iso){ return LB_NAMEN[iso].toLowerCase()===v; }))lbKonfChipAdd(ev.target);
+});
+document.addEventListener('change',function(ev){
+  if(!ev.target)return;
+  if(ev.target.id==='lb-konf-sel'){ LB_UI.konfSel=ev.target.value; return lbRender(); }
+  if(ev.target.id==='lb-meld-konf'){
+    var m=lbMeldungen().find(function(x){return x.id===ev.target.getAttribute('data-mid');}); if(!m)return;
+    if(ev.target.value)m.konfliktId=ev.target.value; else delete m.konfliktId; saveD(); showToast('Konflikt-Zuordnung gespeichert ✓','ok');
   }
 });
 
