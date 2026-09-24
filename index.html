@@ -439,6 +439,8 @@ body.theme-tron {
 .lp-btn.fill { background: var(--lp-accent); color: var(--lp-bg); font-weight: 500; }
 .lp-btn.fill:hover { opacity: .88; background: var(--lp-accent); }
 .lp-btn.review.fill { background: var(--lp-review); color: var(--lp-bg); }
+.lp-x.lab-num.on { background: var(--lp-review); border-color: var(--lp-review); color: var(--lp-bg); font-weight: 600; }
+.lp-x.lab-num.zuletzt:not(.on) { border-color: var(--lp-review); color: var(--lp-review); }
 .lp-x { border: none; background: none; color: var(--lp-muted); cursor: pointer; font-size: 12px; padding: 4px 6px; font-family: var(--sans); }
 .lp-x:hover { color: var(--lp-text); }
 .lp-cps { margin-top: 8px; font-size: 12px; line-height: 1.9; }
@@ -11613,7 +11615,7 @@ function lpChange(el){
     f[fld]=v; lpTouch(f); rerender=true;
   } else if(kind==='lab'){
     var lb=lpLabs().find(function(x){return x.id===id;}); if(!lb)return;
-    if(fld==='anzahl'){ lb.anzahl=Math.max(0,parseInt(v,10)||0); lb.falsch=[]; rerender=true; }
+    if(fld==='anzahl'){ lb.anzahl=Math.max(0,parseInt(v,10)||0); lb.auswahl=(lb.auswahl||[]).filter(function(n){return n<=lb.anzahl;}); rerender=true; }
     else if(fld==='punkte'){ lb.punkte=v===''?null:Math.max(0,parseInt(v,10)||0); }
     else lb[fld]=v;
     lpTouch(lb);
@@ -16391,7 +16393,7 @@ var LB_LEVEL=[['ruhig','Ruhig','#1d3b4a'],['beobachten','Beobachten','#2e6b4c'],
 var LB_BEZ=[['buendnis','Bündnis'],['partnerschaft','Partnerschaft'],['lieferung','Lieferung'],['konflikt','Konflikt'],['verhandlung','Verhandlung']];
 var LB_BESCH_STATUS=[['geplant','Geplant'],['bestellt','Bestellt'],['geliefert','Geliefert'],['inDienst','In Dienst'],['ausgemustert','Ausgemustert']];
 var LB_ROLLEN=['Staatsoberhaupt','Regierungschef','Verteidigung'];
-var LB_NAMEN=null, LB_UI={tab:'karte',land:null,zLand:null,form:false,mapColor:'level'};
+var LB_NAMEN={"FJI":"Fidschi","TZA":"Tansania","ESH":"Westsahara","CAN":"Kanada","USA":"USA","KAZ":"Kasachstan","UZB":"Usbekistan","PNG":"Papua-Neuguinea","IDN":"Indonesien","ARG":"Argentinien","CHL":"Chile","COD":"DR Kongo","SOM":"Somalia","KEN":"Kenia","SDN":"Sudan","TCD":"Tschad","HTI":"Haiti","DOM":"Dominikanische Republik","RUS":"Russland","BHS":"Bahamas","FLK":"Falklandinseln","NOR":"Norwegen","GRL":"Grönland","ATF":"Französische Süd- und Antarktisgebiete","TLS":"Osttimor","ZAF":"Südafrika","LSO":"Lesotho","MEX":"Mexiko","URY":"Uruguay","BRA":"Brasilien","BOL":"Bolivien","PER":"Peru","COL":"Kolumbien","PAN":"Panama","CRI":"Costa Rica","NIC":"Nicaragua","HND":"Honduras","SLV":"El Salvador","GTM":"Guatemala","BLZ":"Belize","VEN":"Venezuela","GUY":"Guyana","SUR":"Suriname","FRA":"Frankreich","ECU":"Ecuador","PRI":"Puerto Rico","JAM":"Jamaika","CUB":"Kuba","ZWE":"Simbabwe","BWA":"Botswana","NAM":"Namibia","SEN":"Senegal","MLI":"Mali","MRT":"Mauretanien","BEN":"Benin","NER":"Niger","NGA":"Nigeria","CMR":"Kamerun","TGO":"Togo","GHA":"Ghana","CIV":"Elfenbeinküste","GIN":"Guinea","GNB":"Guinea-Bissau","LBR":"Liberia","SLE":"Sierra Leone","BFA":"Burkina Faso","CAF":"Zentralafrikanische Republik","COG":"Republik Kongo","GAB":"Gabun","GNQ":"Äquatorialguinea","ZMB":"Sambia","MWI":"Malawi","MOZ":"Mosambik","SWZ":"Eswatini","AGO":"Angola","BDI":"Burundi","ISR":"Israel","LBN":"Libanon","MDG":"Madagaskar","PSE":"Palästina","GMB":"Gambia","TUN":"Tunesien","DZA":"Algerien","JOR":"Jordanien","ARE":"VAE","QAT":"Katar","KWT":"Kuwait","IRQ":"Irak","OMN":"Oman","VUT":"Vanuatu","KHM":"Kambodscha","THA":"Thailand","LAO":"Laos","MMR":"Myanmar","VNM":"Vietnam","PRK":"Nordkorea","KOR":"Südkorea","MNG":"Mongolei","IND":"Indien","BGD":"Bangladesch","BTN":"Bhutan","NPL":"Nepal","PAK":"Pakistan","AFG":"Afghanistan","TJK":"Tadschikistan","KGZ":"Kirgisistan","TKM":"Turkmenistan","IRN":"Iran","SYR":"Syrien","ARM":"Armenien","SWE":"Schweden","BLR":"Belarus","UKR":"Ukraine","POL":"Polen","AUT":"Österreich","HUN":"Ungarn","MDA":"Moldau","ROU":"Rumänien","LTU":"Litauen","LVA":"Lettland","EST":"Estland","DEU":"Deutschland","BGR":"Bulgarien","GRC":"Griechenland","TUR":"Türkei","ALB":"Albanien","HRV":"Kroatien","CHE":"Schweiz","LUX":"Luxemburg","BEL":"Belgien","NLD":"Niederlande","PRT":"Portugal","ESP":"Spanien","IRL":"Irland","NCL":"Neukaledonien","SLB":"Salomonen","NZL":"Neuseeland","AUS":"Australien","LKA":"Sri Lanka","CHN":"China","TWN":"Taiwan","ITA":"Italien","DNK":"Dänemark","GBR":"Grossbritannien","ISL":"Island","AZE":"Aserbaidschan","GEO":"Georgien","PHL":"Philippinen","MYS":"Malaysia","BRN":"Brunei","SVN":"Slowenien","FIN":"Finnland","SVK":"Slowakei","CZE":"Tschechien","ERI":"Eritrea","JPN":"Japan","PRY":"Paraguay","YEM":"Jemen","SAU":"Saudi-Arabien","ATA":"Antarktis","CYP":"Zypern","MAR":"Marokko","EGY":"Ägypten","LBY":"Libyen","ETH":"Äthiopien","DJI":"Dschibuti","UGA":"Uganda","RWA":"Ruanda","BIH":"Bosnien und Herzegowina","MKD":"Nordmazedonien","SRB":"Serbien","MNE":"Montenegro","TTO":"Trinidad und Tobago","SSD":"Südsudan"}, LB_UI={tab:'karte',land:null,zLand:null,form:false,mapColor:'level'};
 SY_LIST_LABEL.lbMeldungen='Lagebericht-Meldungen'; SY_LIST_LABEL.lbLaender='Lagebericht-Länder'; SY_LIST_LABEL.lbBeziehungen='Lagebericht-Beziehungen';
 
 function lbMeldungen(){ if(!Array.isArray(D.lbMeldungen))D.lbMeldungen=[]; return D.lbMeldungen; }
@@ -16407,11 +16409,7 @@ function lbLevelInfo(k){ return LB_LEVEL.find(function(x){return x[0]===k;})||LB
 function lbKatLabel(k){ var x=LB_KAT.find(function(y){return y[0]===k;}); return x?x[1]:k; }
 function lbSicherLabel(k){ var x=LB_SICHER.find(function(y){return y[0]===k;}); return x?x[1]:k; }
 function lbTouch(o){ o.ts=Date.now(); }
-async function lbLoadNamen(){
-  if(LB_NAMEN)return LB_NAMEN;
-  try{ LB_NAMEN=await fetch('karte/laendernamen.json').then(function(r){return r.json();}); }catch(e){ LB_NAMEN={}; }
-  return LB_NAMEN;
-}
+function lbLoadNamen(){ return Promise.resolve(LB_NAMEN); }              // fest im Code hinterlegt, kein Nachladen noetig
 function lbIsoSearch(q){
   q=(q||'').trim().toLowerCase(); if(!q)return [];
   var out=[];
@@ -16424,11 +16422,11 @@ function lbIsoSearch(q){
 function lbLoadSvg(){
   var host=document.getElementById('lb-map'); if(!host||host.getAttribute('data-loaded'))return;
   host.setAttribute('data-loaded','1');
-  fetch('karte/world.svg').then(function(r){ if(!r.ok)throw 0; return r.text(); }).then(function(txt){
+  fetch('world.svg').then(function(r){ if(!r.ok)throw 0; return r.text(); }).then(function(txt){
     host.innerHTML=txt;
     host.querySelectorAll('.c').forEach(function(p){ p.addEventListener('click',function(){ lbOpenLand(p.getAttribute('data-iso')||p.id); }); });
     lbPaintMap();
-  }).catch(function(){ host.removeAttribute('data-loaded'); host.innerHTML='<div class="lp-mu" style="padding:24px;text-align:center">Karte konnte nicht geladen werden — liegt <code>karte/world.svg</code> neben index.html?</div>'; });
+  }).catch(function(){ host.removeAttribute('data-loaded'); host.innerHTML='<div class="lp-mu" style="padding:24px;text-align:center">Karte konnte nicht geladen werden — liegt <code>world.svg</code> neben index.html?</div>'; });
 }
 function lbActivityCount(iso,days){ var lim=lpAdd(today(),-days); return lbMeldungen().filter(function(m){return m.datum>=lim&&(m.laender||[]).indexOf(iso)>=0;}).length; }
 function lbPaintMap(){
@@ -16746,6 +16744,82 @@ lbRender=function(){
 var _lbDossierHTML_p2=lbDossierHTML;
 lbDossierHTML=function(iso){ var h=_lbDossierHTML_p2(iso), marker='<div class="lp-cd"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">MELDUNGEN'; var stat=lbStatHTML(iso); return stat?h.replace(marker,stat+marker):h; };
 
+// ── Streitkräfte-Bestand pro Land (Flugzeuge, Panzer, Schiffe …) — liegt im Länder-Datensatz (l.bestand), synct wie die Beschaffungen ──
+var LB_BEST_BER=[['luft','Luftstreitkräfte','ti-plane'],['land','Heer','ti-tank'],['see','Marine','ti-ship'],['flab','Luftverteidigung','ti-radar'],['sonst','Sonstiges','ti-box']];
+var LB_BEST_TYPEN={
+  luft:['Kampfflugzeug','Bomber','Transportflugzeug','Tankflugzeug','Aufklärung / AWACS','Trainer','Mehrzweckhelikopter','Kampfhelikopter','Transporthelikopter','Drohne'],
+  land:['Kampfpanzer','Schützenpanzer','Transportpanzer','Panzerhaubitze','Gezogene Artillerie','Raketenartillerie','Aufklärungsfahrzeug','Pionierpanzer'],
+  see:['Flugzeugträger','Zerstörer','Fregatte','Korvette','U-Boot','Amphibisches Schiff','Patrouillenboot','Minenabwehr'],
+  flab:['Langstrecke','Mittelstrecke','Kurzstrecke','Radar'],
+  sonst:['Ballistische Rakete','Marschflugkörper','Satellit']
+};
+function lbBestBer(k){ return LB_BEST_BER.find(function(b){return b[0]===k;})||LB_BEST_BER[LB_BEST_BER.length-1]; }
+function lbBestNum(n){ n=Number(n)||0; return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,"'"); }
+function lbBestandHTML(iso){
+  var l=lbLand(iso), best=(l&&l.bestand)||[];
+  var h='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">STREITKRÄFTE · BESTAND</span><button type="button" class="lp-btn gray" data-lb="best-new" data-iso="'+iso+'">+ System</button></div>';
+  if(!best.length)return h+'<div class="lp-mu" style="font-size:12px">Noch kein Bestand erfasst — Flugzeuge, Panzer, Schiffe usw. mit Anzahl eintragen.</div></div>';
+  LB_BEST_BER.forEach(function(b){
+    var rows=best.filter(function(x){return lbBestBer(x.bereich)[0]===b[0];}); if(!rows.length)return;
+    rows.sort(function(a,c){ return (a.typ||'').localeCompare(c.typ||'')||(Number(c.anzahl)||0)-(Number(a.anzahl)||0); });
+    var sum=rows.reduce(function(a,x){return a+(Number(x.anzahl)||0);},0);
+    h+='<div class="lp-row" style="justify-content:space-between;margin:8px 0 2px"><span style="font-size:12px;font-weight:500"><i class="ti '+b[2]+'"></i> '+b[1]+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lbBestNum(sum)+' total</span></div>';
+    rows.forEach(function(x){
+      h+='<div class="lp-row" style="justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--lp-border)"><span style="flex:1;min-width:0"><b style="font-weight:500">'+lpEsc(x.system)+'</b>'+(x.typ?' <span class="lp-mu" style="font-size:11px">· '+lpEsc(x.typ)+'</span>':'')+(x.notiz?'<div class="lp-mu" style="font-size:11px">'+lpEsc(x.notiz)+'</div>':'')+'</span>'
+        +'<span class="lp-mono" style="align-self:center;font-size:13px;min-width:40px;text-align:right">'+lbBestNum(x.anzahl)+'</span>'
+        +'<span class="lp-mono lp-mu" style="font-size:11px;align-self:center" title="Stand">'+lpEsc(lpFmtShort(x.stand))+'</span>'
+        +'<button type="button" class="lp-x" data-lb="best-edit" data-iso="'+iso+'" data-id="'+lpEsc(x.id)+'" aria-label="ändern"><i class="ti ti-pencil"></i></button>'
+        +'<button type="button" class="lp-x" data-lb="best-del" data-iso="'+iso+'" data-id="'+lpEsc(x.id)+'" aria-label="löschen">✕</button></div>';
+    });
+  });
+  return h+'</div>';
+}
+function lbBestTypDl(ber){ return (LB_BEST_TYPEN[ber]||[]).map(function(t){return '<option value="'+lpEsc(t)+'">';}).join(''); }
+function lbBestEdit(iso,id){
+  var l=lbLand(iso), x=id&&l&&(l.bestand||[]).find(function(y){return y.id===id;});
+  x=x||{bereich:'luft',typ:'',system:'',anzahl:'',stand:today(),notiz:''};
+  syModal('lb-best','<div class="lp-cap" style="margin-bottom:8px">'+(id?'BESTAND BEARBEITEN':'BESTAND ERFASSEN')+' · '+lpEsc(lbName(iso).toUpperCase())+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<select class="lp-in" id="lbb-ber">'+LB_BEST_BER.map(function(b){return '<option value="'+b[0]+'"'+(lbBestBer(x.bereich)[0]===b[0]?' selected':'')+'>'+b[1]+'</option>';}).join('')+'</select>'
+    +'<input class="lp-in" id="lbb-typ" list="lbb-typ-dl" placeholder="Typ (z. B. Kampfflugzeug, Kampfpanzer)" value="'+lpEsc(x.typ||'')+'"><datalist id="lbb-typ-dl">'+lbBestTypDl(lbBestBer(x.bereich)[0])+'</datalist>'
+    +'<input class="lp-in" id="lbb-sys" placeholder="System (z. B. F-35A, Leopard 2A7)" value="'+lpEsc(x.system||'')+'">'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap"><input class="lp-in lp-mono" type="number" min="0" step="1" inputmode="numeric" id="lbb-anz" placeholder="Anzahl" value="'+lpEsc(x.anzahl===''||x.anzahl==null?'':String(x.anzahl))+'" style="max-width:120px"><label class="lp-mu" style="font-size:11px;align-self:center">Stand</label><input class="lp-in lp-mono" type="date" id="lbb-stand" value="'+lpEsc(x.stand||today())+'" style="max-width:160px"></div>'
+    +'<input class="lp-in" id="lbb-notiz" placeholder="Notiz / Quelle (optional)" value="'+lpEsc(x.notiz||'')+'"></div>'
+    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="lp-btn gray" data-lb="best-close">Abbrechen</button><button type="button" class="lp-btn fill" data-lb="best-save" data-iso="'+iso+'" data-id="'+lpEsc(id||'')+'">Speichern</button></div>');
+  var sy=document.getElementById('lbb-sys'); if(sy&&!id)sy.focus();
+}
+function lbBestSave(iso,id){
+  var sys=document.getElementById('lbb-sys').value.trim(); if(!sys){ showToast('Bitte ein System eintragen.'); return; }
+  var anzRaw=document.getElementById('lbb-anz').value.trim(), anz=anzRaw===''?0:Math.max(0,Math.round(Number(anzRaw)));
+  if(isNaN(anz)){ showToast('Anzahl bitte als Zahl eintragen.'); return; }
+  var l=lbLand(iso,true); l.bestand=l.bestand||[];
+  var x=id&&l.bestand.find(function(y){return y.id===id;});
+  if(!x){ x={id:uid()}; l.bestand.push(x); }
+  x.bereich=document.getElementById('lbb-ber').value; x.typ=document.getElementById('lbb-typ').value.trim(); x.system=sys; x.anzahl=anz;
+  x.stand=document.getElementById('lbb-stand').value||today(); x.notiz=document.getElementById('lbb-notiz').value.trim();
+  lbTouch(l); saveD(); var m=document.getElementById('lb-best'); if(m)m.remove(); lbRender();
+}
+var _lbDossierHTML_best=lbDossierHTML;
+lbDossierHTML=function(iso){ var h=_lbDossierHTML_best(iso), marker='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">BESCHAFFUNGEN'; return h.indexOf(marker)>=0?h.replace(marker,lbBestandHTML(iso)+marker):h+lbBestandHTML(iso); };
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return;
+  var a=el.getAttribute('data-lb'), iso=el.getAttribute('data-iso'), id=el.getAttribute('data-id');
+  switch(a){
+    case 'best-new': ev.preventDefault(); return lbBestEdit(iso,null);
+    case 'best-edit': ev.preventDefault(); return lbBestEdit(iso,id);
+    case 'best-close': ev.preventDefault(); var m=document.getElementById('lb-best'); if(m)m.remove(); return;
+    case 'best-save': ev.preventDefault(); return lbBestSave(iso,id);
+    case 'best-del':
+      ev.preventDefault(); var l=lbLand(iso); if(!l)return; var x=(l.bestand||[]).find(function(y){return y.id===id;}); if(!x)return;
+      if(!confirm('«'+x.system+'» aus dem Bestand von '+lbName(iso)+' entfernen?'))return;
+      l.bestand=l.bestand.filter(function(y){return y.id!==id;}); lbTouch(l); saveD(); return lbRender();
+  }
+});
+document.addEventListener('change',function(ev){
+  if(!ev.target||ev.target.id!=='lbb-ber')return;
+  var dl=document.getElementById('lbb-typ-dl'); if(dl)dl.innerHTML=lbBestTypDl(ev.target.value);
+});
+
 // ── Globale Suche (Strg+K): Lagebericht ist nicht privat, wird durchsucht ──
 var _pdSearchIndex_lb=pdSearchIndex;
 pdSearchIndex=function(){
@@ -16941,15 +17015,25 @@ function labCardHTML(l){
   if(l.status==='offen'||l.status==='inArbeit'){
     h+='<div class="lp-mu" style="font-size:11px;margin-top:8px">Anzahl Aufgaben</div><input class="lp-in lp-mono" type="number" min="1" style="width:80px" id="lab-n-'+id+'" value="'+(l.anzahl||'')+'" data-lpc="lab.anzahl" data-id="'+id+'"/>'
     +'<div class="lp-mu" style="font-size:11px;margin:8px 0 4px">Welche Nummern waren falsch? (leer = alles richtig)</div>'
-    +'<div class="lp-row" style="gap:4px;flex-wrap:wrap" id="lab-grid-'+id+'">'+(l.anzahl?Array.from({length:l.anzahl},function(_,i){ return i+1; }).map(function(n){ return '<button type="button" class="lp-x lab-num'+((l.falsch||[]).indexOf(n)>=0?' on':'')+'" data-lab="num" data-id="'+id+'" data-n="'+n+'" style="width:30px">'+n+'</button>'; }).join(''):'<span class="lp-mu" style="font-size:11px">zuerst Anzahl eintragen</span>')+'</div>'
-    +'<button type="button" class="lp-btn fill" style="margin-top:8px" data-lab="durchgang" data-id="'+id+'">Durchgang speichern</button>';
+    +'<div class="lp-row" style="gap:4px;flex-wrap:wrap" id="lab-grid-'+id+'">'+(l.anzahl?Array.from({length:l.anzahl},function(_,i){ return i+1; }).map(function(n){ return '<button type="button" class="lp-x lab-num'+((l.auswahl||[]).indexOf(n)>=0?' on':'')+((l.durchgaenge||[]).length&&(l.falsch||[]).indexOf(n)>=0?' zuletzt':'')+'" data-lab="num" data-id="'+id+'" data-n="'+n+'" style="width:30px"'+((l.falsch||[]).indexOf(n)>=0?' title="im letzten Durchgang falsch"':'')+'>'+n+'</button>'; }).join(''):'<span class="lp-mu" style="font-size:11px">zuerst Anzahl eintragen</span>')+'</div>'
+    +'<div class="lp-row" style="gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><button type="button" class="lp-btn fill" data-lab="durchgang" data-id="'+id+'">Durchgang speichern</button><span class="lp-mu" style="font-size:11px" id="lab-sel-'+id+'">'+labAuswahlText(l)+'</span></div>';
   } else if(l.status==='geloest'){
     h+='<div class="lp-mu" style="font-size:11px;margin:6px 0">Nächste Wiederholung: vollständig richtig lösen, dann zählt der Tag.</div>'
       +'<button type="button" class="lp-btn ok" data-lab="wdh-ok" data-id="'+id+'">✓ Heute vollständig richtig</button> <button type="button" class="lp-btn danger" data-lab="wdh-falsch" data-id="'+id+'">✗ Fehler drin</button>';
   } else { h+='<div class="lp-mu" style="font-size:11px;margin-top:6px">Fertig gefestigt.</div>'; }
+  h+=labVerlaufHTML(l);
   h+='<div class="lp-row" style="gap:8px;margin-top:10px;flex-wrap:wrap;justify-content:space-between"><input class="lp-in lp-mono" type="date" title="Abgabedatum" data-lpc="lab.abgabeDatum" data-id="'+id+'" value="'+(l.abgabeDatum||'')+'" style="max-width:150px"/>'
     +'<span class="lp-row" style="gap:6px"><input class="lp-in lp-mono" type="number" min="0" max="20" title="Punkte" placeholder="Pkt." data-lpc="lab.punkte" data-id="'+id+'" value="'+(l.punkte!=null?l.punkte:'')+'" style="width:70px"/><button type="button" class="lp-x" data-lab="del" data-id="'+id+'">✕</button></span></div></div>';
   return h;
+}
+function labAuswahlText(l){ var a=(l.auswahl||[]).slice().sort(function(x,y){return x-y;}); return a.length?a.length+' falsch markiert: '+a.join(', '):'nichts markiert = alles richtig'; }
+function labVerlaufHTML(l){
+  var dg=(l.durchgaenge||[]); if(!dg.length)return '';
+  var rows=dg.slice(-5).reverse().map(function(d){
+    var n=(d.falscheNummern||[]).slice().sort(function(x,y){return x-y;});
+    return '<div class="lp-row" style="justify-content:space-between;gap:8px;font-size:11px;padding:2px 0"><span class="lp-mono lp-mu">'+lpFmtShort(d.datum)+'</span><span style="flex:1;min-width:0;text-align:right">'+(d.alleKorrekt?'<span style="color:var(--lp-ok)">✓ alles richtig</span>':'<span style="color:var(--lp-review)">'+n.length+(l.anzahl?' / '+l.anzahl:'')+' falsch</span> <span class="lp-mu">· Nr. '+n.join(', ')+'</span>')+'</span></div>';
+  }).join('');
+  return '<details style="margin-top:8px"'+(l.status==='inArbeit'?' open':'')+'><summary class="lp-mu" style="cursor:pointer;font-size:11px">'+dg.length+' Durchg'+(dg.length===1?'ang':'änge')+(dg.length>5?' · letzte 5':'')+'</summary>'+rows+'</details>';
 }
 function lpLabsHTML(f){
   var labs=lpLabsOf(f.id), R=nrRegeln?nrRegeln():null, sum=0; labs.forEach(function(l){sum+=+l.punkte||0;});
@@ -16965,10 +17049,11 @@ document.addEventListener('click',function(ev){
     case 'new': var fid=el.getAttribute('data-fach'), n=lpLabsOf(fid).length+1; var t=prompt('Titel (leer = «Lab '+n+'»):',''); labNew(fid,n,t&&t.trim()||('Lab '+n)); return lpRender();
     case 'del': if(!confirm('Lab löschen?'))return; D.lpLabs=lpLabs().filter(function(x){return x.id!==id;}); markDeleted(id); saveD(); return lpRender();
     case 'num':
-      var l=lpLabs().find(function(x){return x.id===id;}); if(!l)return; var n=+el.getAttribute('data-n'); l.falsch=l.falsch||[];
-      var i=l.falsch.indexOf(n); if(i>=0)l.falsch.splice(i,1); else l.falsch.push(n);
-      el.classList.toggle('on'); return;
-    case 'durchgang': var l2=lpLabs().find(function(x){return x.id===id;}); if(!l2)return; if(!l2.anzahl){ showToast('Bitte zuerst die Anzahl Aufgaben eintragen.'); return; } labDurchgang(l2,l2.falsch||[]); showToast(l2.falsch&&l2.falsch.length?'Durchgang gespeichert, weiter üben.':'Alles richtig ✓','ok'); return lpRender();
+      var l=lpLabs().find(function(x){return x.id===id;}); if(!l)return; var n=+el.getAttribute('data-n'); l.auswahl=l.auswahl||[];
+      var i=l.auswahl.indexOf(n); if(i>=0)l.auswahl.splice(i,1); else l.auswahl.push(n);
+      el.classList.toggle('on',l.auswahl.indexOf(n)>=0); var st=document.getElementById('lab-sel-'+id); if(st)st.textContent=labAuswahlText(l);
+      lpTouch(l); saveD(); return;
+    case 'durchgang': var l2=lpLabs().find(function(x){return x.id===id;}); if(!l2)return; if(!l2.anzahl){ showToast('Bitte zuerst die Anzahl Aufgaben eintragen.'); return; } var sel=(l2.auswahl||[]).filter(function(n){return n>=1&&n<=l2.anzahl;}).sort(function(x,y){return x-y;}); l2.auswahl=[]; labDurchgang(l2,sel); showToast(sel.length?'Durchgang gespeichert: '+sel.length+' von '+l2.anzahl+' falsch (Nr. '+sel.join(', ')+').':'Durchgang gespeichert: alles richtig ✓','ok'); return lpRender();
     case 'wdh-ok': var l3=lpLabs().find(function(x){return x.id===id;}); if(!l3)return; labDurchgang(l3,[]); return lpRender();
     case 'wdh-falsch': var l4=lpLabs().find(function(x){return x.id===id;}); if(!l4)return; var nrs=prompt('Welche Nummern falsch? (mit Komma trennen)',''); labDurchgang(l4,(nrs||'').split(',').map(function(s){return +s.trim();}).filter(Boolean)); return lpRender();
   }
