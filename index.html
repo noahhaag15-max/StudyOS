@@ -3380,7 +3380,7 @@ var D = {
 // nichts, was nur lokal existiert, geht verloren. Einzige Ausnahme: bewusst lokal gelöschte
 // Einträge können durch einen älteren Snapshot wieder auftauchen — das ist der bewusste
 // Kompromiss (lieber ein Karteileichen-Eintrag zurück als echte Daten verloren).
-var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','lbKonflikte','lpAufgaben','lpLabs','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
+var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','lbKonflikte','lbBuendnisse','lpAufgaben','lpLabs','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
 // wplan & track sind hier bewusst NICHT drin — die brauchen einen ECHTEN Tiefen-Merge (siehe
 // mergeWplan/mergeTrack unten), weil ihre Werte pro Woche/Tag komplexe, häufig aktiv bearbeitete
 // Strukturen sind. Ein einfacher Object.assign auf oberster Ebene hätte (und hat!) eine ganze
@@ -16495,7 +16495,7 @@ function lbDossierHTML(iso){
   // Beschaffungen
   var besch=(l.beschaffungen||[]).slice().sort(function(a,b){return (b.datum||'')<(a.datum||'')?-1:1;});
   h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">BESCHAFFUNGEN</span><button type="button" class="lp-btn gray" data-lb="besch-new" data-iso="'+iso+'">+ Eintrag</button></div>'
-    +(besch.length?besch.map(function(b){ return '<div class="lp-row" style="justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--lp-border)"><span style="flex:1;min-width:0"><b style="font-weight:500">'+lpEsc(b.system)+'</b>'+(b.stueckzahl?' × '+lpEsc(b.stueckzahl):'')+(b.notiz?'<div class="lp-mu" style="font-size:11px">'+lpEsc(b.notiz)+'</div>':'')+'</span><span class="tbadge bq" style="align-self:center">'+lpEsc((LB_BESCH_STATUS.find(function(s){return s[0]===b.status;})||[,b.status])[1])+'</span><span class="lp-mono lp-mu" style="font-size:11px;align-self:center">'+lpEsc(lpFmtShort(b.datum))+'</span><button type="button" class="lp-x" data-lb="besch-del" data-iso="'+iso+'" data-id="'+lpEsc(b.id)+'">✕</button></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Keine Beschaffungen erfasst.</div>')+'</div>';
+    +(besch.length?besch.map(function(b){ return '<div class="lp-row" style="justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--lp-border)"><span style="flex:1;min-width:0"><b style="font-weight:500">'+lpEsc(b.system)+'</b>'+(b.stueckzahl?' × '+lpEsc(b.stueckzahl):'')+(b.notiz?'<div class="lp-mu" style="font-size:11px">'+lpEsc(b.notiz)+'</div>':'')+'</span><span class="tbadge bq" style="align-self:center">'+lpEsc((LB_BESCH_STATUS.find(function(s){return s[0]===b.status;})||[,b.status])[1])+'</span><span class="lp-mono lp-mu" style="font-size:11px;align-self:center">'+lpEsc(lpFmtShort(b.datum))+'</span><button type="button" class="lp-x" data-lb="besch-edit" data-iso="'+iso+'" data-id="'+lpEsc(b.id)+'" aria-label="bearbeiten"><i class="ti ti-pencil"></i></button><button type="button" class="lp-x" data-lb="besch-del" data-iso="'+iso+'" data-id="'+lpEsc(b.id)+'">✕</button></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Keine Beschaffungen erfasst.</div>')+'</div>';
   // Beziehungen
   var bez=lbBeziehungen().filter(function(b){return b.von===iso||b.nach===iso;});
   h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">BEZIEHUNGEN</span><button type="button" class="lp-btn gray" data-lb="bez-new" data-iso="'+iso+'">+ Beziehung</button></div>'
@@ -16525,6 +16525,7 @@ function lbMeldungOpenHTML(m){
     +(m.tags&&m.tags.length?'<div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-top:10px">'+m.tags.map(function(t){return '<span class="wp-pill">#'+lpEsc(t)+'</span>';}).join('')+'</div>':'')
     +(m.einschaetzung?'<div style="border-left:3px solid var(--lp-accent);padding:8px 12px;margin-top:12px;background:color-mix(in srgb,var(--lp-accent) 8%,transparent)"><div class="lp-cap" style="margin-bottom:4px">EINSCHÄTZUNG</div><div style="font-size:13px;white-space:pre-wrap">'+lpEsc(m.einschaetzung)+'</div></div>':'')
     +'<div class="lp-mu" style="font-size:11px;margin-top:12px">Quelle: '+(m.quelle&&m.quelle.url?'<a href="'+lpEsc(m.quelle.url)+'" target="_blank" rel="noopener">'+lpEsc(m.quelle.name)+'</a>':lpEsc(m.quelle&&m.quelle.name||'—'))+(m.quelle&&m.quelle.datum?' · '+lpEsc(lpFmt(m.quelle.datum)):'')+'</div>'
+    +(lbBuendnisse().length?'<div class="lp-fld" style="margin-top:12px"><label>Bündnis</label><select class="lp-in" id="lb-meld-bund" data-mid="'+lpEsc(m.id)+'"><option value="">— keines —</option>'+lbBundSorted().map(function(b){return '<option value="'+lpEsc(b.id)+'"'+(m.buendnisId===b.id?' selected':'')+'>'+lpEsc(lbBundTitel(b))+'</option>';}).join('')+'</select></div>':'')
     +(lbKonflikte().length?'<div class="lp-fld" style="margin-top:12px"><label>Konflikt</label><select class="lp-in" id="lb-meld-konf" data-mid="'+lpEsc(m.id)+'"><option value="">— keiner —</option>'+lbKonfSorted().map(function(k){return '<option value="'+lpEsc(k.id)+'"'+(m.konfliktId===k.id?' selected':'')+'>'+lpEsc(k.name)+'</option>';}).join('')+'</select></div>':'')
     +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px">'+((m.laender||[]).length>=2?'<button type="button" class="lp-btn gray" data-lb="bez-vorschlag" data-id="'+lpEsc(m.id)+'"><i class="ti ti-link"></i> Beziehung daraus anlegen</button>':'')+'<button type="button" class="lp-btn gray" data-lb="meld-edit" data-id="'+lpEsc(m.id)+'"><i class="ti ti-pencil"></i> Bearbeiten</button><button type="button" class="lp-btn danger" data-lb="meld-del" data-id="'+lpEsc(m.id)+'">Löschen</button></div></div>';
   return h;
@@ -16540,13 +16541,14 @@ function lbFormHTML(pre){
     +'<div class="lp-fld"><label>Länder</label><div style="flex:1;min-width:0"><div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px" id="lb-land-chips">'+chips+'</div><input class="lp-in" id="lb-land-q" list="lb-land-dl" placeholder="Land tippen und Enter" style="width:100%"/><datalist id="lb-land-dl">'+Object.keys(LB_NAMEN||{}).map(function(iso){return '<option value="'+lpEsc(LB_NAMEN[iso])+'">';}).join('')+'</datalist></div></div>'
     +'<div class="lp-fld"><label>Datum</label><input class="lp-in lp-mono" type="date" id="lb-datum" value="'+(pre.datum||today())+'" style="max-width:150px"/></div>'
     +'<div class="lp-fld"><label>Kategorie</label><select class="lp-in" id="lb-kat">'+LB_KAT.map(function(k){return '<option value="'+k[0]+'"'+(pre.kategorie===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></div>'
+    +(lbBuendnisse().length?'<div class="lp-fld"><label>Bündnis</label><select class="lp-in" id="lb-bund"><option value="">— keines —</option>'+lbBundSorted().map(function(b){return '<option value="'+lpEsc(b.id)+'"'+(pre.buendnisId===b.id?' selected':'')+'>'+lpEsc(lbBundTitel(b))+'</option>';}).join('')+'</select></div>':'')
     +(lbKonflikte().length?'<div class="lp-fld"><label>Konflikt</label><select class="lp-in" id="lb-konf"><option value="">— keiner —</option>'+lbKonfSorted().map(function(k){return '<option value="'+lpEsc(k.id)+'"'+(pre.konfliktId===k.id?' selected':'')+'>'+lpEsc(k.name)+'</option>';}).join('')+'</select></div>':'')
     +'<div class="lp-fld"><label>Sicherheit</label><select class="lp-in" id="lb-sicher">'+LB_SICHER.map(function(k){return '<option value="'+k[0]+'"'+(pre.sicherheit===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></div>'
     +'<div class="lp-fld"><label>Titel</label><input class="lp-in" id="lb-titel" value="'+lpEsc(pre.titel||'')+'" style="flex:1"/></div>'
     +'<div class="lp-fld" style="align-items:flex-start"><label>Text</label><textarea class="lp-in" id="lb-text" rows="4" style="flex:1;width:100%">'+lpEsc(pre.text||'')+'</textarea></div>'
-    +'<div class="lp-fld" style="align-items:flex-start"><label>Systeme</label><div style="flex:1;min-width:0"><div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px" id="lb-sys-chips">'+(pre.systeme||[]).map(function(x){ return '<span class="wp-pill" data-lb="sys-chip" data-v="'+lpEsc(x)+'" style="cursor:pointer">'+lpEsc(x)+' <b style="font-weight:400">✕</b></span>'; }).join('')+'</div><input class="lp-in" id="lb-sys-q" list="lb-sys-dl" placeholder="z. B. J-36, B-21 — Enter oder Komma" style="width:100%"/><datalist id="lb-sys-dl">'+lbSystemVorschlaege().map(function(x){return '<option value="'+lpEsc(x)+'">';}).join('')+'</datalist></div></div>'
+    +'<div class="lp-fld" style="align-items:flex-start"><label>Systeme</label><div style="flex:1;min-width:0"><div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px" id="lb-sys-chips">'+(pre.systeme||[]).map(function(x){ return '<span class="wp-pill" data-lb="sys-chip" data-v="'+lpEsc(x)+'" style="cursor:pointer">'+lpEsc(x)+' <b style="font-weight:400">✕</b></span>'; }).join('')+'</div><input class="lp-in" id="lb-sys-q" data-sugg="sys" autocomplete="off" placeholder="z. B. J-36, B-21 — Enter oder Komma" style="width:100%"/><datalist id="lb-sys-dl">'+lbSystemVorschlaege().map(function(x){return '<option value="'+lpEsc(x)+'">';}).join('')+'</datalist></div></div>'
     +'<div class="lp-fld"><label>Ereignis</label><select class="lp-in" id="lb-ereignis"><option value="">— keines —</option>'+LB_EREIGNIS.map(function(x){return '<option value="'+x[0]+'"'+(pre.ereignis===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></div>'
-    +'<div class="lp-fld"><label>Tags</label><input class="lp-in" id="lb-tags" placeholder="mit Komma trennen" value="'+lpEsc((pre.tags||[]).join(', '))+'" style="flex:1"/></div>'
+    +'<div class="lp-fld"><label>Tags</label><input class="lp-in" id="lb-tags" data-sugg="tags" autocomplete="off" placeholder="mit Komma trennen" value="'+lpEsc((pre.tags||[]).join(', '))+'" style="flex:1"/></div>'
     +'<div class="lp-cap" style="margin:10px 0 4px">QUELLE (PFLICHT)</div>'
     +'<div class="lp-fld"><label>Name</label><input class="lp-in" id="lb-q-name" value="'+lpEsc(pre.quelle&&pre.quelle.name||'')+'" style="flex:1"/></div>'
     +'<div class="lp-fld"><label>URL</label><input class="lp-in" id="lb-q-url" placeholder="optional" value="'+lpEsc(pre.quelle&&pre.quelle.url||'')+'" style="flex:1"/></div>'
@@ -16564,6 +16566,7 @@ function lbFormSave(){
   var m={id:uid(),datum:document.getElementById('lb-datum').value||today(),laender:laender,kategorie:document.getElementById('lb-kat').value,titel:titel,text:(document.getElementById('lb-text').value||'').trim(),
     sicherheit:document.getElementById('lb-sicher').value,tags:tags,quelle:{name:qname,url:(document.getElementById('lb-q-url').value||'').trim(),datum:today()},einschaetzung:(document.getElementById('lb-einsch').value||'').trim(),erstellt:today()};
   var kSel=document.getElementById('lb-konf'); if(kSel&&kSel.value)m.konfliktId=kSel.value;
+  var bSel=document.getElementById('lb-bund'); if(bSel&&bSel.value)m.buendnisId=bSel.value;
   lbSysChipFromInput(); m.systeme=[].map.call(document.querySelectorAll('#lb-sys-chips [data-lb="sys-chip"]'),function(e){return e.getAttribute('data-v');});
   var ereig=document.getElementById('lb-ereignis').value; if(ereig)m.ereignis=ereig;
   var alt=LB_UI.editId&&lbMeldungen().find(function(x){return x.id===LB_UI.editId;});
@@ -16607,7 +16610,7 @@ function lbRender(){
   if(LB_UI.tab==='dossier'&&LB_UI.land){ el.innerHTML=h+lbDossierHTML(LB_UI.land); return; }
   h+=lbTabsHTML();
   if(LB_UI.tab==='zeitstrahl'){ el.innerHTML=h+lbZeitstrahlHTML(); return; }
-  h+='<div class="lp-row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap"><span class="lp-seg"><button type="button" class="'+(LB_UI.mapColor==='level'?'on':'')+'" data-lb="mapcolor" data-v="level">Lage-Level</button><button type="button" class="'+(LB_UI.mapColor==='aktivitaet'?'on':'')+'" data-lb="mapcolor" data-v="aktivitaet">Aktivität</button><button type="button" class="'+(LB_UI.mapColor==='konflikt'?'on':'')+'" data-lb="mapcolor" data-v="konflikt">Konflikte</button></span>'+lbKonfMapSelectHTML()+'</div>'
+  h+='<div class="lp-row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap"><span class="lp-seg"><button type="button" class="'+(LB_UI.mapColor==='level'?'on':'')+'" data-lb="mapcolor" data-v="level">Lage-Level</button><button type="button" class="'+(LB_UI.mapColor==='aktivitaet'?'on':'')+'" data-lb="mapcolor" data-v="aktivitaet">Aktivität</button><button type="button" class="'+(LB_UI.mapColor==='konflikt'?'on':'')+'" data-lb="mapcolor" data-v="konflikt">Konflikte</button><button type="button" class="'+(LB_UI.mapColor==='buendnis'?'on':'')+'" data-lb="mapcolor" data-v="buendnis">Bündnisse</button></span>'+lbKonfMapSelectHTML()+'</div>'
     +'<div id="lb-map" style="overflow-x:auto;border-radius:12px;border:1px solid var(--lp-border)"></div>'
     +lbMapLegendHTML();
   el.innerHTML=h;
@@ -16622,11 +16625,8 @@ document.addEventListener('click',function(ev){
     case 'watchlist': var l=lbLand(iso,true); l.watchlist=!l.watchlist; lbTouch(l); saveD(); return lbRender();
     case 'level': var l2=lbLand(iso,true); if(l2.lageLevel!==el.getAttribute('data-v')){ l2.lageLevel=el.getAttribute('data-v'); l2.levelSeit=today(); lbTouch(l2); saveD(); } return lbRender();
     case 'fuehrung-edit': return lbFuEdit(iso,el.getAttribute('data-rolle'));
-    case 'besch-new':
-      var sys=prompt('System / Bezeichnung:'); if(!sys||!sys.trim())return;
-      var stk=prompt('Stückzahl (optional):')||'';
-      var l4=lbLand(iso,true); l4.beschaffungen=l4.beschaffungen||[];
-      l4.beschaffungen.push({id:uid(),system:sys.trim(),stueckzahl:stk.trim(),status:'geplant',datum:today(),notiz:''}); lbTouch(l4); saveD(); return lbRender();
+    case 'besch-new': return lbBeschEdit(iso,null);
+    case 'besch-edit': return lbBeschEdit(iso,id);
     case 'besch-del':
       var l5=lbLand(iso); if(!l5)return; l5.beschaffungen=(l5.beschaffungen||[]).filter(function(b){return b.id!==id;}); lbTouch(l5); saveD(); return lbRender();
     case 'bez-new': return lbBezEdit({von:iso});
@@ -16806,7 +16806,7 @@ function lbBestEdit(iso,id){
     +'<div style="display:flex;flex-direction:column;gap:8px">'
     +'<select class="lp-in" id="lbb-ber">'+LB_BEST_BER.map(function(b){return '<option value="'+b[0]+'"'+(lbBestBer(x.bereich)[0]===b[0]?' selected':'')+'>'+b[1]+'</option>';}).join('')+'</select>'
     +'<input class="lp-in" id="lbb-typ" list="lbb-typ-dl" placeholder="Typ (z. B. Kampfflugzeug, Kampfpanzer)" value="'+lpEsc(x.typ||'')+'"><datalist id="lbb-typ-dl">'+lbBestTypDl(lbBestBer(x.bereich)[0])+'</datalist>'
-    +'<input class="lp-in" id="lbb-sys" placeholder="System (z. B. F-35A, Leopard 2A7)" value="'+lpEsc(x.system||'')+'">'
+    +'<input class="lp-in" id="lbb-sys" data-sugg="eins" autocomplete="off" placeholder="System (z. B. F-35A, Leopard 2A7)" value="'+lpEsc(x.system||'')+'">'
     +'<div class="lp-row" style="gap:8px;flex-wrap:wrap"><input class="lp-in lp-mono" type="number" min="0" step="1" inputmode="numeric" id="lbb-anz" placeholder="Anzahl" value="'+lpEsc(x.anzahl===''||x.anzahl==null?'':String(x.anzahl))+'" style="max-width:120px"><label class="lp-mu" style="font-size:11px;align-self:center">Stand</label><input class="lp-in lp-mono" type="date" id="lbb-stand" value="'+lpEsc(x.stand||today())+'" style="max-width:160px"></div>'
     +'<input class="lp-in" id="lbb-notiz" placeholder="Notiz / Quelle (optional)" value="'+lpEsc(x.notiz||'')+'"></div>'
     +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="lp-btn gray" data-lb="best-close">Abbrechen</button><button type="button" class="lp-btn fill" data-lb="best-save" data-iso="'+iso+'" data-id="'+lpEsc(id||'')+'">Speichern</button></div>');
@@ -17251,6 +17251,289 @@ document.addEventListener('click',function(ev){
     ev.preventDefault(); var m=lbMeldungen().find(function(x){return x.id===el.getAttribute('data-id');}); if(!m)return;
     LB_UI.formPre=JSON.parse(JSON.stringify(m)); LB_UI.editId=m.id; LB_UI.openMeld=null; LB_UI.form=true; lbRender(); window.scrollTo(0,0); return;
   }
+});
+
+// ═══ VORSCHLAGSLISTE — findet Teile des Namens («FA» → «McDonnell Douglas FA-18 Hornet», auch «fa18») ═══
+// data-sugg="sys"  → Chips-Eingabe der Systeme (Auswahl wird Chip)
+// data-sugg="tags" → kommagetrennte Liste (ersetzt das aktuelle Stück)
+// data-sugg="eins" → ein einzelner Wert
+var LB_SG={el:null,box:null,items:[],idx:-1};
+function lbNorm(x){ return String(x||'').toLowerCase().replace(/[^a-z0-9äöüéèàç]+/g,''); }
+function lbSuggToken(el){ var v=el.value; if(el.getAttribute('data-sugg')==='tags'){ var i=v.lastIndexOf(','); return v.slice(i+1).trim(); } return v.trim(); }
+function lbSuggList(el){
+  var q=lbSuggToken(el), ql=q.toLowerCase(), qn=lbNorm(q); if(!ql)return [];
+  var have={}; if(el.getAttribute('data-sugg')==='tags')el.value.split(',').forEach(function(t){ have[t.trim().toLowerCase()]=1; });
+  if(el.id==='lb-sys-q')[].forEach.call(document.querySelectorAll('#lb-sys-chips [data-lb="sys-chip"]'),function(c){ have[c.getAttribute('data-v').toLowerCase()]=1; });
+  var hits=[];
+  lbSystemVorschlaege().forEach(function(v){
+    var vl=v.toLowerCase(); if(have[vl]||vl===ql)return;
+    var pos=vl.indexOf(ql), rank;
+    if(pos===0)rank=0; else if(pos>0)rank=/[^a-z0-9]/.test(vl.charAt(pos-1))?1:2; else if(qn&&lbNorm(v).indexOf(qn)>=0)rank=3; else return;
+    hits.push({v:v,pos:pos,rank:rank});
+  });
+  return hits.sort(function(a,b){ return a.rank-b.rank||a.v.length-b.v.length||a.v.localeCompare(b.v); }).slice(0,8);
+}
+function lbSuggClose(){ if(LB_SG.box)LB_SG.box.remove(); LB_SG={el:null,box:null,items:[],idx:-1}; }
+function lbSuggShow(el){
+  var items=lbSuggList(el); if(!items.length){ lbSuggClose(); return; }
+  if(!LB_SG.box||LB_SG.el!==el){ lbSuggClose(); var b=document.createElement('div'); b.className='lp'; b.id='lb-sugg'; document.body.appendChild(b); LB_SG.box=b; LB_SG.el=el; }
+  LB_SG.items=items; LB_SG.idx=-1;
+  var r=el.getBoundingClientRect(), q=lbSuggToken(el);
+  LB_SG.box.style.cssText='position:fixed;z-index:3200;left:'+Math.max(4,r.left)+'px;top:'+(r.bottom+4)+'px;width:'+Math.max(220,r.width)+'px;max-width:calc(100vw - 8px);max-height:260px;overflow:auto;background:var(--lp-card,#111a22);border:1px solid var(--lp-border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.45);padding:4px';
+  LB_SG.box.innerHTML=items.map(function(it,i){
+    var v=it.v, h=it.pos>=0?lpEsc(v.slice(0,it.pos))+'<b style="color:var(--lp-accent)">'+lpEsc(v.slice(it.pos,it.pos+q.length))+'</b>'+lpEsc(v.slice(it.pos+q.length)):lpEsc(v);
+    return '<div class="lb-sugg-it" data-i="'+i+'" style="padding:7px 9px;border-radius:7px;cursor:pointer;font-size:13px">'+h+'</div>';
+  }).join('');
+}
+function lbSuggMark(){ [].forEach.call(LB_SG.box.querySelectorAll('.lb-sugg-it'),function(d,i){ d.style.background=i===LB_SG.idx?'color-mix(in srgb,var(--lp-accent) 18%,transparent)':''; if(i===LB_SG.idx)d.scrollIntoView({block:'nearest'}); }); }
+function lbSuggPick(i){
+  var el=LB_SG.el, it=LB_SG.items[i]; if(!el||!it)return;
+  var mode=el.getAttribute('data-sugg');
+  if(mode==='tags'){ var v=el.value, k=v.lastIndexOf(','); el.value=(k>=0?v.slice(0,k+1)+' ':'')+it.v+', '; }
+  else el.value=it.v;
+  lbSuggClose();
+  if(el.id==='lb-sys-q')lbSysChipFromInput();
+  el.focus();
+}
+document.addEventListener('input',function(ev){ var el=ev.target; if(el&&el.getAttribute&&el.getAttribute('data-sugg'))lbSuggShow(el); });
+document.addEventListener('focusin',function(ev){ var el=ev.target; if(el&&el.getAttribute&&el.getAttribute('data-sugg')&&lbSuggToken(el))lbSuggShow(el); });
+document.addEventListener('focusout',function(ev){ if(LB_SG.el&&ev.target===LB_SG.el)setTimeout(function(){ if(document.activeElement!==LB_SG.el)lbSuggClose(); },180); });
+document.addEventListener('mousedown',function(ev){ var it=ev.target.closest&&ev.target.closest('.lb-sugg-it'); if(it){ ev.preventDefault(); lbSuggPick(+it.getAttribute('data-i')); } },true);
+document.addEventListener('keydown',function(ev){
+  if(!LB_SG.box||ev.target!==LB_SG.el)return;
+  if(ev.key==='ArrowDown'||ev.key==='ArrowUp'){ ev.preventDefault(); var n=LB_SG.items.length; LB_SG.idx=ev.key==='ArrowDown'?(LB_SG.idx+1)%n:(LB_SG.idx<=0?n-1:LB_SG.idx-1); lbSuggMark(); return; }
+  if(ev.key==='Escape'){ ev.preventDefault(); ev.stopPropagation(); lbSuggClose(); return; }
+  if(ev.key==='Enter'&&LB_SG.idx>=0){ ev.preventDefault(); ev.stopImmediatePropagation(); lbSuggPick(LB_SG.idx); return; }
+  if(ev.key==='Enter'||ev.key===',')lbSuggClose();
+},true);
+window.addEventListener('scroll',function(){ if(LB_SG.el)lbSuggShow(LB_SG.el); },true);
+
+// ═══ BESCHAFFUNGEN — Dialog statt prompt() ═══
+function lbBeschEdit(iso,id){
+  var l=lbLand(iso), b=id&&l?(l.beschaffungen||[]).find(function(x){return x.id===id;}):null;
+  b=b||{system:'',stueckzahl:'',status:'geplant',datum:today(),notiz:''};
+  syModal('lb-besch','<div class="lp-cap" style="margin-bottom:8px">'+(id?'BESCHAFFUNG BEARBEITEN':'BESCHAFFUNG ERFASSEN')+' · '+lpEsc(lbName(iso).toUpperCase())+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<input class="lp-in" id="lbc-sys" data-sugg="eins" autocomplete="off" placeholder="System (z. B. F-35A)" value="'+lpEsc(b.system||'')+'">'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap"><input class="lp-in lp-mono" id="lbc-stk" placeholder="Stückzahl" value="'+lpEsc(b.stueckzahl||'')+'" style="max-width:120px"><select class="lp-in" id="lbc-status">'+LB_BESCH_STATUS.map(function(x){return '<option value="'+x[0]+'"'+(b.status===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select><input class="lp-in lp-mono" type="date" id="lbc-datum" value="'+lpEsc(b.datum||today())+'" style="max-width:160px"></div>'
+    +'<input class="lp-in" id="lbc-notiz" placeholder="Notiz (optional, z. B. Wert, Lieferant)" value="'+lpEsc(b.notiz||'')+'">'
+    +'</div><div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="lp-btn gray" data-lb="besch-close">Abbrechen</button><button type="button" class="lp-btn fill" data-lb="besch-save" data-iso="'+iso+'" data-id="'+lpEsc(id||'')+'">Speichern</button></div>');
+  if(!id){ var f=document.getElementById('lbc-sys'); if(f)f.focus(); }
+}
+function lbBeschSave(iso,id){
+  var sys=document.getElementById('lbc-sys').value.trim(); if(!sys){ showToast('Bitte ein System eintragen.'); return; }
+  var l=lbLand(iso,true); l.beschaffungen=l.beschaffungen||[];
+  var b=id&&l.beschaffungen.find(function(x){return x.id===id;}); if(!b){ b={id:uid()}; l.beschaffungen.push(b); }
+  b.system=sys; b.stueckzahl=document.getElementById('lbc-stk').value.trim(); b.status=document.getElementById('lbc-status').value; b.datum=document.getElementById('lbc-datum').value||today(); b.notiz=document.getElementById('lbc-notiz').value.trim();
+  lbTouch(l); saveD(); var m=document.getElementById('lb-besch'); if(m)m.remove(); lbRender();
+}
+
+// ═══ BÜNDNISSE & ORGANISATIONEN — Mitglieder mit Beitritt/Austritt, Partner, Vorlagen, Karte mit Zeitregler ═══
+SY_LIST_LABEL.lbBuendnisse='Lagebericht-Bündnisse';
+var LB_BUND_ART=[['militaer','Militärbündnis'],['verteidigung','Verteidigungskooperation'],['politisch','Politische Union'],['wirtschaft','Wirtschaft'],['nachrichten','Nachrichtendienste'],['sonstiges','Sonstiges']];
+var LB_BUND_COL='#3d7bd9', LB_BW=null;
+// Vorlagen: Stand 09.2026, aus allgemeinem Wissen zusammengestellt — bitte prüfen. Staaten ohne eigene Fläche auf der Karte (z. B. Malta) fehlen.
+var LB_BUND_VORLAGEN=[
+  {key:'nato',name:'Nordatlantikpakt',kurz:'NATO',art:'militaer',gegruendet:'1949-04-04',notiz:'Vorlage — Beitrittsdaten bitte prüfen. Partner = Partnerschaft für den Frieden (Auswahl).',
+   m:{'1949-04-04':['BEL','CAN','DNK','FRA','ISL','ITA','LUX','NLD','NOR','PRT','GBR','USA'],'1952-02-18':['GRC','TUR'],'1955-05-09':['DEU'],'1982-05-30':['ESP'],'1999-03-12':['CZE','HUN','POL'],'2004-03-29':['BGR','EST','LVA','LTU','ROU','SVK','SVN'],'2009-04-01':['ALB','HRV'],'2017-06-05':['MNE'],'2020-03-27':['MKD'],'2023-04-04':['FIN'],'2024-03-07':['SWE']},
+   p:{'1994-02-08':['UKR'],'1994-03-16':['MDA'],'1994-03-23':['GEO'],'1994-05-04':['AZE'],'1994-05-27':['KAZ'],'1994-10-05':['ARM'],'1995-02-10':['AUT'],'1996-12-11':['CHE'],'1999-12-01':['IRL'],'2006-12-14':['SRB','BIH']}},
+  {key:'eu',name:'Europäische Union',kurz:'EU',art:'politisch',gegruendet:'1958-01-01',notiz:'Vorlage — ab 1958 als EWG, seit 1993 EU. Daten bitte prüfen.',
+   m:{'1958-01-01':['BEL','FRA','DEU','ITA','LUX','NLD'],'1973-01-01':['DNK','IRL'],'1981-01-01':['GRC'],'1986-01-01':['ESP','PRT'],'1995-01-01':['AUT','FIN','SWE'],'2004-05-01':['CYP','CZE','EST','HUN','LVA','LTU','POL','SVK','SVN'],'2007-01-01':['BGR','ROU'],'2013-07-01':['HRV']},
+   ex:[['GBR','1973-01-01','2020-01-31']]},
+  {key:'ovks',name:'Organisation des Vertrags über kollektive Sicherheit',kurz:'OVKS / CSTO',art:'militaer',gegruendet:'1992-05-15',notiz:'Vorlage — Armenien hat seine Teilnahme 2024 eingefroren. Daten bitte prüfen.',
+   m:{'1992-05-15':['RUS','KAZ','KGZ','TJK','ARM'],'1993-12-31':['BLR']}},
+  {key:'sco',name:'Shanghaier Organisation für Zusammenarbeit',kurz:'SCO',art:'politisch',gegruendet:'2001-06-15',notiz:'Vorlage — Daten bitte prüfen.',
+   m:{'2001-06-15':['CHN','RUS','KAZ','KGZ','TJK','UZB'],'2017-06-09':['IND','PAK'],'2023-07-04':['IRN'],'2024-07-04':['BLR']}},
+  {key:'aukus',name:'AUKUS',kurz:'AUKUS',art:'verteidigung',gegruendet:'2021-09-15',notiz:'Vorlage.',m:{'2021-09-15':['AUS','GBR','USA']}},
+  {key:'fiveeyes',name:'Five Eyes',kurz:'FVEY',art:'nachrichten',gegruendet:'1946-03-05',notiz:'Vorlage — Beitrittsjahre von Kanada, Australien und Neuseeland gerundet.',
+   m:{'1946-03-05':['USA','GBR'],'1948-01-01':['CAN'],'1956-01-01':['AUS','NZL']}},
+  {key:'brics',name:'BRICS',kurz:'BRICS',art:'wirtschaft',gegruendet:'2009-06-16',notiz:'Vorlage — Saudi-Arabiens Status ist unklar und fehlt. Daten bitte prüfen.',
+   m:{'2009-06-16':['BRA','RUS','IND','CHN'],'2010-12-24':['ZAF'],'2024-01-01':['EGY','ETH','IRN','ARE'],'2025-01-06':['IDN']}},
+  {key:'dissuasion',name:'Dissuasion Avancée',kurz:'Dissuasion Avancée',art:'verteidigung',gegruendet:'2026-03-02',notiz:'Vorlage — französische Initiative, laut Meldung vom 14.09.2026.',m:{'2026-03-02':['FRA'],'2026-09-14':['FIN']}}
+];
+function lbBuendnisse(){ if(!Array.isArray(D.lbBuendnisse))D.lbBuendnisse=[]; return D.lbBuendnisse; }
+function lbBundTitel(b){ return b.kurz&&b.kurz!==b.name?b.kurz+' · '+b.name:(b.name||b.kurz||'Bündnis'); }
+function lbBundArtLabel(k){ return (LB_BUND_ART.find(function(x){return x[0]===k;})||[,k])[1]; }
+function lbBundAktiv(e,d){ d=d||today(); return (e.seit||'')<=d&&(!e.bis||e.bis>d); }
+function lbBundMitglieder(b,d){ return (b.mitglieder||[]).filter(function(e){return lbBundAktiv(e,d);}); }
+function lbBundSorted(){ return lbBuendnisse().slice().sort(function(a,b){ return lbBundMitglieder(b).length-lbBundMitglieder(a).length||(a.kurz||a.name).localeCompare(b.kurz||b.name); }); }
+function lbBundFromVorlage(v){
+  var mk=function(obj){ var out=[]; Object.keys(obj||{}).forEach(function(d){ obj[d].forEach(function(iso){ if(LB_NAMEN[iso])out.push({iso:iso,seit:d,bis:''}); }); }); return out; };
+  var m=mk(v.m); (v.ex||[]).forEach(function(x){ if(LB_NAMEN[x[0]])m.push({iso:x[0],seit:x[1],bis:x[2]}); });
+  return {id:'',name:v.name,kurz:v.kurz,art:v.art,gegruendet:v.gegruendet,notiz:v.notiz,mitglieder:m,partner:mk(v.p)};
+}
+// Zeitstrahl der Erweiterungen: Punkt pro Beitrittsdatum (Grösse = Anzahl), Ringe = Austritte
+function lbBundTimelineSVG(b){
+  var alle=(b.mitglieder||[]); if(!alle.length)return '';
+  var st=b.gegruendet||alle.map(function(e){return e.seit;}).sort()[0], en=today(); if(st>en)st=en;
+  var span=Math.max(1,lbDays(st,en)), W=600, x0=10, x1=W-10, X=function(d){ var v=Math.max(0,Math.min(span,lbDays(st,d))); return x0+v/span*(x1-x0); };
+  var wellen={}; alle.forEach(function(e){ (wellen[e.seit]=wellen[e.seit]||[]).push(e.iso); });
+  var h='<svg viewBox="0 0 '+W+' 58" width="100%" style="display:block;margin-top:8px" font-family="Space Mono,monospace" font-size="10"><line x1="'+x0+'" y1="24" x2="'+x1+'" y2="24" style="stroke:var(--lp-border)" stroke-width="3" stroke-linecap="round"/>';
+  var ks=Object.keys(wellen).sort(), lastLabelX=-99;
+  ks.forEach(function(d){
+    var n=wellen[d].length, x=X(d), r=Math.min(11,3.5+n*.9), lbl=x-lastLabelX>34;
+    h+='<g><title>'+lpEsc(lpFmt(d)+': '+wellen[d].map(lbName).join(', '))+'</title><circle cx="'+x.toFixed(1)+'" cy="24" r="'+r.toFixed(1)+'" style="fill:'+LB_BUND_COL+'" opacity=".9" stroke="#0b1620" stroke-width="1"/>'
+      +(n>1?'<text x="'+x.toFixed(1)+'" y="27.5" text-anchor="middle" style="fill:#fff" font-size="9" font-weight="700">'+n+'</text>':'')
+      +(lbl?'<text x="'+x.toFixed(1)+'" y="50" text-anchor="middle" style="fill:var(--lp-muted)">'+d.slice(0,4)+'</text>':'')+'</g>';
+    if(lbl)lastLabelX=x;
+  });
+  alle.filter(function(e){return e.bis;}).forEach(function(e){ var x=X(e.bis); h+='<g><title>'+lpEsc(lpFmt(e.bis)+': Austritt '+lbName(e.iso))+'</title><circle cx="'+x.toFixed(1)+'" cy="24" r="5" fill="none" style="stroke:var(--lp-review)" stroke-width="2"/></g>'; });
+  return h+'</svg>';
+}
+function lbBundCardHTML(b){
+  var akt=lbBundMitglieder(b).sort(function(x,y){return lbName(x.iso).localeCompare(lbName(y.iso));}), par=(b.partner||[]).filter(function(e){return lbBundAktiv(e);}), ex=(b.mitglieder||[]).filter(function(e){return e.bis&&e.bis<=today();});
+  var chip=function(e,faint){ return '<span class="wp-pill" data-lb="konf-land" data-iso="'+e.iso+'" title="seit '+lpEsc(lpFmt(e.seit))+'" style="cursor:pointer;font-size:11px;'+(faint?'border-color:'+LB_BUND_COL+';color:'+LB_BUND_COL:'background:'+LB_BUND_COL+';border-color:'+LB_BUND_COL+';color:#fff')+'">'+lpEsc(lbName(e.iso))+'</span>'; };
+  var chips=akt.map(function(e){return chip(e,false);}).join('');
+  return '<div class="lp-cd" style="margin-bottom:12px">'
+    +'<div class="lp-row" style="justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start"><div style="min-width:0"><div style="font-size:15px;font-weight:500">'+lpEsc(b.kurz||b.name)+(b.kurz&&b.name&&b.kurz!==b.name?' <span class="lp-mu" style="font-size:12px;font-weight:400">'+lpEsc(b.name)+'</span>':'')+'</div>'
+    +'<div class="lp-mu lp-mono" style="font-size:11px;margin-top:2px">'+lpEsc(lbBundArtLabel(b.art))+(b.gegruendet?' · seit '+lpEsc(lpFmt(b.gegruendet)):'')+' · '+akt.length+' Mitglied'+(akt.length===1?'':'er')+(par.length?' · '+par.length+' Partner':'')+'</div></div>'
+    +'<div class="lp-row" style="gap:6px"><button type="button" class="lp-x" data-lb="bund-map" data-id="'+lpEsc(b.id)+'" title="auf der Karte zeigen"><i class="ti ti-map-2"></i></button><button type="button" class="lp-x" data-lb="bund-edit" data-id="'+lpEsc(b.id)+'" title="bearbeiten"><i class="ti ti-pencil"></i></button></div></div>'
+    +lbBundTimelineSVG(b)
+    +(akt.length>14?'<details style="margin-top:6px"><summary class="lp-mu" style="cursor:pointer;font-size:11px">'+akt.length+' Mitglieder anzeigen</summary><div class="lp-row" style="gap:4px;flex-wrap:wrap;margin-top:6px">'+chips+'</div></details>':'<div class="lp-row" style="gap:4px;flex-wrap:wrap;margin-top:6px">'+chips+'</div>')
+    +(par.length?'<div class="lp-mu" style="font-size:11px;margin-top:8px">Partner</div><div class="lp-row" style="gap:4px;flex-wrap:wrap;margin-top:3px">'+par.map(function(e){return chip(e,true);}).join('')+'</div>':'')
+    +(ex.length?'<div class="lp-mu" style="font-size:11px;margin-top:8px">Ausgetreten: '+ex.map(function(e){return lpEsc(lbName(e.iso))+' ('+lpEsc(lpFmtShort(e.bis))+e.bis.slice(0,4)+')';}).join(', ')+'</div>':'')
+    +(b.notiz?'<div class="lp-mu" style="font-size:11px;margin-top:6px;white-space:pre-wrap">'+lpEsc(b.notiz)+'</div>':'')+'</div>';
+}
+function lbBuendnisseHTML(){
+  var l=lbBundSorted();
+  return '<div class="lp-row" style="justify-content:space-between;margin-bottom:10px"><span class="lp-cap">BÜNDNISSE & ORGANISATIONEN · '+l.length+'</span><button type="button" class="lp-btn gray" data-lb="bund-new"><i class="ti ti-plus"></i> Bündnis</button></div>'
+    +(l.length?l.map(lbBundCardHTML).join(''):'<div class="lp-mu" style="margin-bottom:14px">Noch keine Bündnisse erfasst. Mit «+ Bündnis» anlegen — z. B. aus einer Vorlage (NATO, EU, SCO …).</div>')
+    +'<div style="height:10px"></div>';
+}
+var _lbMatrixHTML_b=lbMatrixHTML;
+lbMatrixHTML=function(){ return lbBuendnisseHTML()+_lbMatrixHTML_b(); };
+
+// ── Karte: Mitglieder zum gewählten Zeitpunkt ──
+function lbBundSel(){ var l=lbBundSorted(); return l.find(function(b){return b.id===LB_UI.bundSel;})||l[0]||null; }
+function lbBundJahrBereich(b){ var y0=+((b.gegruendet||((b.mitglieder||[]).map(function(e){return e.seit;}).sort()[0])||today()).slice(0,4)), y1=+today().slice(0,4); return [Math.min(y0,y1),y1]; }
+function lbBundStichtag(){ var b=lbBundSel(); if(!b)return today(); var r=lbBundJahrBereich(b), y=LB_UI.bundJahr||r[1]; y=Math.max(r[0],Math.min(r[1],y)); return y>=r[1]?today():y+'-12-31'; }
+var _lbKonfMapSelectHTML_b=lbKonfMapSelectHTML;
+lbKonfMapSelectHTML=function(){
+  if(LB_UI.mapColor!=='buendnis')return _lbKonfMapSelectHTML_b();
+  var l=lbBundSorted(); if(!l.length)return '';
+  var b=lbBundSel(), r=lbBundJahrBereich(b), y=Math.max(r[0],Math.min(r[1],LB_UI.bundJahr||r[1]));
+  return '<select class="lp-in" id="lb-bund-sel" style="max-width:240px">'+l.map(function(x){return '<option value="'+lpEsc(x.id)+'"'+(x.id===b.id?' selected':'')+'>'+lpEsc(lbBundTitel(x))+'</option>';}).join('')+'</select>'
+    +(r[1]>r[0]?'<span class="lp-row" style="gap:6px;align-items:center;flex:1;min-width:200px"><input type="range" id="lb-bund-jahr" min="'+r[0]+'" max="'+r[1]+'" value="'+y+'" style="flex:1"><span class="lp-mono" id="lb-bund-jahr-l" style="font-size:12px;min-width:44px">'+(y>=r[1]?'heute':y)+'</span></span>':'');
+};
+var _lbMapLegendHTML_b=lbMapLegendHTML;
+lbMapLegendHTML=function(){
+  if(LB_UI.mapColor!=='buendnis')return _lbMapLegendHTML_b();
+  var b=lbBundSel(), wrap=function(x){ return '<div class="lp-row lp-mu" style="gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px" id="lb-bund-leg">'+x+'</div>'; };
+  if(!b)return wrap('<span>Noch keine Bündnisse erfasst — im Tab «Beziehungen» anlegen.</span>');
+  return wrap(lbBundLegInner(b));
+};
+function lbBundLegInner(b){ var d=lbBundStichtag(); return '<span><span style="color:'+LB_BUND_COL+'">■</span> Mitglieder: '+lbBundMitglieder(b,d).length+'</span>'+((b.partner||[]).length?'<span><span style="color:'+LB_BUND_COL+';opacity:.45">■</span> Partner</span>':'')+'<span>Stand '+lpEsc(lpFmt(d))+'</span>'; }
+var _lbPaintMap_b=lbPaintMap;
+lbPaintMap=function(){
+  _lbPaintMap_b();
+  if(LB_UI.mapColor!=='buendnis')return;
+  var host=document.getElementById('lb-map'), b=lbBundSel(); if(!host||!b)return;
+  var d=lbBundStichtag(), fill={};
+  (b.partner||[]).forEach(function(e){ if(lbBundAktiv(e,d))fill[e.iso]=.4; });
+  (b.mitglieder||[]).forEach(function(e){ if(lbBundAktiv(e,d))fill[e.iso]=1; });
+  host.querySelectorAll('.c').forEach(function(p){ var iso=p.getAttribute('data-iso')||p.id; if(fill[iso]){ p.style.fill=LB_BUND_COL; p.style.fillOpacity=fill[iso]; } });
+};
+
+// ── Dossier: Mitgliedschaften ──
+var _lbDossierHTML_b=lbDossierHTML;
+lbDossierHTML=function(iso){
+  var h=_lbDossierHTML_b(iso), rows=[];
+  lbBundSorted().forEach(function(b){
+    (b.mitglieder||[]).filter(function(e){return e.iso===iso;}).forEach(function(e){ rows.push({b:b,t:e.bis&&e.bis<=today()?'Mitglied '+lpFmt(e.seit)+'–'+lpFmt(e.bis):'Mitglied seit '+lpFmt(e.seit),on:!(e.bis&&e.bis<=today())}); });
+    (b.partner||[]).filter(function(e){return e.iso===iso;}).forEach(function(e){ rows.push({b:b,t:'Partner seit '+lpFmt(e.seit)+(e.bis?' bis '+lpFmt(e.bis):''),on:false}); });
+  });
+  if(!rows.length)return h;
+  var card='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:6px">MITGLIEDSCHAFTEN · '+rows.length+'</div>'+rows.map(function(r){
+    return '<div class="lp-row" style="justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--lp-border);cursor:pointer" data-lb="bund-map" data-id="'+lpEsc(r.b.id)+'"><span style="flex:1;min-width:0"><span style="color:'+LB_BUND_COL+';opacity:'+(r.on?1:.5)+'">■</span> <b style="font-weight:500">'+lpEsc(r.b.kurz||r.b.name)+'</b> <span class="lp-mu" style="font-size:11px">'+lpEsc(lbBundArtLabel(r.b.art))+'</span></span><span class="lp-mono lp-mu" style="font-size:11px;align-self:center">'+lpEsc(r.t)+'</span></div>';
+  }).join('')+'</div>';
+  var marker='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">BEZIEHUNGEN';
+  return h.indexOf(marker)>=0?h.replace(marker,card+marker):h+card;
+};
+
+// ── Dialog ──
+function lbBundListHTML(){
+  var W=LB_BW, row=function(kind,e,i){
+    return '<div class="lp-row" style="gap:6px;align-items:center;padding:3px 0;border-top:1px solid var(--lp-border);flex-wrap:wrap"><span style="flex:1;min-width:110px;font-size:12px">'+lpEsc(lbName(e.iso))+'</span>'
+      +'<input class="lp-in lp-mono" type="date" data-bw="'+kind+'" data-i="'+i+'" data-f="seit" value="'+lpEsc(e.seit||'')+'" style="max-width:140px;font-size:11px" title="Beitritt">'
+      +'<input class="lp-in lp-mono" type="date" data-bw="'+kind+'" data-i="'+i+'" data-f="bis" value="'+lpEsc(e.bis||'')+'" style="max-width:140px;font-size:11px" title="Austritt (optional)">'
+      +'<button type="button" class="lp-x" data-lb="bund-row-del" data-kind="'+kind+'" data-i="'+i+'">✕</button></div>';
+  };
+  var sortL=function(k){ W[k]=(W[k]||[]).slice().sort(function(a,b){ return (a.seit||'').localeCompare(b.seit||'')||lbName(a.iso).localeCompare(lbName(b.iso)); }); };
+  sortL('mitglieder'); sortL('partner');
+  return '<div class="lp-mu" style="font-size:11px;margin:4px 0 2px">Mitglieder · '+W.mitglieder.length+' <span style="opacity:.7">(Beitritt · Austritt)</span></div>'+(W.mitglieder.length?W.mitglieder.map(function(e,i){return row('mitglieder',e,i);}).join(''):'<div class="lp-mu" style="font-size:11px">noch keine</div>')
+    +'<div class="lp-mu" style="font-size:11px;margin:8px 0 2px">Partner / Beobachter · '+W.partner.length+'</div>'+(W.partner.length?W.partner.map(function(e,i){return row('partner',e,i);}).join(''):'<div class="lp-mu" style="font-size:11px">keine</div>');
+}
+function lbBundEdit(id){
+  var b=id?lbBuendnisse().find(function(x){return x.id===id;}):null;
+  LB_BW=b?JSON.parse(JSON.stringify(b)):{id:'',name:'',kurz:'',art:'militaer',gegruendet:'',notiz:'',mitglieder:[],partner:[]};
+  LB_BW.mitglieder=LB_BW.mitglieder||[]; LB_BW.partner=LB_BW.partner||[];
+  lbBundDialog(!b);
+}
+function lbBundDialog(isNew){
+  var W=LB_BW;
+  syModal('lb-bund','<div class="lp-cap" style="margin-bottom:8px">'+(W.id?'BÜNDNIS BEARBEITEN':'NEUES BÜNDNIS')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +(isNew?'<select class="lp-in" id="lbw-vorlage"><option value="">Vorlage wählen (optional) …</option>'+LB_BUND_VORLAGEN.map(function(v){return '<option value="'+v.key+'">'+lpEsc(v.kurz+' — '+v.name)+'</option>';}).join('')+'</select>':'')
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap"><input class="lp-in" id="lbw-kurz" placeholder="Kürzel (z. B. NATO)" value="'+lpEsc(W.kurz||'')+'" style="max-width:150px"><input class="lp-in" id="lbw-name" placeholder="Name (z. B. Nordatlantikpakt)" value="'+lpEsc(W.name||'')+'" style="flex:1;min-width:160px"></div>'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap;align-items:center"><select class="lp-in" id="lbw-art">'+LB_BUND_ART.map(function(x){return '<option value="'+x[0]+'"'+(W.art===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select><label class="lp-mu" style="font-size:11px">gegründet</label><input class="lp-in lp-mono" type="date" id="lbw-gegr" value="'+lpEsc(W.gegruendet||'')+'" style="max-width:160px"></div>'
+    +'<div class="lp-cap" style="margin-top:4px">MITGLIEDER</div>'
+    +'<div class="lp-row" style="gap:6px;flex-wrap:wrap;align-items:center"><input class="lp-in" id="lbw-land" list="lbw-dl" placeholder="Land" style="flex:1;min-width:120px"><datalist id="lbw-dl">'+Object.keys(LB_NAMEN||{}).map(function(iso){return '<option value="'+lpEsc(LB_NAMEN[iso])+'">';}).join('')+'</datalist><input class="lp-in lp-mono" type="date" id="lbw-seit" value="'+today()+'" style="max-width:150px"><button type="button" class="lp-btn gray" data-lb="bund-add" data-kind="mitglieder">+ Mitglied</button><button type="button" class="lp-btn gray" data-lb="bund-add" data-kind="partner">+ Partner</button></div>'
+    +'<div id="lbw-list" style="max-height:38vh;overflow:auto">'+lbBundListHTML()+'</div>'
+    +'<textarea class="lp-in" id="lbw-notiz" rows="2" placeholder="Notiz (optional)">'+lpEsc(W.notiz||'')+'</textarea>'
+    +'<div class="lp-mu" id="lbw-err" style="font-size:11px;display:none;color:var(--lp-review)"></div></div>'
+    +'<div class="lp-row" style="justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap">'
+    +(W.id?'<button type="button" class="lp-btn danger" data-lb="bund-del" data-id="'+lpEsc(W.id)+'">Löschen</button>':'<span></span>')
+    +'<span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-lb="bund-close">Abbrechen</button><button type="button" class="lp-btn fill" data-lb="bund-save">Speichern</button></span></div>');
+}
+function lbBundReadHead(){ var W=LB_BW; if(!W)return; W.kurz=document.getElementById('lbw-kurz').value.trim(); W.name=document.getElementById('lbw-name').value.trim(); W.art=document.getElementById('lbw-art').value; W.gegruendet=document.getElementById('lbw-gegr').value; W.notiz=document.getElementById('lbw-notiz').value.trim(); }
+function lbBundSave(){
+  var W=LB_BW, err=document.getElementById('lbw-err'); lbBundReadHead();
+  if(!W.name&&!W.kurz){ err.textContent='Bitte Name oder Kürzel eintragen.'; err.style.display='block'; return; }
+  var bad=W.mitglieder.concat(W.partner).find(function(e){return e.bis&&e.seit&&e.bis<e.seit;}); if(bad){ err.textContent='Bei '+lbName(bad.iso)+' liegt der Austritt vor dem Beitritt.'; err.style.display='block'; return; }
+  var b=W.id?lbBuendnisse().find(function(x){return x.id===W.id;}):null; if(!b){ b={id:uid()}; lbBuendnisse().push(b); }
+  ['name','kurz','art','gegruendet','notiz','mitglieder','partner'].forEach(function(k){ b[k]=W[k]; });
+  W.mitglieder.concat(W.partner).forEach(function(e){ lbLand(e.iso,true); });
+  lbTouch(b); saveD(); var m=document.getElementById('lb-bund'); if(m)m.remove(); LB_BW=null; lbRender(); showToast('Bündnis gespeichert ✓','ok');
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return;
+  var a=el.getAttribute('data-lb'), id=el.getAttribute('data-id'), rm=function(){ var n=document.getElementById('lb-bund'); if(n)n.remove(); LB_BW=null; };
+  switch(a){
+    case 'besch-close': ev.preventDefault(); var mb=document.getElementById('lb-besch'); if(mb)mb.remove(); return;
+    case 'besch-save': ev.preventDefault(); return lbBeschSave(el.getAttribute('data-iso'),id);
+    case 'bund-new': ev.preventDefault(); return lbBundEdit(null);
+    case 'bund-edit': ev.preventDefault(); return lbBundEdit(id);
+    case 'bund-close': ev.preventDefault(); return rm();
+    case 'bund-save': ev.preventDefault(); return lbBundSave();
+    case 'bund-add':
+      ev.preventDefault(); if(!LB_BW)return; var kind=el.getAttribute('data-kind'), iso=lbIsoFromInput(document.getElementById('lbw-land').value);
+      if(!iso){ showToast('Land nicht gefunden.'); return; }
+      if(LB_BW.mitglieder.concat(LB_BW.partner).some(function(e){return e.iso===iso&&!e.bis;})){ showToast(lbName(iso)+' ist schon eingetragen.'); return; }
+      LB_BW[kind].push({iso:iso,seit:document.getElementById('lbw-seit').value||today(),bis:''}); document.getElementById('lbw-land').value='';
+      document.getElementById('lbw-list').innerHTML=lbBundListHTML(); return;
+    case 'bund-row-del': ev.preventDefault(); if(!LB_BW)return; LB_BW[el.getAttribute('data-kind')].splice(+el.getAttribute('data-i'),1); document.getElementById('lbw-list').innerHTML=lbBundListHTML(); return;
+    case 'bund-del':
+      ev.preventDefault(); var b=lbBuendnisse().find(function(x){return x.id===id;}); if(!b||!confirm('Bündnis «'+(b.kurz||b.name)+'» löschen?'))return;
+      D.lbBuendnisse=lbBuendnisse().filter(function(x){return x.id!==id;}); markDeleted(id); if(LB_UI.bundSel===id)LB_UI.bundSel=''; saveD(); rm(); return lbRender();
+    case 'bund-map': ev.preventDefault(); LB_UI.tab='karte'; LB_UI.land=null; LB_UI.mapColor='buendnis'; LB_UI.bundSel=id; LB_UI.bundJahr=0; return lbRender();
+  }
+});
+document.addEventListener('change',function(ev){
+  var t=ev.target; if(!t)return;
+  if(t.id==='lbw-vorlage'&&t.value){ var v=LB_BUND_VORLAGEN.find(function(x){return x.key===t.value;}); if(!v)return; LB_BW=lbBundFromVorlage(v); return lbBundDialog(true); }
+  if(t.getAttribute&&t.getAttribute('data-bw')&&LB_BW){ var e=LB_BW[t.getAttribute('data-bw')][+t.getAttribute('data-i')]; if(e)e[t.getAttribute('data-f')]=t.value; return; }
+  if(t.id==='lb-bund-sel'){ LB_UI.bundSel=t.value; LB_UI.bundJahr=0; return lbRender(); }
+  if(t.id==='lb-meld-bund'){
+    var m=lbMeldungen().find(function(x){return x.id===t.getAttribute('data-mid');}); if(!m)return;
+    if(t.value)m.buendnisId=t.value; else delete m.buendnisId; saveD(); showToast('Bündnis-Zuordnung gespeichert ✓','ok');
+  }
+});
+document.addEventListener('input',function(ev){
+  if(!ev.target||ev.target.id!=='lb-bund-jahr')return;
+  var b=lbBundSel(); if(!b)return; var r=lbBundJahrBereich(b); LB_UI.bundJahr=+ev.target.value;
+  var l=document.getElementById('lb-bund-jahr-l'); if(l)l.textContent=LB_UI.bundJahr>=r[1]?'heute':LB_UI.bundJahr;
+  var lg=document.getElementById('lb-bund-leg'); if(lg)lg.innerHTML=lbBundLegInner(b);
+  lbPaintMap();
 });
 
 // ── Globale Suche (Strg+K): Lagebericht ist nicht privat, wird durchsucht ──
