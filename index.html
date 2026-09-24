@@ -16611,7 +16611,7 @@ function lbRender(){
   h+=lbTabsHTML();
   if(LB_UI.tab==='zeitstrahl'){ el.innerHTML=h+lbZeitstrahlHTML(); return; }
   h+='<div class="lp-row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap"><span class="lp-seg"><button type="button" class="'+(LB_UI.mapColor==='level'?'on':'')+'" data-lb="mapcolor" data-v="level">Lage-Level</button><button type="button" class="'+(LB_UI.mapColor==='aktivitaet'?'on':'')+'" data-lb="mapcolor" data-v="aktivitaet">Aktivität</button><button type="button" class="'+(LB_UI.mapColor==='konflikt'?'on':'')+'" data-lb="mapcolor" data-v="konflikt">Konflikte</button><button type="button" class="'+(LB_UI.mapColor==='buendnis'?'on':'')+'" data-lb="mapcolor" data-v="buendnis">Bündnisse</button></span>'+lbKonfMapSelectHTML()+'</div>'
-    +'<div id="lb-map" style="overflow-x:auto;border-radius:12px;border:1px solid var(--lp-border)"></div>'
+    +'<div id="lb-map" style="position:relative;overflow:hidden;border-radius:12px;border:1px solid var(--lp-border)"></div>'
     +lbMapLegendHTML();
   el.innerHTML=h;
   lbLoadSvg();
@@ -17630,6 +17630,161 @@ document.addEventListener('click',function(ev){
   }
 });
 function lbCopyFallback(t){ var x=document.createElement('textarea'); x.value=t; x.style.position='fixed'; x.style.opacity='0'; document.body.appendChild(x); x.select(); try{ document.execCommand('copy'); }catch(e){} x.remove(); }
+
+// ═══ KARTE: ZOOM & VERSCHIEBEN — Mausrad/Pinch zoomt auf den Punkt unter Zeiger bzw. Fingern, Ziehen verschiebt ═══
+var LB_ZW=1000, LB_ZH=520, LB_ZMAX=14;
+function lbZoomVB(){ var z=LB_UI.zoom; return z&&z.w?z:{x:0,y:0,w:LB_ZW,h:LB_ZH}; }
+function lbZoomClamp(z){
+  z.w=Math.max(LB_ZW/LB_ZMAX,Math.min(LB_ZW,z.w)); z.h=z.w*LB_ZH/LB_ZW;
+  z.x=Math.max(0,Math.min(LB_ZW-z.w,z.x)); z.y=Math.max(0,Math.min(LB_ZH-z.h,z.y));
+  return z;
+}
+function lbZoomApply(){
+  var host=document.getElementById('lb-map'), svg=host&&host.querySelector('svg'); if(!svg)return;
+  var z=lbZoomVB(), k=LB_ZW/z.w;
+  svg.setAttribute('viewBox',z.x.toFixed(2)+' '+z.y.toFixed(2)+' '+z.w.toFixed(2)+' '+z.h.toFixed(2));
+  // Punkte nicht mitwachsen lassen (Linien/Grenzen: non-scaling-stroke per CSS)
+  svg.querySelectorAll('#lb-marks circle').forEach(function(c){ var r0=c.getAttribute('data-r0'); if(!r0){ r0=c.getAttribute('r'); c.setAttribute('data-r0',r0); } c.setAttribute('r',(+r0/Math.pow(k,.75)).toFixed(2)); });
+  svg.style.touchAction=k>1.01?'none':'pan-y';
+  var lbl=host.querySelector('.lb-zoom-k'); if(lbl)lbl.textContent=k>1.01?(Math.round(k*10)/10+'×').replace('.',','):'';
+  clearTimeout(LB_UI._zlT); LB_UI._zlT=setTimeout(function(){ var z2=lbZoomVB(); lbZoomLabels(svg,z2,LB_ZW/z2.w); },140);
+}
+// Ländernamen ab ~3× Zoom einblenden (nur sichtbare, grössere Flächen)
+function lbZoomLabels(svg,z,k){
+  var g=svg.querySelector('#lb-zlabels'); if(!g){ g=document.createElementNS('http://www.w3.org/2000/svg','g'); g.id='lb-zlabels'; g.setAttribute('pointer-events','none'); svg.appendChild(g); }
+  g.innerHTML=''; if(k<2.8)return;
+  var host=document.getElementById('lb-map'), fs=11/k*(LB_ZW/Math.max(1,host.clientWidth)), NS='http://www.w3.org/2000/svg';
+  svg.querySelectorAll('.c').forEach(function(p){
+    var iso=p.getAttribute('data-iso')||p.id; if(!LB_NAMEN[iso])return;
+    var b; try{ b=p.getBBox(); }catch(e){ return; }
+    if(b.width*k<34||b.x>z.x+z.w||b.x+b.width<z.x||b.y>z.y+z.h||b.y+b.height<z.y)return;
+    var c=lbIsoCenter(host,iso); if(!c||c.x<z.x||c.x>z.x+z.w||c.y<z.y||c.y>z.y+z.h)return;
+    var t=document.createElementNS(NS,'text'); t.setAttribute('x',c.x); t.setAttribute('y',c.y); t.setAttribute('text-anchor','middle'); t.setAttribute('font-size',fs.toFixed(3));
+    t.setAttribute('style','fill:#e6f1f7;paint-order:stroke;stroke:#0b1620;stroke-width:'+(fs*.28).toFixed(3)+'px;font-family:Space Grotesk,system-ui,sans-serif;font-weight:500'); t.textContent=LB_NAMEN[iso];
+    g.appendChild(t);
+  });
+}
+function lbZoomAt(cx,cy,f){
+  var host=document.getElementById('lb-map'), svg=host&&host.querySelector('svg'); if(!svg)return;
+  var r=svg.getBoundingClientRect(), z=lbZoomVB(), px=z.x+(cx-r.left)/r.width*z.w, py=z.y+(cy-r.top)/r.height*z.h;
+  var nw=z.w/f; nw=Math.max(LB_ZW/LB_ZMAX,Math.min(LB_ZW,nw)); var nh=nw*LB_ZH/LB_ZW;
+  LB_UI.zoom=lbZoomClamp({x:px-(px-z.x)*nw/z.w,y:py-(py-z.y)*nh/z.h,w:nw,h:nh}); lbZoomApply();
+}
+function lbZoomBtn(f){ var host=document.getElementById('lb-map'), svg=host&&host.querySelector('svg'); if(!svg)return; var r=svg.getBoundingClientRect(); if(f===0){ LB_UI.zoom=null; lbZoomApply(); return; } lbZoomAt(r.left+r.width/2,r.top+r.height/2,f); }
+function lbZoomInit(){
+  var host=document.getElementById('lb-map'), svg=host&&host.querySelector('svg'); if(!svg)return;
+  if(!svg.getAttribute('data-zoom')){
+    svg.setAttribute('data-zoom','1'); svg.style.display='block'; svg.style.width='100%'; svg.style.height='auto'; svg.style.cursor='grab'; svg.style.userSelect='none';
+    if(!host.querySelector('.lb-zoom-ui'))host.insertAdjacentHTML('beforeend','<div class="lb-zoom-ui" style="position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:4px;align-items:flex-end">'
+      +['+','−','⟲'].map(function(t,i){ return '<button type="button" class="lp-btn gray" data-lb="zoom" data-v="'+[1.6,1/1.6,0][i]+'" style="width:32px;height:32px;padding:0;justify-content:center;background:var(--lp-bg);font-size:'+(i===2?14:18)+'px" title="'+['hineinzoomen','herauszoomen','ganze Welt'][i]+'">'+t+'</button>'; }).join('')
+      +'<span class="lb-zoom-k lp-mono lp-mu" style="font-size:10px"></span></div>');
+    var ptrs={}, start=null, dragged=false;
+    svg.addEventListener('wheel',function(e){ e.preventDefault(); lbZoomAt(e.clientX,e.clientY,Math.exp(-e.deltaY*(e.deltaMode===1?.05:.0018))); },{passive:false});
+    svg.addEventListener('pointerdown',function(e){
+      ptrs[e.pointerId]={x:e.clientX,y:e.clientY};
+      var ids=Object.keys(ptrs), z=lbZoomVB();
+      if(ids.length===1){ start={x:e.clientX,y:e.clientY,z:{x:z.x,y:z.y,w:z.w,h:z.h}}; dragged=false; }
+      else if(ids.length===2){ var a=ptrs[ids[0]], b=ptrs[ids[1]]; start={pinch:Math.hypot(a.x-b.x,a.y-b.y),cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,z:{x:z.x,y:z.y,w:z.w,h:z.h}}; dragged=true; }
+    });
+    svg.addEventListener('pointermove',function(e){
+      if(!ptrs[e.pointerId]||!start)return; ptrs[e.pointerId]={x:e.clientX,y:e.clientY};
+      var ids=Object.keys(ptrs), r=svg.getBoundingClientRect();
+      if(ids.length>=2&&start.pinch){
+        var a=ptrs[ids[0]], b=ptrs[ids[1]], d=Math.hypot(a.x-b.x,a.y-b.y), f=d/Math.max(1,start.pinch), cx=(a.x+b.x)/2, cy=(a.y+b.y)/2;
+        var z0=start.z, px=z0.x+(start.cx-r.left)/r.width*z0.w, py=z0.y+(start.cy-r.top)/r.height*z0.h, nw=Math.max(LB_ZW/LB_ZMAX,Math.min(LB_ZW,z0.w/f)), nh=nw*LB_ZH/LB_ZW;
+        LB_UI.zoom=lbZoomClamp({x:px-(cx-r.left)/r.width*nw,y:py-(cy-r.top)/r.height*nh,w:nw,h:nh}); lbZoomApply(); return;
+      }
+      if(ids.length===1&&!start.pinch){
+        var dx=e.clientX-start.x, dy=e.clientY-start.y; if(!dragged&&Math.hypot(dx,dy)<5)return;
+        if(!dragged){ dragged=true; try{ svg.setPointerCapture(e.pointerId); }catch(er){} svg.style.cursor='grabbing'; }
+        var z1=start.z; if(z1.w>=LB_ZW-.5&&e.pointerType==='touch')return;   // ungezoomt: Seite normal scrollen lassen
+        LB_UI.zoom=lbZoomClamp({x:z1.x-dx/r.width*z1.w,y:z1.y-dy/r.height*z1.h,w:z1.w,h:z1.h}); lbZoomApply();
+      }
+    });
+    var end=function(e){ delete ptrs[e.pointerId]; var ids=Object.keys(ptrs); if(!ids.length){ start=null; svg.style.cursor='grab'; } else if(ids.length===1){ var z=lbZoomVB(), q=ptrs[ids[0]]; start={x:q.x,y:q.y,z:{x:z.x,y:z.y,w:z.w,h:z.h}}; } };
+    svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
+    svg.addEventListener('click',function(e){ if(dragged){ e.stopPropagation(); e.preventDefault(); dragged=false; } },true);
+    svg.addEventListener('dblclick',function(e){ e.preventDefault(); lbZoomAt(e.clientX,e.clientY,2); });
+  }
+  lbZoomApply();
+}
+var _lbPaintMap_z=lbPaintMap;
+lbPaintMap=function(){ _lbPaintMap_z(); lbZoomInit(); };
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb="zoom"]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  lbZoomBtn(+el.getAttribute('data-v'));
+});
+(function(){ var st=document.createElement('style'); st.textContent='#lb-map .worldmap .c,#lb-map #lb-marks path,#lb-map #lb-marks circle{vector-effect:non-scaling-stroke}#lb-map .worldmap .c{stroke-width:.6}#lb-map .worldmap .grat{vector-effect:non-scaling-stroke}'; document.head.appendChild(st); })();
+
+// ═══ WOCHENPLAN: TAGES-ZOOM — Pinch (Handy/Trackpad) bzw. Strg+Mausrad über einem Tag macht nur diesen Tag grösser ═══
+// Zustand: WP_UI.zoom={i:Wochentag 0–6, k:1–4}. Der gezoomte Tag bekommt k-fache Breite, die übrigen werden schmale Streifen;
+// die Stundenhöhe wächst leicht mit (WP_HP), damit kurze Blöcke lesbar werden. Normales Scrollen bleibt normales Scrollen.
+var WP_HP_BASE=WP_HP, WP_ZMAX=4;
+function wpZoomK(){ var z=WP_UI.zoom; return z&&z.k>1.05?z.k:1; }
+function wpZoomCols(){
+  var root=document.getElementById('wp-root'); if(!root)return;
+  var sc=root.querySelector('.wp-scroll'), head=root.querySelector('.wp-head'), grid=root.querySelector('.wp-grid'); if(!sc||!head||!grid)return;
+  var heads=head.querySelectorAll('.wp-dh'), cols=grid.querySelectorAll('.wp-col'), k=wpZoomK(), idx=WP_UI.zoom?WP_UI.zoom.i:-1;
+  [].forEach.call(heads,function(e){ e.classList.remove('wp-zn','wp-zf'); }); [].forEach.call(cols,function(e){ e.classList.remove('wp-zn','wp-zf'); });
+  var pill=root.querySelector('[data-wpz="reset"]');
+  if(k===1||idx<0){ head.style.gridTemplateColumns=grid.style.gridTemplateColumns=''; head.style.minWidth=grid.style.minWidth=''; if(pill)pill.remove(); return; }
+  var avail=root.clientWidth||sc.clientWidth||600, m=Math.max(18,Math.round(84/k)), M=Math.round(Math.max(84,Math.min(84*k,avail-52-6*m))), t='24px';
+  for(var i=0;i<7;i++)t+=' '+(i===idx?'minmax('+M+'px,'+(k*1.6).toFixed(2)+'fr)':'minmax('+m+'px,1fr)');
+  head.style.gridTemplateColumns=grid.style.gridTemplateColumns=t; head.style.minWidth=grid.style.minWidth=(52+M+6*m)+'px';
+  for(var j=0;j<7;j++){ var cls=j===idx?'wp-zf':(heads[j]&&heads[j].getBoundingClientRect().width<64?'wp-zn':''); if(cls){ if(heads[j])heads[j].classList.add(cls); if(cols[j])cols[j].classList.add(cls); } }
+  if(!pill){ var bar=root.querySelector('[data-wp="new"]'); if(bar)bar.insertAdjacentHTML('beforebegin','<button type="button" class="wp-pill on" data-wpz="reset" title="Tages-Zoom zurücksetzen"><i class="ti ti-zoom-reset"></i> Alle Tage</button>'); }
+}
+var _wpRender_z=wpRender;
+wpRender=function(){ WP_HP=Math.round(WP_HP_BASE*(1+(wpZoomK()-1)*.45)); _wpRender_z(); wpZoomCols(); };
+function wpZoomIdxAt(x){
+  var heads=document.querySelectorAll('#wp-root .wp-head .wp-dh'), best=-1, bd=1e9;
+  [].forEach.call(heads,function(h,i){ var r=h.getBoundingClientRect(); if(x>=r.left&&x<=r.right){ best=i; bd=0; } else { var d=Math.min(Math.abs(x-r.left),Math.abs(x-r.right)); if(bd>0&&d<bd){ bd=d; best=i; } } });
+  return best;
+}
+function wpZoomSet(i,k){
+  k=Math.max(1,Math.min(WP_ZMAX,k)); WP_UI.zoom=k<1.05?null:{i:i,k:k};
+  wpZoomCols();                                                     // sofort: Breiten (flüssig)
+  clearTimeout(WP_UI._zT); WP_UI._zT=setTimeout(function(){ var want=Math.round(WP_HP_BASE*(1+(wpZoomK()-1)*.45)); if(want!==WP_HP)wpRender(); },220);  // danach: Stundenhöhe
+}
+function wpZoomInScroll(t){ return t&&t.closest&&t.closest('#wp-root .wp-scroll'); }
+// Laptop: Trackpad-Pinch kommt als Strg+Mausrad, ebenso Strg+Mausrad mit der Maus
+document.addEventListener('wheel',function(ev){
+  if(!ev.ctrlKey||!wpZoomInScroll(ev.target))return; ev.preventDefault();
+  var i=wpZoomIdxAt(ev.clientX); if(i<0)return;
+  var k0=WP_UI.zoom&&WP_UI.zoom.i===i?WP_UI.zoom.k:1;
+  wpZoomSet(i,k0*Math.exp(-ev.deltaY*(ev.deltaMode===1?.08:.012)));
+},{passive:false});
+// Handy: zwei Finger
+var WP_PINCH=null;
+document.addEventListener('touchstart',function(ev){
+  if(ev.touches.length!==2||!wpZoomInScroll(ev.target))return;
+  var a=ev.touches[0], b=ev.touches[1], i=wpZoomIdxAt((a.clientX+b.clientX)/2); if(i<0)return;
+  WP_PINCH={d0:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY),i:i,k0:WP_UI.zoom&&WP_UI.zoom.i===i?WP_UI.zoom.k:1};
+},{passive:true});
+document.addEventListener('touchmove',function(ev){
+  if(!WP_PINCH||ev.touches.length!==2)return; ev.preventDefault();
+  var a=ev.touches[0], b=ev.touches[1], d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+  wpZoomSet(WP_PINCH.i,WP_PINCH.k0*d/Math.max(1,WP_PINCH.d0));
+},{passive:false});
+document.addEventListener('touchend',function(ev){ if(WP_PINCH&&ev.touches.length<2)WP_PINCH=null; });
+// Doppeltippen / Doppelklick auf einen Tageskopf: auf diesen Tag zoomen bzw. zurück
+var WP_TAP={t:0,i:-1};
+function wpZoomToggle(i){ if(WP_UI.zoom&&WP_UI.zoom.i===i)wpZoomSet(i,1); else wpZoomSet(i,2.6); }
+document.addEventListener('dblclick',function(ev){ var h=ev.target.closest&&ev.target.closest('#wp-root .wp-dh'); if(!h||ev.target.closest('[data-sp]'))return; ev.preventDefault(); wpZoomToggle(wpZoomIdxAt(ev.clientX)); });
+document.addEventListener('touchend',function(ev){
+  var h=ev.target.closest&&ev.target.closest('#wp-root .wp-dh'); if(!h||ev.target.closest('[data-sp]')||ev.changedTouches.length!==1)return;
+  var i=wpZoomIdxAt(ev.changedTouches[0].clientX), now=Date.now();
+  if(WP_TAP.i===i&&now-WP_TAP.t<320){ ev.preventDefault(); WP_TAP={t:0,i:-1}; wpZoomToggle(i); } else WP_TAP={t:now,i:i};
+});
+document.addEventListener('click',function(ev){ var b=ev.target.closest&&ev.target.closest('[data-wpz="reset"]'); if(!b)return; ev.preventDefault(); WP_UI.zoom=null; wpRender(); });
+window.addEventListener('resize',function(){ if(WP_UI.zoom)wpZoomCols(); });
+(function(){ var st=document.createElement('style'); st.textContent=''
+  +'#wp-root .wp-scroll{touch-action:pan-x pan-y}'
+  +'.wp-dh.wp-zf{border-color:color-mix(in srgb,var(--c-accent) 60%,transparent)}'
+  +'.wp-col.wp-zf .wp-b{font-size:12px;padding:4px 7px}'
+  +'.wp-dh.wp-zn{padding:5px 0;overflow:hidden}.wp-dh.wp-zn>div:not(:first-child){display:none}.wp-dh.wp-zn>div:first-child{font-size:9px!important;white-space:nowrap;overflow:hidden;text-overflow:clip}'
+  +'.wp-col.wp-zn .wp-b{font-size:0;padding:0;border-radius:5px}.wp-col.wp-zn .wp-b *{display:none}.wp-col.wp-zn .wp-now span{display:none}';
+  document.head.appendChild(st); })();
 
 // ── Globale Suche (Strg+K): Lagebericht ist nicht privat, wird durchsucht ──
 var _pdSearchIndex_lb=pdSearchIndex;
