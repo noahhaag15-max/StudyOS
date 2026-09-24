@@ -16394,7 +16394,17 @@ function bindAll(){
 // LAGEBERICHT — Weltlage: Karte, Länder-Dossier, Zeitstrahl, manuelles Erfassen.
 // Kein XP, keine Meilen, im Lernmodus nicht erreichbar, nicht privat (läuft im Gist-Sync mit).
 // ═══════════════════════════════════════════════════════════
-var LB_KAT=[['beschaffung','Beschaffung'],['einsatz','Einsatz'],['uebung','Übung'],['politik','Politik'],['abkommen','Abkommen'],['krise','Krise'],['industrie','Industrie'],['unfall','Unfall']];
+var LB_KAT=[['beschaffung','Beschaffung'],['entwicklung','Entwicklung & Test'],['einsatz','Einsatz'],['uebung','Übung'],['stationierung','Stationierung'],['politik','Politik'],['abkommen','Abkommen'],['export','Export'],['krise','Krise'],['industrie','Industrie'],['cyber','Cyber & Spionage'],['unfall','Unfall'],['sonstiges','Sonstiges']];
+var LB_KAT_COL={beschaffung:'#4d7cff',entwicklung:'#2ec4b6',einsatz:'#a32f3c',uebung:'#2e6b4c',stationierung:'#9bc53d',politik:'#8a6a1f',abkommen:'#00cfff',export:'#e07be0',krise:'#ff6b6b',industrie:'#a66bff',cyber:'#8d99ae',unfall:'#ffb020',sonstiges:'#6b7f8c'};
+var LB_EREIGNIS=[['rollout','Rollout / Vorstellung'],['erstflug','Erstflug'],['test','Test / Erprobung'],['serie','Serienproduktion'],['auslieferung','Erstauslieferung'],['indienst','Indienststellung'],['ersteinsatz','Erster Einsatz'],['verlust','Verlust / Absturz'],['ausmusterung','Ausmusterung']];
+function lbEreignisLabel(k){ var x=LB_EREIGNIS.find(function(y){return y[0]===k;}); return x?x[1]:k; }
+function lbMeldSysTags(m){ var seen={}; return (m.systeme||[]).concat(m.tags||[]).filter(function(t){ var k=String(t||'').trim().toLowerCase(); if(!k||seen[k])return false; seen[k]=1; return true; }); }
+function lbSystemVorschlaege(){
+  var seen={}, out=[], add=function(v){ v=String(v||'').trim(); var k=v.toLowerCase(); if(v&&!seen[k]){ seen[k]=1; out.push(v); } };
+  lbMeldungen().forEach(function(m){ (m.systeme||[]).forEach(add); (m.tags||[]).forEach(add); });
+  lbLaenderListe().forEach(function(l){ (l.bestand||[]).forEach(function(b){add(b.system);}); (l.beschaffungen||[]).forEach(function(b){add(b.system);}); });
+  return out.sort(function(a,b){return a.localeCompare(b);});
+}
 var LB_SICHER=[['bestaetigt','Bestätigt'],['wahrscheinlich','Wahrscheinlich'],['unbestaetigt','Unbestätigt']];
 var LB_LEVEL=[['ruhig','Ruhig','#1d3b4a'],['beobachten','Beobachten','#2e6b4c'],['erhoeht','Erhöht','#8a6a1f'],['angespannt','Angespannt','#a35a25'],['akut','Akut','#a32f3c']];
 var LB_BEZ=[['buendnis','Bündnis'],['partnerschaft','Partnerschaft'],['lieferung','Lieferung'],['konflikt','Konflikt'],['verhandlung','Verhandlung']];
@@ -16453,7 +16463,7 @@ function lbPaintMap(){
       var ctr=lbIsoCenter(host,iso); if(!ctr)return;
       var n=Object.keys(byKat[iso]).reduce(function(a,k){return a+byKat[iso][k];},0);
       var top=Object.keys(byKat[iso]).sort(function(a,b){return byKat[iso][b]-byKat[iso][a];})[0];
-      var col={beschaffung:'#4d7cff',einsatz:'#a32f3c',uebung:'#2e6b4c',politik:'#8a6a1f',abkommen:'#00cfff',krise:'#ff6b6b',industrie:'#a66bff',unfall:'#ffb020'}[top]||'#00e5ff';
+      var col=LB_KAT_COL[top]||'#00e5ff';
       var c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',ctr.x); c.setAttribute('cy',ctr.y); c.setAttribute('r',Math.min(9,3+n*1.3)); c.setAttribute('fill',col); c.setAttribute('opacity','.85'); c.setAttribute('stroke','#0b1620'); c.setAttribute('stroke-width','.6');
       mk.appendChild(c);
     });
@@ -16503,25 +16513,26 @@ function lbMeldungRowHTML(m){
   return '<div class="lp-inner" style="margin-bottom:6px" data-lb="meld-open" data-id="'+lpEsc(m.id)+'" style="cursor:pointer">'
     +'<div class="lp-row" style="justify-content:space-between;gap:8px"><span class="tbadge bq">'+lpEsc(lvl)+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmtShort(m.datum))+' · '+lpEsc(lbSicherLabel(m.sicherheit))+'</span></div>'
     +'<div style="font-size:13px;font-weight:500;margin-top:4px">'+lpEsc(m.titel)+'</div>'
-    +'<div class="lp-mu" style="font-size:11px;margin-top:2px">'+(m.laender||[]).map(lbName).join(', ')+(m.tags&&m.tags.length?' · '+m.tags.map(function(t){return '#'+t;}).join(' '):'')+'</div></div>';
+    +'<div class="lp-mu" style="font-size:11px;margin-top:2px">'+(m.laender||[]).map(lbName).join(', ')+(m.ereignis?' · '+lpEsc(lbEreignisLabel(m.ereignis)):'')+(m.systeme&&m.systeme.length?' · <b style="font-weight:500">'+m.systeme.map(lpEsc).join(', ')+'</b>':'')+(m.tags&&m.tags.length?' · '+m.tags.map(function(t){return '#'+t;}).join(' '):'')+'</div></div>';
 }
 function lbMeldungOpenHTML(m){
   var h='<div class="lp-cd" style="margin-bottom:12px"><button type="button" class="lp-btn gray" data-lb="meld-close" style="margin-bottom:10px"><i class="ti ti-arrow-left"></i> Zurück</button>'
-    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap;margin-bottom:6px"><span class="tbadge bq">'+lpEsc(lbKatLabel(m.kategorie))+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmt(m.datum))+' · '+lpEsc(lbSicherLabel(m.sicherheit))+'</span></div>'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap;margin-bottom:6px"><span class="tbadge bq">'+lpEsc(lbKatLabel(m.kategorie))+'</span>'+(m.ereignis?'<span class="lp-tag" style="background:color-mix(in srgb,var(--lp-accent) 14%,transparent);color:var(--lp-accent)">'+lpEsc(lbEreignisLabel(m.ereignis))+'</span>':'')+'<span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmt(m.datum))+' · '+lpEsc(lbSicherLabel(m.sicherheit))+'</span></div>'
     +'<div style="font-size:18px;font-weight:500;margin-bottom:6px">'+lpEsc(m.titel)+'</div>'
     +'<div class="lp-mu" style="font-size:12px;margin-bottom:10px">'+(m.laender||[]).map(lbName).join(', ')+'</div>'
     +'<div style="white-space:pre-wrap;font-size:13px;line-height:1.5">'+lpEsc(m.text)+'</div>'
+    +(m.systeme&&m.systeme.length?'<div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center"><span class="lp-cap">SYSTEME</span>'+m.systeme.map(function(x){ return '<span class="wp-pill" data-lb="register-open" data-tag="'+lpEsc(String(x).toLowerCase())+'" style="cursor:pointer;font-weight:500"><i class="ti ti-plane"></i> '+lpEsc(x)+'</span>'; }).join('')+'</div>':'')
     +(m.tags&&m.tags.length?'<div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-top:10px">'+m.tags.map(function(t){return '<span class="wp-pill">#'+lpEsc(t)+'</span>';}).join('')+'</div>':'')
     +(m.einschaetzung?'<div style="border-left:3px solid var(--lp-accent);padding:8px 12px;margin-top:12px;background:color-mix(in srgb,var(--lp-accent) 8%,transparent)"><div class="lp-cap" style="margin-bottom:4px">EINSCHÄTZUNG</div><div style="font-size:13px;white-space:pre-wrap">'+lpEsc(m.einschaetzung)+'</div></div>':'')
     +'<div class="lp-mu" style="font-size:11px;margin-top:12px">Quelle: '+(m.quelle&&m.quelle.url?'<a href="'+lpEsc(m.quelle.url)+'" target="_blank" rel="noopener">'+lpEsc(m.quelle.name)+'</a>':lpEsc(m.quelle&&m.quelle.name||'—'))+(m.quelle&&m.quelle.datum?' · '+lpEsc(lpFmt(m.quelle.datum)):'')+'</div>'
     +(lbKonflikte().length?'<div class="lp-fld" style="margin-top:12px"><label>Konflikt</label><select class="lp-in" id="lb-meld-konf" data-mid="'+lpEsc(m.id)+'"><option value="">— keiner —</option>'+lbKonfSorted().map(function(k){return '<option value="'+lpEsc(k.id)+'"'+(m.konfliktId===k.id?' selected':'')+'>'+lpEsc(k.name)+'</option>';}).join('')+'</select></div>':'')
-    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px">'+((m.laender||[]).length>=2?'<button type="button" class="lp-btn gray" data-lb="bez-vorschlag" data-id="'+lpEsc(m.id)+'"><i class="ti ti-link"></i> Beziehung daraus anlegen</button>':'')+'<button type="button" class="lp-btn danger" data-lb="meld-del" data-id="'+lpEsc(m.id)+'">Löschen</button></div></div>';
+    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px">'+((m.laender||[]).length>=2?'<button type="button" class="lp-btn gray" data-lb="bez-vorschlag" data-id="'+lpEsc(m.id)+'"><i class="ti ti-link"></i> Beziehung daraus anlegen</button>':'')+'<button type="button" class="lp-btn gray" data-lb="meld-edit" data-id="'+lpEsc(m.id)+'"><i class="ti ti-pencil"></i> Bearbeiten</button><button type="button" class="lp-btn danger" data-lb="meld-del" data-id="'+lpEsc(m.id)+'">Löschen</button></div></div>';
   return h;
 }
 function lbFormHTML(pre){
   pre=pre||{};
   var chips=(pre.laender||[]).map(function(iso){ return '<span class="wp-pill" data-lb="land-chip" data-iso="'+iso+'">'+lpEsc(lbName(iso))+' <b style="font-weight:400">✕</b></span>'; }).join('');
-  return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:8px">NEUE MELDUNG</div>'
+  return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:8px">'+(LB_UI.editId?'MELDUNG BEARBEITEN':'NEUE MELDUNG')+'</div>'
     +(pwWorker()?'<div class="lp-inner" style="margin-bottom:10px"><div class="lp-cap" style="margin-bottom:4px">TEXT EINFÜGEN (OPTIONAL)</div>'
       +'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Artikeltext einfügen — Land, Datum, Kategorie, Titel, Text, Sicherheit und Tags werden vorgeschlagen, du prüfst und ergänzt (Quelle bleibt immer manuell).</div>'
       +'<textarea class="lp-in" id="lb-paste" rows="3" style="width:100%" placeholder="Text hier einfügen …"></textarea>'
@@ -16533,6 +16544,8 @@ function lbFormHTML(pre){
     +'<div class="lp-fld"><label>Sicherheit</label><select class="lp-in" id="lb-sicher">'+LB_SICHER.map(function(k){return '<option value="'+k[0]+'"'+(pre.sicherheit===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></div>'
     +'<div class="lp-fld"><label>Titel</label><input class="lp-in" id="lb-titel" value="'+lpEsc(pre.titel||'')+'" style="flex:1"/></div>'
     +'<div class="lp-fld" style="align-items:flex-start"><label>Text</label><textarea class="lp-in" id="lb-text" rows="4" style="flex:1;width:100%">'+lpEsc(pre.text||'')+'</textarea></div>'
+    +'<div class="lp-fld" style="align-items:flex-start"><label>Systeme</label><div style="flex:1;min-width:0"><div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px" id="lb-sys-chips">'+(pre.systeme||[]).map(function(x){ return '<span class="wp-pill" data-lb="sys-chip" data-v="'+lpEsc(x)+'" style="cursor:pointer">'+lpEsc(x)+' <b style="font-weight:400">✕</b></span>'; }).join('')+'</div><input class="lp-in" id="lb-sys-q" list="lb-sys-dl" placeholder="z. B. J-36, B-21 — Enter oder Komma" style="width:100%"/><datalist id="lb-sys-dl">'+lbSystemVorschlaege().map(function(x){return '<option value="'+lpEsc(x)+'">';}).join('')+'</datalist></div></div>'
+    +'<div class="lp-fld"><label>Ereignis</label><select class="lp-in" id="lb-ereignis"><option value="">— keines —</option>'+LB_EREIGNIS.map(function(x){return '<option value="'+x[0]+'"'+(pre.ereignis===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></div>'
     +'<div class="lp-fld"><label>Tags</label><input class="lp-in" id="lb-tags" placeholder="mit Komma trennen" value="'+lpEsc((pre.tags||[]).join(', '))+'" style="flex:1"/></div>'
     +'<div class="lp-cap" style="margin:10px 0 4px">QUELLE (PFLICHT)</div>'
     +'<div class="lp-fld"><label>Name</label><input class="lp-in" id="lb-q-name" value="'+lpEsc(pre.quelle&&pre.quelle.name||'')+'" style="flex:1"/></div>'
@@ -16551,9 +16564,16 @@ function lbFormSave(){
   var m={id:uid(),datum:document.getElementById('lb-datum').value||today(),laender:laender,kategorie:document.getElementById('lb-kat').value,titel:titel,text:(document.getElementById('lb-text').value||'').trim(),
     sicherheit:document.getElementById('lb-sicher').value,tags:tags,quelle:{name:qname,url:(document.getElementById('lb-q-url').value||'').trim(),datum:today()},einschaetzung:(document.getElementById('lb-einsch').value||'').trim(),erstellt:today()};
   var kSel=document.getElementById('lb-konf'); if(kSel&&kSel.value)m.konfliktId=kSel.value;
-  lbMeldungen().push(m); laender.forEach(function(iso){ lbLand(iso,true); });
-  saveD(); LB_UI.form=false; lbRender(); showToast('Meldung gespeichert ✓','ok');
-  if(laender.length>=2)lbBezVorschlag(m);
+  lbSysChipFromInput(); m.systeme=[].map.call(document.querySelectorAll('#lb-sys-chips [data-lb="sys-chip"]'),function(e){return e.getAttribute('data-v');});
+  var ereig=document.getElementById('lb-ereignis').value; if(ereig)m.ereignis=ereig;
+  var alt=LB_UI.editId&&lbMeldungen().find(function(x){return x.id===LB_UI.editId;});
+  if(alt){
+    m.id=alt.id; m.erstellt=alt.erstellt||m.erstellt; if(alt.quelle&&alt.quelle.datum)m.quelle.datum=alt.quelle.datum;
+    D.lbMeldungen[lbMeldungen().indexOf(alt)]=m; LB_UI.editId=null; LB_UI.openMeld=m.id;
+  } else lbMeldungen().push(m);
+  laender.forEach(function(iso){ lbLand(iso,true); });
+  saveD(); LB_UI.form=false; lbRender(); showToast(alt?'Meldung aktualisiert ✓':'Meldung gespeichert ✓','ok');
+  if(!alt&&laender.length>=2)lbBezVorschlag(m);
 }
 
 // ── Zeitstrahl ──
@@ -16617,8 +16637,8 @@ document.addEventListener('click',function(ev){
     case 'meld-open': LB_UI.openMeld=id; return lbRender();
     case 'meld-close': LB_UI.openMeld=null; return lbRender();
     case 'meld-del': if(!confirm('Meldung löschen?'))return; D.lbMeldungen=lbMeldungen().filter(function(m){return m.id!==id;}); markDeleted(id); LB_UI.openMeld=null; saveD(); return lbRender();
-    case 'form-open': LB_UI.form=true; LB_UI.formPre=null; return lbRender();
-    case 'form-close': LB_UI.form=false; LB_UI.formPre=null; return lbRender();
+    case 'form-open': LB_UI.form=true; LB_UI.formPre=null; LB_UI.editId=null; return lbRender();
+    case 'form-close': LB_UI.form=false; LB_UI.formPre=null; if(LB_UI.editId){ LB_UI.openMeld=LB_UI.editId; LB_UI.editId=null; } return lbRender();
     case 'form-save': return lbFormSave();
     case 'land-chip': el.remove(); return;
   }
@@ -16647,13 +16667,13 @@ function lbInit(){ try{ lbLoadNamen(); }catch(e){} }
 // ── Paket 2: System-Register, Beziehungs-Matrix, Statistik, Export, globale Suche ──
 function lbTagCounts(){
   var m={};
-  lbMeldungen().forEach(function(x){ (x.tags||[]).forEach(function(t){ var k=(t||'').trim(); if(!k)return; var lk=k.toLowerCase(); m[lk]=m[lk]||{label:k,n:0,cnt:{}}; m[lk].n++; m[lk].cnt[k]=(m[lk].cnt[k]||0)+1; if(m[lk].cnt[k]>=(m[lk].cnt[m[lk].label]||0))m[lk].label=k; }); });
+  lbMeldungen().forEach(function(x){ lbMeldSysTags(x).forEach(function(t){ var k=(t||'').trim(); if(!k)return; var lk=k.toLowerCase(); m[lk]=m[lk]||{label:k,n:0,cnt:{}}; m[lk].n++; m[lk].cnt[k]=(m[lk].cnt[k]||0)+1; if(m[lk].cnt[k]>=(m[lk].cnt[m[lk].label]||0))m[lk].label=k; }); });
   return Object.keys(m).map(function(k){return {key:k,label:m[k].label,n:m[k].n};}).sort(function(a,b){return b.n-a.n||a.label.localeCompare(b.label);});
 }
 function lbRegisterHTML(){
   var tags=lbTagCounts();
   if(LB_UI.tag){
-    var tk=LB_UI.tag, meld=lbMeldungen().filter(function(m){return (m.tags||[]).some(function(x){return x.toLowerCase()===tk;});}).sort(function(a,b){return (b.datum||'')<(a.datum||'')?-1:1;});
+    var tk=LB_UI.tag, meld=lbMeldungen().filter(function(m){return lbMeldSysTags(m).some(function(x){return x.toLowerCase()===tk;});}).sort(function(a,b){return (b.datum||'')<(a.datum||'')?-1:1;});
     var label=(tags.find(function(x){return x.key===tk;})||{label:tk}).label;
     return '<div class="lp-row" style="justify-content:space-between;margin-bottom:10px"><span class="lp-cap">REGISTER · #'+lpEsc(label)+'</span><button type="button" class="lp-x" data-lb="register-clear">✕ Zurück</button></div>'
       +(meld.length?meld.map(lbMeldungRowHTML).join(''):'<div class="lp-mu">Keine Meldungen.</div>');
@@ -16668,6 +16688,7 @@ function lbTagMerge(fromKey){
   var to=prompt('Tag «'+fromKey+'» zusammenführen mit (Zieltag eintippen):'); if(!to||!to.trim())return;
   var toTrim=to.trim();
   lbMeldungen().forEach(function(m){
+    if(m.systeme)m.systeme=m.systeme.map(function(t){ return t.toLowerCase()===fromKey?toTrim:t; });
     if(!m.tags)return; var changed=false;
     m.tags=m.tags.map(function(t){ if(t.toLowerCase()===fromKey){ changed=true; return toTrim; } return t; });
     if(changed){ var seen={}; m.tags=m.tags.filter(function(t){ var k=t.toLowerCase(); if(seen[k])return false; seen[k]=1; return true; }); }
@@ -16708,13 +16729,13 @@ function lbExportList(){
 }
 function lbExportMd(list){
   return list.map(function(m){
-    return '## '+m.titel+'\n\n'+lpFmt(m.datum)+' · '+lbKatLabel(m.kategorie)+' · '+lbSicherLabel(m.sicherheit)+' · '+(m.laender||[]).map(lbName).join(', ')+'\n\n'+(m.text||'')+'\n\n'+(m.einschaetzung?'**Einschätzung:** '+m.einschaetzung+'\n\n':'')+'Quelle: '+(m.quelle?m.quelle.name+(m.quelle.url?' ('+m.quelle.url+')':''):'—');
+    return '## '+m.titel+'\n\n'+lpFmt(m.datum)+' · '+lbKatLabel(m.kategorie)+' · '+lbSicherLabel(m.sicherheit)+' · '+(m.laender||[]).map(lbName).join(', ')+'\n\n'+(m.text||'')+'\n\n'+(m.systeme&&m.systeme.length?'**Systeme:** '+m.systeme.join(', ')+(m.ereignis?' ('+lbEreignisLabel(m.ereignis)+')':'')+'\n\n':'')+(m.einschaetzung?'**Einschätzung:** '+m.einschaetzung+'\n\n':'')+'Quelle: '+(m.quelle?m.quelle.name+(m.quelle.url?' ('+m.quelle.url+')':''):'—');
   }).join('\n\n---\n\n');
 }
 function lbCsvEsc(s){ return '"'+String(s==null?'':s).replace(/"/g,'""')+'"'; }
 function lbExportCsv(list){
-  var rows=[['Datum','Länder','Kategorie','Sicherheit','Titel','Text','Tags','Quelle','QuelleURL','Einschätzung'].map(lbCsvEsc).join(',')];
-  list.forEach(function(m){ rows.push([m.datum,(m.laender||[]).map(lbName).join('; '),lbKatLabel(m.kategorie),lbSicherLabel(m.sicherheit),m.titel,m.text,(m.tags||[]).join('; '),m.quelle&&m.quelle.name,m.quelle&&m.quelle.url,m.einschaetzung].map(lbCsvEsc).join(',')); });
+  var rows=[['Datum','Länder','Kategorie','Sicherheit','Titel','Text','Tags','Quelle','QuelleURL','Einschätzung','Systeme','Ereignis'].map(lbCsvEsc).join(',')];
+  list.forEach(function(m){ rows.push([m.datum,(m.laender||[]).map(lbName).join('; '),lbKatLabel(m.kategorie),lbSicherLabel(m.sicherheit),m.titel,m.text,(m.tags||[]).join('; '),m.quelle&&m.quelle.name,m.quelle&&m.quelle.url,m.einschaetzung,(m.systeme||[]).join('; '),m.ereignis?lbEreignisLabel(m.ereignis):''].map(lbCsvEsc).join(',')); });
   return rows.join('\r\n');
 }
 function lbExportRun(fmt){
@@ -17025,7 +17046,7 @@ function lbKonfMapSelectHTML(){
 }
 function lbMapLegendHTML(){
   var wrap=function(x){ return '<div class="lp-row lp-mu" style="gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px">'+x+'</div>'; };
-  if(LB_UI.mapColor==='aktivitaet'){ var kc={beschaffung:'#4d7cff',einsatz:'#a32f3c',uebung:'#2e6b4c',politik:'#8a6a1f',abkommen:'#00cfff',krise:'#ff6b6b',industrie:'#a66bff',unfall:'#ffb020'}; return wrap(LB_KAT.map(function(k){ return '<span><span style="color:'+kc[k[0]]+'">●</span> '+k[1]+'</span>'; }).join('')+'<span>Grösse = Anzahl Meldungen, Farbe = häufigste Kategorie</span>'); }
+  if(LB_UI.mapColor==='aktivitaet'){ var kc=LB_KAT_COL; return wrap(LB_KAT.map(function(k){ return '<span><span style="color:'+kc[k[0]]+'">●</span> '+k[1]+'</span>'; }).join('')+'<span>Grösse = Anzahl Meldungen, Farbe = häufigste Kategorie</span>'); }
   if(LB_UI.mapColor!=='konflikt')return wrap(LB_LEVEL.map(function(x){ return '<span><span style="color:'+x[2]+'">●</span> '+x[1]+'</span>'; }).join(''));
   if(!lbKonflikte().length)return wrap('<span>Noch keine Konflikte erfasst — im Tab «Konflikte» anlegen.</span>');
   var k=LB_UI.konfSel&&lbKonflikte().find(function(x){return x.id===LB_UI.konfSel;});
@@ -17208,6 +17229,30 @@ document.addEventListener('change',function(ev){
   }
 });
 
+// ── Meldung: Systeme als Chips, Bearbeiten ──
+function lbSysChipFromInput(){
+  var inp=document.getElementById('lb-sys-q'), box=document.getElementById('lb-sys-chips'); if(!inp||!box)return;
+  inp.value.split(',').map(function(x){return x.trim();}).filter(Boolean).forEach(function(v){
+    var dup=[].some.call(box.querySelectorAll('[data-lb="sys-chip"]'),function(e){return e.getAttribute('data-v').toLowerCase()===v.toLowerCase();});
+    if(!dup)box.insertAdjacentHTML('beforeend','<span class="wp-pill" data-lb="sys-chip" data-v="'+lpEsc(v)+'" style="cursor:pointer">'+lpEsc(v)+' <b style="font-weight:400">✕</b></span>');
+  });
+  inp.value='';
+}
+document.addEventListener('keydown',function(ev){
+  if(!ev.target||ev.target.id!=='lb-sys-q'||(ev.key!=='Enter'&&ev.key!==','))return;
+  ev.preventDefault(); lbSysChipFromInput();
+});
+document.addEventListener('change',function(ev){ if(ev.target&&ev.target.id==='lb-sys-q')lbSysChipFromInput(); });
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return;
+  var a=el.getAttribute('data-lb');
+  if(a==='sys-chip'){ ev.preventDefault(); el.remove(); return; }
+  if(a==='meld-edit'){
+    ev.preventDefault(); var m=lbMeldungen().find(function(x){return x.id===el.getAttribute('data-id');}); if(!m)return;
+    LB_UI.formPre=JSON.parse(JSON.stringify(m)); LB_UI.editId=m.id; LB_UI.openMeld=null; LB_UI.form=true; lbRender(); window.scrollTo(0,0); return;
+  }
+});
+
 // ── Globale Suche (Strg+K): Lagebericht ist nicht privat, wird durchsucht ──
 var _pdSearchIndex_lb=pdSearchIndex;
 pdSearchIndex=function(){
@@ -17215,7 +17260,7 @@ pdSearchIndex=function(){
   lbMeldungen().forEach(function(m){
     it.push({g:'Lagebericht',t:m.titel,sub:(m.laender||[]).map(lbName).join(', ')+' · '+lpFmtShort(m.datum),
       go:function(){ goSec('lagebericht'); LB_UI.openMeld=m.id; lbRender(); },
-      q:(m.titel+' '+m.text+' '+(m.tags||[]).join(' ')+' '+(m.laender||[]).map(lbName).join(' ')+' '+(m.einschaetzung||'')).toLowerCase()});
+      q:(m.titel+' '+m.text+' '+(m.tags||[]).join(' ')+' '+(m.systeme||[]).join(' ')+' '+(m.laender||[]).map(lbName).join(' ')+' '+(m.einschaetzung||'')).toLowerCase()});
   });
   return it;
 };
@@ -17242,8 +17287,22 @@ function lbSanitizePre(d){
   out.sicherheit=LB_SICHER.some(function(k){return k[0]===d.sicherheit;})?d.sicherheit:'unbestaetigt';
   out.titel=String(d.titel||'').slice(0,200);
   out.text=String(d.text||'').slice(0,4000);
+  out.systeme=Array.isArray(d.systeme)?d.systeme.map(function(t){return String(t||'').trim();}).filter(Boolean).slice(0,10):[];
+  if(LB_EREIGNIS.some(function(x){return x[0]===d.ereignis;}))out.ereignis=d.ereignis;
   out.tags=Array.isArray(d.tags)?d.tags.map(function(t){return String(t||'').trim();}).filter(Boolean).slice(0,15):[];
   return out;
+}
+function lbExtractFehler(e){
+  e=String(e||'');
+  if(e==='id'||e==='method')return 'Der Worker ist veraltet (kennt die Schnellerfassung nicht) — worker.js im Cloudflare-Dashboard neu einfügen und «Deploy».';
+  if(e.indexOf('kein Schlüssel')===0)return 'Im Worker fehlt das Secret ANTHROPIC_KEY (Cloudflare › Settings › Variables and Secrets).';
+  if(e==='anthropic:401'||e==='anthropic:403')return 'Der Anthropic-Schlüssel wird abgelehnt — ANTHROPIC_KEY im Worker prüfen.';
+  if(e==='anthropic:400')return 'Anthropic lehnt die Anfrage ab — meist fehlt Guthaben (console.anthropic.com › Billing).';
+  if(e==='anthropic:429'||e==='anthropic:529')return 'Anthropic ist gerade überlastet — in einer Minute nochmals versuchen.';
+  if(e==='origin')return 'Der Worker lässt diese Seite nicht zu — ALLOWED_ORIGIN im Worker prüfen.';
+  if(e==='leer')return 'Bitte zuerst Text einfügen.';
+  if(e==='parse'||e==='antwort')return 'Die KI-Antwort war nicht auswertbar — nochmals versuchen oder Felder manuell ausfüllen.';
+  return 'Kein Vorschlag möglich ('+(e||'Fehler')+') — Felder manuell ausfüllen.';
 }
 function lbExtractRun(){
   var ta=document.getElementById('lb-paste'), status=document.getElementById('lb-extract-status'), w=pwWorker();
@@ -17255,7 +17314,7 @@ function lbExtractRun(){
     .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
     .then(function(res){
       if(status)status.textContent='';
-      if(!res.ok||res.j.error){ showToast('Kein Vorschlag möglich ('+(res.j&&res.j.error||'Fehler')+') — Felder manuell ausfüllen.'); return; }
+      if(!res.ok||res.j.error){ var st2=document.getElementById('lb-extract-status'), msg=lbExtractFehler(res.j&&res.j.error); if(st2)st2.textContent=msg; showToast(msg); return; }
       var pre=lbSanitizePre(res.j); if(!pre){ showToast('Antwort nicht auswertbar — Felder manuell ausfüllen.'); return; }
       LB_UI.formPre=pre; lbRender(); showToast('Vorschlag übernommen — bitte prüfen und Quelle ergänzen.','ok');
     })
