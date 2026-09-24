@@ -16593,14 +16593,158 @@ document.addEventListener('click',function(ev){
     case 'land-chip': el.remove(); return;
   }
 });
+function lbAddLandChip(hit){
+  if(!hit)return;
+  if(!document.querySelector('#lb-land-chips [data-iso="'+hit+'"]'))document.getElementById('lb-land-chips').insertAdjacentHTML('beforeend','<span class="wp-pill" data-lb="land-chip" data-iso="'+hit+'">'+lpEsc(lbName(hit))+' <b style="font-weight:400">✕</b></span>');
+  var inp=document.getElementById('lb-land-q'); if(inp)inp.value='';
+}
 document.addEventListener('keydown',function(ev){
   if(ev.key!=='Enter'||!ev.target||ev.target.id!=='lb-land-q')return; ev.preventDefault();
   var v=ev.target.value.trim(); if(!v)return;
   var hit=lbIsoSearch(v)[0]; if(!hit){ showToast('Land nicht gefunden.'); return; }
-  if(!document.querySelector('#lb-land-chips [data-iso="'+hit+'"]'))document.getElementById('lb-land-chips').insertAdjacentHTML('beforeend','<span class="wp-pill" data-lb="land-chip" data-iso="'+hit+'">'+lpEsc(lbName(hit))+' <b style="font-weight:400">✕</b></span>');
-  ev.target.value='';
+  lbAddLandChip(hit);
+});
+// Klick auf einen Datalist-Vorschlag löst kein «Enter» aus, nur input/change mit dem exakten Namen —
+// darum hier zusätzlich auf einen exakten Treffer beim Tippen/Auswählen reagieren.
+document.addEventListener('input',function(ev){
+  if(!ev.target||ev.target.id!=='lb-land-q')return;
+  var v=ev.target.value.trim().toLowerCase(); if(!v)return;
+  var hit=Object.keys(LB_NAMEN||{}).find(function(iso){ return LB_NAMEN[iso].toLowerCase()===v; });
+  if(hit)lbAddLandChip(hit);
 });
 function lbInit(){ try{ lbLoadNamen(); }catch(e){} }
+
+// ── Paket 2: System-Register, Beziehungs-Matrix, Statistik, Export, globale Suche ──
+function lbTagCounts(){
+  var m={};
+  lbMeldungen().forEach(function(x){ (x.tags||[]).forEach(function(t){ var k=(t||'').trim(); if(!k)return; var lk=k.toLowerCase(); m[lk]=m[lk]||{label:k,n:0,cnt:{}}; m[lk].n++; m[lk].cnt[k]=(m[lk].cnt[k]||0)+1; if(m[lk].cnt[k]>=(m[lk].cnt[m[lk].label]||0))m[lk].label=k; }); });
+  return Object.keys(m).map(function(k){return {key:k,label:m[k].label,n:m[k].n};}).sort(function(a,b){return b.n-a.n||a.label.localeCompare(b.label);});
+}
+function lbRegisterHTML(){
+  var tags=lbTagCounts();
+  if(LB_UI.tag){
+    var tk=LB_UI.tag, meld=lbMeldungen().filter(function(m){return (m.tags||[]).some(function(x){return x.toLowerCase()===tk;});}).sort(function(a,b){return (b.datum||'')<(a.datum||'')?-1:1;});
+    var label=(tags.find(function(x){return x.key===tk;})||{label:tk}).label;
+    return '<div class="lp-row" style="justify-content:space-between;margin-bottom:10px"><span class="lp-cap">REGISTER · #'+lpEsc(label)+'</span><button type="button" class="lp-x" data-lb="register-clear">✕ Zurück</button></div>'
+      +(meld.length?meld.map(lbMeldungRowHTML).join(''):'<div class="lp-mu">Keine Meldungen.</div>');
+  }
+  if(!tags.length)return '<div class="lp-cap" style="margin-bottom:10px">SYSTEM-REGISTER</div><div class="lp-mu">Noch keine Tags erfasst — beim Erfassen einer Meldung eintragen.</div>';
+  return '<div class="lp-cap" style="margin-bottom:10px">SYSTEM-REGISTER · '+tags.length+'</div>'
+    +tags.map(function(x){ return '<div class="hg-ln" data-lb="register-open" data-tag="'+lpEsc(x.key)+'" style="cursor:pointer"><span style="flex:1;min-width:0;font-size:13px">#'+lpEsc(x.label)+'</span>'
+      +'<button type="button" class="lp-x" data-lb="tag-merge" data-tag="'+lpEsc(x.key)+'" title="mit anderem Tag zusammenführen"><i class="ti ti-git-merge"></i></button>'
+      +'<span class="lp-mono lp-mu" style="font-size:11px;min-width:20px;text-align:right">'+x.n+'</span></div>'; }).join('');
+}
+function lbTagMerge(fromKey){
+  var to=prompt('Tag «'+fromKey+'» zusammenführen mit (Zieltag eintippen):'); if(!to||!to.trim())return;
+  var toTrim=to.trim();
+  lbMeldungen().forEach(function(m){
+    if(!m.tags)return; var changed=false;
+    m.tags=m.tags.map(function(t){ if(t.toLowerCase()===fromKey){ changed=true; return toTrim; } return t; });
+    if(changed){ var seen={}; m.tags=m.tags.filter(function(t){ var k=t.toLowerCase(); if(seen[k])return false; seen[k]=1; return true; }); }
+  });
+  saveD(); showToast('Tags zusammengeführt ✓','ok'); lbRender();
+}
+
+// ── Beziehungs-Matrix ──
+var LB_BEZ_SYM={buendnis:'🤝',partnerschaft:'🔗',lieferung:'📦',konflikt:'⚔️',verhandlung:'💬'};
+function lbMatrixHTML(){
+  var bez=lbBeziehungen(); if(!bez.length)return '<div class="lp-cap" style="margin-bottom:10px">BEZIEHUNGS-MATRIX</div><div class="lp-mu">Noch keine Beziehungen erfasst (im Länder-Dossier unter «+ Beziehung»).</div>';
+  var isos={}; bez.forEach(function(b){ isos[b.von]=1; isos[b.nach]=1; });
+  var list=Object.keys(isos).sort(function(a,b){return lbName(a).localeCompare(lbName(b));});
+  var h='<div class="lp-cap" style="margin-bottom:10px">BEZIEHUNGS-MATRIX</div><div style="overflow-x:auto"><table class="trk-tbl"><thead><tr><th></th>'+list.map(function(iso){return '<th title="'+lpEsc(lbName(iso))+'">'+iso+'</th>';}).join('')+'</tr></thead><tbody>';
+  list.forEach(function(r){
+    h+='<tr><th title="'+lpEsc(lbName(r))+'">'+r+'</th>'+list.map(function(c){
+      if(c===r)return '<td>—</td>';
+      var b=bez.find(function(x){return (x.von===r&&x.nach===c)||(x.von===c&&x.nach===r);});
+      return b?'<td style="cursor:pointer" data-lb="bez-open" data-id="'+lpEsc(b.id)+'" title="'+lpEsc((LB_BEZ.find(function(t){return t[0]===b.typ;})||[,b.typ])[1])+'">'+LB_BEZ_SYM[b.typ]+'</td>':'<td></td>';
+    }).join('')+'</tr>';
+  });
+  return h+'</tbody></table></div><div class="lp-row lp-mu" style="gap:10px;flex-wrap:wrap;margin-top:8px;font-size:11px">'+Object.keys(LB_BEZ_SYM).map(function(k){return '<span>'+LB_BEZ_SYM[k]+' '+(LB_BEZ.find(function(x){return x[0]===k;})||[,k])[1]+'</span>';}).join('')+'</div>';
+}
+
+// ── Statistik pro Land (eigenes SVG statt Chart.js, konsistent mit dem Rest der App) ──
+function lbStatHTML(iso){
+  var counts={}; lbMeldungen().forEach(function(m){ if((m.laender||[]).indexOf(iso)<0)return; counts[m.kategorie]=(counts[m.kategorie]||0)+1; });
+  var kats=LB_KAT.filter(function(k){return counts[k[0]];}); if(!kats.length)return '';
+  var max=Math.max.apply(null,kats.map(function(k){return counts[k[0]];}));
+  return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:8px">STATISTIK NACH KATEGORIE</div>'+kats.map(function(k){ var n=counts[k[0]]; return '<div class="lp-row" style="gap:8px;align-items:center;margin-bottom:4px"><span class="lp-mu" style="width:90px;font-size:11px;flex-shrink:0">'+k[1]+'</span><div class="ck-track" style="flex:1;height:10px;margin:0"><i style="width:'+Math.round(n/max*100)+'%"></i></div><span class="lp-mono lp-mu" style="font-size:11px;width:20px;text-align:right">'+n+'</span></div>'; }).join('')+'</div>';
+}
+
+// ── Export ──
+function lbExportList(){
+  var list=lbMeldungen().slice().sort(function(a,b){return (a.datum||'')<(b.datum||'')?-1:1;});
+  if(LB_UI.zLand)list=list.filter(function(m){return (m.laender||[]).indexOf(LB_UI.zLand)>=0;});
+  return list;
+}
+function lbExportMd(list){
+  return list.map(function(m){
+    return '## '+m.titel+'\n\n'+lpFmt(m.datum)+' · '+lbKatLabel(m.kategorie)+' · '+lbSicherLabel(m.sicherheit)+' · '+(m.laender||[]).map(lbName).join(', ')+'\n\n'+(m.text||'')+'\n\n'+(m.einschaetzung?'**Einschätzung:** '+m.einschaetzung+'\n\n':'')+'Quelle: '+(m.quelle?m.quelle.name+(m.quelle.url?' ('+m.quelle.url+')':''):'—');
+  }).join('\n\n---\n\n');
+}
+function lbCsvEsc(s){ return '"'+String(s==null?'':s).replace(/"/g,'""')+'"'; }
+function lbExportCsv(list){
+  var rows=[['Datum','Länder','Kategorie','Sicherheit','Titel','Text','Tags','Quelle','QuelleURL','Einschätzung'].map(lbCsvEsc).join(',')];
+  list.forEach(function(m){ rows.push([m.datum,(m.laender||[]).map(lbName).join('; '),lbKatLabel(m.kategorie),lbSicherLabel(m.sicherheit),m.titel,m.text,(m.tags||[]).join('; '),m.quelle&&m.quelle.name,m.quelle&&m.quelle.url,m.einschaetzung].map(lbCsvEsc).join(',')); });
+  return rows.join('\r\n');
+}
+function lbExportRun(fmt){
+  var list=lbExportList(); if(!list.length){ showToast('Keine Meldungen zum Exportieren.'); return; }
+  var txt=fmt==='csv'?lbExportCsv(list):lbExportMd(list);
+  var blob=new Blob([txt],{type:fmt==='csv'?'text/csv;charset=utf-8':'text/markdown;charset=utf-8'});
+  var a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='lagebericht-'+today()+'.'+fmt;
+  document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); },500);
+  showToast(list.length+' Meldungen exportiert ✓','ok');
+}
+
+// ── Tabs erweitert (überschreibt die Paket-1-Fassung) ──
+lbTabsHTML=function(){
+  var tabs=[['karte','Karte'],['zeitstrahl','Zeitstrahl'],['register','Register'],['matrix','Beziehungen']];
+  return '<div class="lp-row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px"><div class="lp-seg">'+tabs.map(function(t){ return '<button type="button" class="'+(LB_UI.tab===t[0]?'on':'')+'" data-lb="tab" data-v="'+t[0]+'">'+t[1]+'</button>'; }).join('')+'</div>'
+    +'<span class="lp-row" style="gap:6px"><button type="button" class="lp-btn gray" data-lb="export" data-v="md"><i class="ti ti-file-text"></i> Markdown</button><button type="button" class="lp-btn gray" data-lb="export" data-v="csv"><i class="ti ti-table"></i> CSV</button></span></div>';
+};
+var _lbRender_p2=lbRender;
+lbRender=function(){
+  var el=document.getElementById('lb-root'); if(!el)return;
+  if(!LB_NAMEN){ return _lbRender_p2(); }
+  if(LB_UI.openMeld||LB_UI.form||(LB_UI.tab==='dossier'&&LB_UI.land))return _lbRender_p2();
+  if(LB_UI.tab!=='register'&&LB_UI.tab!=='matrix')return _lbRender_p2();
+  var h='<div class="lp-row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:4px"><div><div class="lp-cap">LAGEBERICHT</div><div style="font-size:17px;font-weight:500">Weltlage · '+lbMeldungen().length+' Meldungen</div></div>'
+    +'<button type="button" class="lp-btn fill" data-lb="form-open"><i class="ti ti-plus"></i> Meldung erfassen</button></div>'+lbTabsHTML();
+  h+= LB_UI.tab==='register'?lbRegisterHTML():lbMatrixHTML();
+  el.innerHTML=h;
+};
+// Dossier: Statistik-Kachel ergänzen
+var _lbDossierHTML_p2=lbDossierHTML;
+lbDossierHTML=function(iso){ var h=_lbDossierHTML_p2(iso), marker='<div class="lp-cd"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">MELDUNGEN'; var stat=lbStatHTML(iso); return stat?h.replace(marker,stat+marker):h; };
+
+// ── Globale Suche (Strg+K): Lagebericht ist nicht privat, wird durchsucht ──
+var _pdSearchIndex_lb=pdSearchIndex;
+pdSearchIndex=function(){
+  var it=_pdSearchIndex_lb();
+  lbMeldungen().forEach(function(m){
+    it.push({g:'Lagebericht',t:m.titel,sub:(m.laender||[]).map(lbName).join(', ')+' · '+lpFmtShort(m.datum),
+      go:function(){ goSec('lagebericht'); LB_UI.openMeld=m.id; lbRender(); },
+      q:(m.titel+' '+m.text+' '+(m.tags||[]).join(' ')+' '+(m.laender||[]).map(lbName).join(' ')+' '+(m.einschaetzung||'')).toLowerCase()});
+  });
+  return it;
+};
+
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return;
+  var a=el.getAttribute('data-lb'), id=el.getAttribute('data-id'), tag=el.getAttribute('data-tag');
+  switch(a){
+    case 'register-open': ev.preventDefault(); LB_UI.tag=tag; return lbRender();
+    case 'register-clear': ev.preventDefault(); LB_UI.tag=null; return lbRender();
+    case 'tag-merge': ev.preventDefault(); ev.stopPropagation(); return lbTagMerge(tag);
+    case 'bez-open':
+      ev.preventDefault(); var b=lbBeziehungen().find(function(x){return x.id===id;}); if(!b)return;
+      if(confirm(lbName(b.von)+' – '+lbName(b.nach)+' · '+(LB_BEZ.find(function(t){return t[0]===b.typ;})||[,b.typ])[1]+' seit '+lpFmt(b.seit)+(b.bis?' bis '+lpFmt(b.bis):'')+'\n\nBeziehung löschen?')){
+        D.lbBeziehungen=lbBeziehungen().filter(function(x){return x.id!==id;}); markDeleted(id); saveD(); lbRender();
+      }
+      return;
+    case 'export': ev.preventDefault(); return lbExportRun(el.getAttribute('data-v'));
+  }
+});
 
 // ═══════════════════════════════════════════════════════════
 // INIT
