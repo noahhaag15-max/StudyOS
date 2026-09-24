@@ -16472,9 +16472,10 @@ function lbDossierHTML(iso){
     +LB_LEVEL.map(function(x){ return '<button type="button" class="wp-pill'+(l.lageLevel===x[0]?' on':'')+'" style="'+(l.lageLevel===x[0]?'background:'+x[2]+';border-color:'+x[2]:'')+'" data-lb="level" data-iso="'+iso+'" data-v="'+x[0]+'">'+x[1]+'</button>'; }).join('')
     +'</div>'+(l.levelSeit?'<div class="lp-mu" style="font-size:11px;margin-top:6px">seit '+lpEsc(lpFmt(l.levelSeit))+'</div>':'')+'</div>';
   // Führung
-  h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:6px">FÜHRUNG</div>';
+  h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">FÜHRUNG</span><button type="button" class="lp-btn gray" data-lb="fu-new" data-iso="'+iso+'">+ Person</button></div>';
   var akt=(l.fuehrung||[]).filter(function(f){return !f.bis;}), alt=(l.fuehrung||[]).filter(function(f){return f.bis;});
-  LB_ROLLEN.forEach(function(r){
+  var rollen=LB_ROLLEN.concat(akt.map(function(f){return f.rolle;}).filter(function(r,i,a){ return LB_ROLLEN.indexOf(r)<0&&a.indexOf(r)===i; }).sort(function(a,b){return a.localeCompare(b);}));
+  rollen.forEach(function(r){
     var cur=akt.find(function(f){return f.rolle===r;});
     h+='<div class="lp-row" style="justify-content:space-between;gap:8px;padding:4px 0"><span class="lp-mu" style="min-width:120px">'+r+'</span><span style="flex:1;min-width:0">'+(cur?lpEsc(cur.name)+' <span class="lp-mu lp-mono" style="font-size:10px">seit '+lpEsc(lpFmt(cur.seit))+'</span>':'<span class="lp-mu">offen</span>')+'</span>'
       +'<button type="button" class="lp-x" data-lb="fuehrung-edit" data-iso="'+iso+'" data-rolle="'+lpEsc(r)+'" aria-label="ändern"><i class="ti ti-pencil"></i></button></div>';
@@ -16488,7 +16489,7 @@ function lbDossierHTML(iso){
   // Beziehungen
   var bez=lbBeziehungen().filter(function(b){return b.von===iso||b.nach===iso;});
   h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">BEZIEHUNGEN</span><button type="button" class="lp-btn gray" data-lb="bez-new" data-iso="'+iso+'">+ Beziehung</button></div>'
-    +(bez.length?bez.map(function(b){ var other=b.von===iso?b.nach:b.von; return '<div class="lp-row" style="justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--lp-border)"><span style="flex:1;min-width:0">'+lpEsc((LB_BEZ.find(function(t){return t[0]===b.typ;})||[,b.typ])[1])+' · '+lpEsc(lbName(other))+(b.notiz?'<div class="lp-mu" style="font-size:11px">'+lpEsc(b.notiz)+'</div>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px;align-self:center">'+lpEsc(lpFmt(b.seit))+(b.bis?'–'+lpEsc(lpFmt(b.bis)):'')+'</span><button type="button" class="lp-x" data-lb="bez-del" data-id="'+lpEsc(b.id)+'">✕</button></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Keine Beziehungen erfasst.</div>')+'</div>';
+    +(bez.length?bez.map(function(b){ var other=b.von===iso?b.nach:b.von; return '<div class="lp-row" style="justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--lp-border)"><span style="flex:1;min-width:0">'+lpEsc((LB_BEZ.find(function(t){return t[0]===b.typ;})||[,b.typ])[1])+' · '+lpEsc(lbName(other))+(b.notiz?'<div class="lp-mu" style="font-size:11px">'+lpEsc(b.notiz)+'</div>':'')+'</span>'+(b.meldungId&&lbMeldungen().some(function(m){return m.id===b.meldungId;})?'<button type="button" class="lp-x" data-lb="meld-open" data-id="'+lpEsc(b.meldungId)+'" title="zugehörige Meldung"><i class="ti ti-news"></i></button>':'')+'<span class="lp-mono lp-mu" style="font-size:11px;align-self:center">'+lpEsc(lpFmt(b.seit))+(b.bis?'–'+lpEsc(lpFmt(b.bis)):'')+'</span><button type="button" class="lp-x" data-lb="bez-edit" data-id="'+lpEsc(b.id)+'" aria-label="bearbeiten"><i class="ti ti-pencil"></i></button><button type="button" class="lp-x" data-lb="bez-del" data-id="'+lpEsc(b.id)+'">✕</button></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Keine Beziehungen erfasst.</div>')+'</div>';
   // Meldungen
   var meld=lbMeldungen().filter(function(m){return (m.laender||[]).indexOf(iso)>=0;}).sort(function(a,b){return (b.datum||'')<(a.datum||'')?-1:1;});
   h+='<div class="lp-cd"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">MELDUNGEN · '+meld.length+'</span>'+(meld.length>5?'<span class="lp-mu" style="cursor:pointer;font-size:11px" data-lb="zeitstrahl-land" data-iso="'+iso+'">alle im Zeitstrahl</span>':'')+'</div>'
@@ -16513,7 +16514,7 @@ function lbMeldungOpenHTML(m){
     +(m.tags&&m.tags.length?'<div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-top:10px">'+m.tags.map(function(t){return '<span class="wp-pill">#'+lpEsc(t)+'</span>';}).join('')+'</div>':'')
     +(m.einschaetzung?'<div style="border-left:3px solid var(--lp-accent);padding:8px 12px;margin-top:12px;background:color-mix(in srgb,var(--lp-accent) 8%,transparent)"><div class="lp-cap" style="margin-bottom:4px">EINSCHÄTZUNG</div><div style="font-size:13px;white-space:pre-wrap">'+lpEsc(m.einschaetzung)+'</div></div>':'')
     +'<div class="lp-mu" style="font-size:11px;margin-top:12px">Quelle: '+(m.quelle&&m.quelle.url?'<a href="'+lpEsc(m.quelle.url)+'" target="_blank" rel="noopener">'+lpEsc(m.quelle.name)+'</a>':lpEsc(m.quelle&&m.quelle.name||'—'))+(m.quelle&&m.quelle.datum?' · '+lpEsc(lpFmt(m.quelle.datum)):'')+'</div>'
-    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="lp-btn danger" data-lb="meld-del" data-id="'+lpEsc(m.id)+'">Löschen</button></div></div>';
+    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px">'+((m.laender||[]).length>=2?'<button type="button" class="lp-btn gray" data-lb="bez-vorschlag" data-id="'+lpEsc(m.id)+'"><i class="ti ti-link"></i> Beziehung daraus anlegen</button>':'')+'<button type="button" class="lp-btn danger" data-lb="meld-del" data-id="'+lpEsc(m.id)+'">Löschen</button></div></div>';
   return h;
 }
 function lbFormHTML(pre){
@@ -16549,6 +16550,7 @@ function lbFormSave(){
     sicherheit:document.getElementById('lb-sicher').value,tags:tags,quelle:{name:qname,url:(document.getElementById('lb-q-url').value||'').trim(),datum:today()},einschaetzung:(document.getElementById('lb-einsch').value||'').trim(),erstellt:today()};
   lbMeldungen().push(m); laender.forEach(function(iso){ lbLand(iso,true); });
   saveD(); LB_UI.form=false; lbRender(); showToast('Meldung gespeichert ✓','ok');
+  if(laender.length>=2)lbBezVorschlag(m);
 }
 
 // ── Zeitstrahl ──
@@ -16596,13 +16598,7 @@ document.addEventListener('click',function(ev){
     case 'mapcolor': LB_UI.mapColor=el.getAttribute('data-v'); lbPaintMap(); return;
     case 'watchlist': var l=lbLand(iso,true); l.watchlist=!l.watchlist; lbTouch(l); saveD(); return lbRender();
     case 'level': var l2=lbLand(iso,true); if(l2.lageLevel!==el.getAttribute('data-v')){ l2.lageLevel=el.getAttribute('data-v'); l2.levelSeit=today(); lbTouch(l2); saveD(); } return lbRender();
-    case 'fuehrung-edit':
-      var rolle=el.getAttribute('data-rolle'), l3=lbLand(iso,true), cur=(l3.fuehrung||[]).find(function(f){return f.rolle===rolle&&!f.bis;});
-      var name=prompt('Name («'+rolle+'», '+lbName(iso)+') — leer lassen zum Entfernen:',cur?cur.name:'');
-      if(name===null)return;
-      if(cur){ cur.bis=today(); }
-      if(name.trim()){ l3.fuehrung=l3.fuehrung||[]; l3.fuehrung.push({rolle:rolle,name:name.trim(),seit:today(),bis:''}); }
-      lbTouch(l3); saveD(); return lbRender();
+    case 'fuehrung-edit': return lbFuEdit(iso,el.getAttribute('data-rolle'));
     case 'besch-new':
       var sys=prompt('System / Bezeichnung:'); if(!sys||!sys.trim())return;
       var stk=prompt('Stückzahl (optional):')||'';
@@ -16610,12 +16606,9 @@ document.addEventListener('click',function(ev){
       l4.beschaffungen.push({id:uid(),system:sys.trim(),stueckzahl:stk.trim(),status:'geplant',datum:today(),notiz:''}); lbTouch(l4); saveD(); return lbRender();
     case 'besch-del':
       var l5=lbLand(iso); if(!l5)return; l5.beschaffungen=(l5.beschaffungen||[]).filter(function(b){return b.id!==id;}); lbTouch(l5); saveD(); return lbRender();
-    case 'bez-new':
-      var q=prompt('Anderes Land (Name eintippen):'); if(!q)return;
-      var hit=lbIsoSearch(q)[0]; if(!hit){ showToast('Land nicht gefunden.'); return; }
-      var typ=prompt('Typ: buendnis, partnerschaft, lieferung, konflikt, verhandlung','partnerschaft'); if(!typ)return;
-      lbBeziehungen().push({id:uid(),von:iso,nach:hit,typ:typ.trim(),seit:today(),bis:'',notiz:''}); saveD(); return lbRender();
-    case 'bez-del': D.lbBeziehungen=lbBeziehungen().filter(function(b){return b.id!==id;}); markDeleted(id); saveD(); return lbRender();
+    case 'bez-new': return lbBezEdit({von:iso});
+    case 'bez-edit': return lbBezEdit({id:id});
+    case 'bez-del': var bd=lbBeziehungen().find(function(b){return b.id===id;}); if(!bd||!confirm('Beziehung '+lbName(bd.von)+' – '+lbName(bd.nach)+' löschen?'))return; D.lbBeziehungen=lbBeziehungen().filter(function(b){return b.id!==id;}); markDeleted(id); saveD(); return lbRender();
     case 'zeitstrahl-land': LB_UI.zLand=iso; LB_UI.tab='zeitstrahl'; return lbRender();
     case 'zeitstrahl-clear': LB_UI.zLand=null; return lbRender();
     case 'meld-open': LB_UI.openMeld=id; return lbRender();
@@ -16827,6 +16820,129 @@ document.addEventListener('change',function(ev){
   var dl=document.getElementById('lbb-typ-dl'); if(dl)dl.innerHTML=lbBestTypDl(ev.target.value);
 });
 
+// ── Beziehungen: Dialog statt prompt(), Vorschlag aus Meldungen ──
+var LB_KAT_BEZ={abkommen:'partnerschaft',beschaffung:'lieferung',industrie:'lieferung',krise:'konflikt',einsatz:'konflikt',politik:'verhandlung',uebung:'partnerschaft'};
+function lbIsoFromInput(v){
+  v=(v||'').trim(); if(!v)return null; var lv=v.toLowerCase();
+  var exact=Object.keys(LB_NAMEN||{}).find(function(iso){ return LB_NAMEN[iso].toLowerCase()===lv; });
+  return exact||lbIsoSearch(v)[0]||null;
+}
+function lbBezFind(a,b){ return lbBeziehungen().filter(function(x){ return (x.von===a&&x.nach===b)||(x.von===b&&x.nach===a); }); }
+function lbBezTypLabel(k){ return (LB_BEZ.find(function(t){return t[0]===k;})||[,k])[1]; }
+function lbBezEdit(o){
+  o=o||{}; var b=o.id?lbBeziehungen().find(function(x){return x.id===o.id;}):null;
+  var v=b||{von:o.von||'',nach:o.nach||'',typ:o.typ||'partnerschaft',seit:o.seit||today(),bis:'',notiz:o.notiz||'',meldungId:o.meldungId||''};
+  var meld=v.meldungId&&lbMeldungen().find(function(m){return m.id===v.meldungId;});
+  var dl='<datalist id="lbz-dl">'+Object.keys(LB_NAMEN||{}).map(function(iso){return '<option value="'+lpEsc(LB_NAMEN[iso])+'">';}).join('')+'</datalist>';
+  syModal('lb-bez','<div class="lp-cap" style="margin-bottom:8px">'+(b?'BEZIEHUNG BEARBEITEN':'NEUE BEZIEHUNG')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<div class="lp-row" style="gap:8px;align-items:center;flex-wrap:wrap"><input class="lp-in" id="lbz-von" list="lbz-dl" placeholder="Land A" value="'+lpEsc(v.von?lbName(v.von):'')+'" style="flex:1;min-width:120px"><span class="lp-mu">–</span><input class="lp-in" id="lbz-nach" list="lbz-dl" placeholder="Land B" value="'+lpEsc(v.nach?lbName(v.nach):'')+'" style="flex:1;min-width:120px">'+dl+'</div>'
+    +'<select class="lp-in" id="lbz-typ">'+LB_BEZ.map(function(t){return '<option value="'+t[0]+'"'+(v.typ===t[0]?' selected':'')+'>'+t[1]+'</option>';}).join('')+'</select>'
+    +'<div class="lp-row" style="gap:8px;align-items:center;flex-wrap:wrap"><label class="lp-mu" style="font-size:11px">seit</label><input class="lp-in lp-mono" type="date" id="lbz-seit" value="'+lpEsc(v.seit||'')+'" style="max-width:160px"><label class="lp-mu" style="font-size:11px">bis (optional)</label><input class="lp-in lp-mono" type="date" id="lbz-bis" value="'+lpEsc(v.bis||'')+'" style="max-width:160px"></div>'
+    +'<input class="lp-in" id="lbz-notiz" placeholder="Notiz (z. B. Name des Abkommens)" value="'+lpEsc(v.notiz||'')+'">'
+    +(meld?'<div class="lp-mu" style="font-size:11px"><i class="ti ti-link"></i> verknüpft mit Meldung «'+lpEsc(meld.titel)+'»</div>':'')
+    +'<div class="lp-mu" id="lbz-err" style="font-size:11px;display:none;color:var(--lp-review)"></div></div>'
+    +'<div class="lp-row" style="justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap">'
+    +(b?'<button type="button" class="lp-btn danger" data-lb="bez-del2" data-id="'+lpEsc(b.id)+'">Löschen</button>':'<span></span>')
+    +'<span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-lb="bez-close">Abbrechen</button><button type="button" class="lp-btn fill" data-lb="bez-save" data-id="'+lpEsc(b?b.id:'')+'" data-mid="'+lpEsc(v.meldungId||'')+'">Speichern</button></span></div>');
+}
+function lbBezSave(id,mid){
+  var err=document.getElementById('lbz-err'), fail=function(t){ err.textContent=t; err.style.display='block'; };
+  var a=lbIsoFromInput(document.getElementById('lbz-von').value), c=lbIsoFromInput(document.getElementById('lbz-nach').value);
+  if(!a||!c)return fail('Bitte zwei gültige Länder wählen.');
+  if(a===c)return fail('Die beiden Länder müssen verschieden sein.');
+  var typ=document.getElementById('lbz-typ').value, seit=document.getElementById('lbz-seit').value||today(), bis=document.getElementById('lbz-bis').value||'';
+  if(bis&&bis<seit)return fail('«bis» liegt vor «seit».');
+  var b=id?lbBeziehungen().find(function(x){return x.id===id;}):null;
+  if(!b){
+    var dup=lbBezFind(a,c).find(function(x){return x.typ===typ&&!x.bis;});
+    if(dup&&!confirm('Zwischen '+lbName(a)+' und '+lbName(c)+' besteht schon «'+lbBezTypLabel(typ)+'» seit '+lpFmt(dup.seit)+'. Trotzdem zusätzlich anlegen?'))return;
+    b={id:uid()}; lbBeziehungen().push(b);
+  }
+  b.von=a; b.nach=c; b.typ=typ; b.seit=seit; b.bis=bis; b.notiz=document.getElementById('lbz-notiz').value.trim();
+  if(mid)b.meldungId=mid;
+  lbLand(a,true); lbLand(c,true); lbTouch(b); saveD();
+  var m=document.getElementById('lb-bez'); if(m)m.remove(); lbRender(); showToast('Beziehung gespeichert ✓','ok');
+}
+function lbBezVorschlag(m){
+  var l=(m.laender||[]).slice(0,5), pairs=[];
+  for(var i=0;i<l.length;i++)for(var j=i+1;j<l.length;j++)pairs.push([l[i],l[j]]);
+  if(!pairs.length)return;
+  var typ=LB_KAT_BEZ[m.kategorie]||'partnerschaft';
+  syModal('lb-bezv','<div class="lp-cap" style="margin-bottom:6px">BEZIEHUNG ANLEGEN?</div>'
+    +'<div class="lp-mu" style="font-size:12px;margin-bottom:10px">Die Meldung «'+lpEsc(m.titel)+'» betrifft mehrere Länder. Nur falls dadurch eine Beziehung entstanden oder verändert ist — sonst einfach schliessen.</div>'
+    +pairs.map(function(pr){
+      var ex=lbBezFind(pr[0],pr[1]).filter(function(x){return !x.bis;});
+      return '<div class="hg-ln" style="align-items:center"><div style="min-width:0;flex:1"><div style="font-size:13px">'+lpEsc(lbName(pr[0]))+' – '+lpEsc(lbName(pr[1]))+'</div>'
+        +(ex.length?'<div class="lp-mu" style="font-size:11px">besteht schon: '+ex.map(function(x){return lpEsc(lbBezTypLabel(x.typ))+' seit '+lpEsc(lpFmtShort(x.seit));}).join(', ')+'</div>':'')+'</div>'
+        +'<button type="button" class="lp-btn gray" data-lb="bezv-pick" data-mid="'+lpEsc(m.id)+'" data-a="'+pr[0]+'" data-b="'+pr[1]+'" data-typ="'+typ+'">Anlegen …</button></div>';
+    }).join('')
+    +'<div class="lp-row" style="justify-content:flex-end;margin-top:12px"><button type="button" class="lp-btn gray" data-lb="bezv-close">Nein, nur Meldung</button></div>');
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return;
+  var a=el.getAttribute('data-lb'), id=el.getAttribute('data-id'), rm=function(x){ var n=document.getElementById(x); if(n)n.remove(); };
+  switch(a){
+    case 'bez-close': ev.preventDefault(); return rm('lb-bez');
+    case 'bez-save': ev.preventDefault(); return lbBezSave(id,el.getAttribute('data-mid'));
+    case 'bez-del2':
+      ev.preventDefault(); var b=lbBeziehungen().find(function(x){return x.id===id;}); if(!b||!confirm('Beziehung '+lbName(b.von)+' – '+lbName(b.nach)+' löschen?'))return;
+      D.lbBeziehungen=lbBeziehungen().filter(function(x){return x.id!==id;}); markDeleted(id); saveD(); rm('lb-bez'); return lbRender();
+    case 'bez-vorschlag': ev.preventDefault(); var m=lbMeldungen().find(function(x){return x.id===id;}); if(m)lbBezVorschlag(m); return;
+    case 'bezv-close': ev.preventDefault(); return rm('lb-bezv');
+    case 'bezv-pick':
+      ev.preventDefault(); var mm=lbMeldungen().find(function(x){return x.id===el.getAttribute('data-mid');}); rm('lb-bezv');
+      return lbBezEdit({von:el.getAttribute('data-a'),nach:el.getAttribute('data-b'),typ:el.getAttribute('data-typ'),seit:mm?mm.datum:today(),notiz:mm?mm.titel:'',meldungId:mm?mm.id:''});
+  }
+});
+
+// ── Führung: frei wählbare Rollen, Dialog statt prompt() ──
+var LB_ROLLEN_VORSCHLAG=['Staatsoberhaupt','Regierungschef','Verteidigung','Aussenminister/in','Innenminister/in','Finanzminister/in','Generalstabschef/in','Oberbefehlshaber/in Streitkräfte','Chef/in Luftwaffe','Chef/in Heer','Chef/in Marine','Rüstungschef/in','Nachrichtendienst','Nationaler Sicherheitsberater/in','Botschafter/in in der Schweiz','Oppositionsführer/in'];
+function lbFuEdit(iso,rolle){
+  var l=lbLand(iso,true), cur=rolle?(l.fuehrung||[]).find(function(f){return f.rolle===rolle&&!f.bis;}):null;
+  syModal('lb-fu','<div class="lp-cap" style="margin-bottom:8px">FÜHRUNG · '+lpEsc(lbName(iso).toUpperCase())+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<input class="lp-in" id="lbf-rolle" list="lbf-dl" placeholder="Rolle / Funktion (frei, z. B. Chef/in Luftwaffe)" value="'+lpEsc(rolle||'')+'"'+(rolle?' readonly style="opacity:.75"':'')+'><datalist id="lbf-dl">'+LB_ROLLEN_VORSCHLAG.map(function(r){return '<option value="'+lpEsc(r)+'">';}).join('')+'</datalist>'
+    +'<input class="lp-in" id="lbf-name" placeholder="Name" value="'+lpEsc(cur?cur.name:'')+'">'
+    +'<div class="lp-row" style="gap:8px;align-items:center"><label class="lp-mu" style="font-size:11px">im Amt seit</label><input class="lp-in lp-mono" type="date" id="lbf-seit" value="'+lpEsc(cur?cur.seit:today())+'" style="max-width:160px"></div>'
+    +(cur?'<div class="lp-mu" style="font-size:11px">Aktuell: '+lpEsc(cur.name)+' seit '+lpEsc(lpFmt(cur.seit))+'. «Wechsel» archiviert diese Person, «Korrigieren» ändert nur Schreibweise/Datum.</div>':'')
+    +'<div class="lp-mu" id="lbf-err" style="font-size:11px;display:none;color:var(--lp-review)"></div></div>'
+    +'<div class="lp-row" style="justify-content:space-between;gap:8px;margin-top:12px;flex-wrap:wrap">'
+    +(cur?'<button type="button" class="lp-btn gray" data-lb="fu-end" data-iso="'+iso+'" data-rolle="'+lpEsc(rolle)+'" title="Person tritt ab, Rolle bleibt offen">Abgang</button>':'<span></span>')
+    +'<span class="lp-row" style="gap:8px;flex-wrap:wrap"><button type="button" class="lp-btn gray" data-lb="fu-close">Abbrechen</button>'
+    +(cur?'<button type="button" class="lp-btn gray" data-lb="fu-save" data-mode="fix" data-iso="'+iso+'" data-rolle="'+lpEsc(rolle)+'">Korrigieren</button><button type="button" class="lp-btn fill" data-lb="fu-save" data-mode="neu" data-iso="'+iso+'" data-rolle="'+lpEsc(rolle)+'">Wechsel speichern</button>'
+         :'<button type="button" class="lp-btn fill" data-lb="fu-save" data-mode="neu" data-iso="'+iso+'" data-rolle="'+lpEsc(rolle||'')+'">Speichern</button>')
+    +'</span></div>');
+  var fo=document.getElementById(rolle?'lbf-name':'lbf-rolle'); if(fo)fo.focus();
+}
+function lbFuSave(iso,rolleFix,mode){
+  var err=document.getElementById('lbf-err'), fail=function(t){ err.textContent=t; err.style.display='block'; };
+  var rolle=(rolleFix||document.getElementById('lbf-rolle').value||'').trim(), name=document.getElementById('lbf-name').value.trim(), seit=document.getElementById('lbf-seit').value||today();
+  if(!rolle)return fail('Bitte eine Rolle eintragen.');
+  if(!name)return fail('Bitte einen Namen eintragen.');
+  var l=lbLand(iso,true); l.fuehrung=l.fuehrung||[];
+  var cur=l.fuehrung.find(function(f){return f.rolle===rolle&&!f.bis;});
+  if(mode==='fix'&&cur){ cur.name=name; cur.seit=seit; }
+  else {
+    if(cur){ if(cur.name===name){ cur.seit=seit; } else { if(seit===cur.seit)seit=today(); cur.bis=seit; l.fuehrung.push({rolle:rolle,name:name,seit:seit,bis:''}); } }
+    else l.fuehrung.push({rolle:rolle,name:name,seit:seit,bis:''});
+  }
+  lbTouch(l); saveD(); var m=document.getElementById('lb-fu'); if(m)m.remove(); lbRender();
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return;
+  var a=el.getAttribute('data-lb'), iso=el.getAttribute('data-iso'), rolle=el.getAttribute('data-rolle'), rm=function(){ var n=document.getElementById('lb-fu'); if(n)n.remove(); };
+  switch(a){
+    case 'fu-new': ev.preventDefault(); return lbFuEdit(iso,null);
+    case 'fu-close': ev.preventDefault(); return rm();
+    case 'fu-save': ev.preventDefault(); return lbFuSave(iso,rolle,el.getAttribute('data-mode'));
+    case 'fu-end':
+      ev.preventDefault(); var l=lbLand(iso), cur=l&&(l.fuehrung||[]).find(function(f){return f.rolle===rolle&&!f.bis;}); if(!cur)return;
+      if(!confirm(cur.name+' ('+rolle+') als abgetreten markieren? Bleibt in der Historie.'))return;
+      cur.bis=today(); lbTouch(l); saveD(); rm(); return lbRender();
+  }
+});
+
 // ── Globale Suche (Strg+K): Lagebericht ist nicht privat, wird durchsucht ──
 var _pdSearchIndex_lb=pdSearchIndex;
 pdSearchIndex=function(){
@@ -16847,11 +16963,7 @@ document.addEventListener('click',function(ev){
     case 'register-clear': ev.preventDefault(); LB_UI.tag=null; return lbRender();
     case 'tag-merge': ev.preventDefault(); ev.stopPropagation(); return lbTagMerge(tag);
     case 'bez-open':
-      ev.preventDefault(); var b=lbBeziehungen().find(function(x){return x.id===id;}); if(!b)return;
-      if(confirm(lbName(b.von)+' – '+lbName(b.nach)+' · '+(LB_BEZ.find(function(t){return t[0]===b.typ;})||[,b.typ])[1]+' seit '+lpFmt(b.seit)+(b.bis?' bis '+lpFmt(b.bis):'')+'\n\nBeziehung löschen?')){
-        D.lbBeziehungen=lbBeziehungen().filter(function(x){return x.id!==id;}); markDeleted(id); saveD(); lbRender();
-      }
-      return;
+      ev.preventDefault(); return lbBezEdit({id:id});
     case 'export': ev.preventDefault(); return lbExportRun(el.getAttribute('data-v'));
     case 'extract': ev.preventDefault(); return lbExtractRun();
   }
