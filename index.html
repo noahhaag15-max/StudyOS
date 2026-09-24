@@ -16535,9 +16535,9 @@ function lbFormHTML(pre){
   var chips=(pre.laender||[]).map(function(iso){ return '<span class="wp-pill" data-lb="land-chip" data-iso="'+iso+'">'+lpEsc(lbName(iso))+' <b style="font-weight:400">✕</b></span>'; }).join('');
   return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:8px">'+(LB_UI.editId?'MELDUNG BEARBEITEN':'NEUE MELDUNG')+'</div>'
     +(true?'<div class="lp-inner" style="margin-bottom:10px"><div class="lp-cap" style="margin-bottom:4px">TEXT EINFÜGEN (OPTIONAL)</div>'
-      +'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Artikeltext einfügen — Land, Datum, Kategorie, Titel, Text, Sicherheit und Tags werden vorgeschlagen, du prüfst und ergänzt (Quelle bleibt immer manuell).</div>'
-      +lbKiKeyHTML()+'<textarea class="lp-in" id="lb-paste" rows="3" style="width:100%" placeholder="Text hier einfügen …"></textarea>'
-      +'<div class="lp-row" style="justify-content:space-between;align-items:center;margin-top:6px"><span class="lp-mu" id="lb-extract-status" style="font-size:11px"></span><button type="button" class="lp-btn gray" data-lb="extract">Vorschlag holen</button></div></div>':'')
+      +'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Artikeltext einfügen (am besten mit Überschrift) — Länder, Datum, Kategorie, Titel, Systeme, Ereignis und Sicherheit werden vorgeschlagen, du prüfst und ergänzt. Quelle bleibt immer manuell.</div>'
+      +'<textarea class="lp-in" id="lb-paste" rows="3" style="width:100%" placeholder="Text hier einfügen …"></textarea>'
+      +'<div class="lp-row" style="justify-content:space-between;align-items:center;margin-top:6px"><span class="lp-mu" id="lb-extract-status" style="font-size:11px"></span><button type="button" class="lp-btn gray" data-lb="extract">Vorschlag holen</button></div>'+lbKiExtrasHTML()+'</div>':'')
     +'<div class="lp-fld"><label>Länder</label><div style="flex:1;min-width:0"><div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px" id="lb-land-chips">'+chips+'</div><input class="lp-in" id="lb-land-q" list="lb-land-dl" placeholder="Land tippen und Enter" style="width:100%"/><datalist id="lb-land-dl">'+Object.keys(LB_NAMEN||{}).map(function(iso){return '<option value="'+lpEsc(LB_NAMEN[iso])+'">';}).join('')+'</datalist></div></div>'
     +'<div class="lp-fld"><label>Datum</label><input class="lp-in lp-mono" type="date" id="lb-datum" value="'+(pre.datum||today())+'" style="max-width:150px"/></div>'
     +'<div class="lp-fld"><label>Kategorie</label><select class="lp-in" id="lb-kat">'+LB_KAT.map(function(k){return '<option value="'+k[0]+'"'+(pre.kategorie===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></div>'
@@ -17536,6 +17536,101 @@ document.addEventListener('input',function(ev){
   lbPaintMap();
 });
 
+// ═══ SCHNELLERFASSUNG OHNE SCHLÜSSEL ═══
+// (1) Lokale Erkennung: Länder, Datum, Kategorie, Ereignis, Systeme, Sicherheit, Titel — reine Stichwort-/Muster-Regeln, keine KI.
+// (2) Claude-Chat: Anweisung kopieren → auf claude.ai abschicken → Antwort (JSON) hier einfügen.
+function lbKiExtrasHTML(){
+  return '<details style="margin-top:8px"><summary class="lp-mu" style="cursor:pointer;font-size:11px">Mehr Möglichkeiten: mit Claude-Chat verfeinern, KI-Schlüssel</summary>'
+    +'<div style="margin-top:6px;font-size:12px"><div class="lp-mu" style="font-size:11px;margin-bottom:6px">Ohne Schlüssel, über deinen normalen Claude-Chat: 1. Anweisung kopieren (öffnet claude.ai) → dort einfügen und senden. 2. Claudes Antwort kopieren und hier einfügen.</div>'
+    +'<button type="button" class="lp-btn gray" data-lb="ki-chat-copy"><i class="ti ti-copy"></i> 1. Anweisung kopieren</button>'
+    +'<textarea class="lp-in" id="lb-ki-antwort" rows="2" style="width:100%;margin-top:6px" placeholder="2. Antwort von Claude hier einfügen …"></textarea>'
+    +'<div class="lp-row" style="justify-content:flex-end;margin-top:4px"><button type="button" class="lp-btn gray" data-lb="ki-chat-apply">Antwort übernehmen</button></div>'
+    +lbKiKeyHTML()+'</div></details>';
+}
+var LB_ADJ={'französisch':'FRA','franzosen':'FRA','finnisch':'FIN','deutsch':'DEU','bundeswehr':'DEU','russisch':'RUS','kreml':'RUS','moskau':'RUS','ukrainisch':'UKR','kiew':'UKR','kyjiw':'UKR','amerikanisch':'USA','us-':'USA','pentagon':'USA','washington':'USA','chinesisch':'CHN','peking':'CHN','britisch':'GBR','london':'GBR','israelisch':'ISR','jerusalem':'ISR','iranisch':'IRN','teheran':'IRN','japanisch':'JPN','tokio':'JPN','nordkoreanisch':'PRK','pjöngjang':'PRK','südkoreanisch':'KOR','seoul':'KOR','schweizer':'CHE','schweizerisch':'CHE','österreichisch':'AUT','italienisch':'ITA','spanisch':'ESP','polnisch':'POL','schwedisch':'SWE','norwegisch':'NOR','dänisch':'DNK','niederländisch':'NLD','belgisch':'BEL','türkisch':'TUR','indisch':'IND','pakistanisch':'PAK','australisch':'AUS','kanadisch':'CAN','taiwanesisch':'TWN','taipeh':'TWN','saudisch':'SAU','ägyptisch':'EGY','griechisch':'GRC','tschechisch':'CZE','ungarisch':'HUN','rumänisch':'ROU','bulgarisch':'BGR','serbisch':'SRB','kroatisch':'HRV','estnisch':'EST','lettisch':'LVA','litauisch':'LTU','portugiesisch':'PRT','brasilianisch':'BRA','argentinisch':'ARG','mexikanisch':'MEX','syrisch':'SYR','irakisch':'IRQ','libanesisch':'LBN','jemenitisch':'YEM','emiratisch':'ARE','katarisch':'QAT','belarussisch':'BLR','weissrussisch':'BLR','georgisch':'GEO','armenisch':'ARM','aserbaidschanisch':'AZE','kasachisch':'KAZ','vietnamesisch':'VNM','philippinisch':'PHL','indonesisch':'IDN','thailändisch':'THA','malaysisch':'MYS','neuseeländisch':'NZL','südafrikanisch':'ZAF','nigerianisch':'NGA','äthiopisch':'ETH','algerisch':'DZA','marokkanisch':'MAR','libysch':'LBY','sudanesisch':'SDN','slowakisch':'SVK','slowenisch':'SVN','irisch':'IRL','isländisch':'ISL','luxemburgisch':'LUX','montenegrinisch':'MNE','albanisch':'ALB','moldauisch':'MDA','venezolanisch':'VEN','kolumbianisch':'COL','chilenisch':'CHL','afghanisch':'AFG','myanmarisch':'MMR',
+  'united states':'USA','u.s.':'USA','russia':'RUS','ukraine':'UKR','china':'CHN','france':'FRA','germany':'DEU','united kingdom':'GBR','u.k.':'GBR','israel':'ISR','iran':'IRN','taiwan':'TWN','japan':'JPN','india':'IND','poland':'POL','finland':'FIN','sweden':'SWE','switzerland':'CHE','north korea':'PRK','south korea':'KOR','turkey':'TUR','türkiye':'TUR'};
+var LB_KAT_WORT={
+  entwicklung:['erstflug','jungfernflug','rollout','roll-out','prototyp','testflug','erprob','vorgestellt','enthüllt','entwickl','technologiedemonstrator','first flight','unveil'],
+  beschaffung:['beschaff','bestell','kauft','gekauft','erwirbt','erwerb','kaufvertrag','auftrag über','zuschlag','procure','auslieferung','ausgeliefert','geliefert','übergabe'],
+  export:['export','ausfuhr','verkauf an','verkauft an','liefert an','lieferung an','exportgenehmigung'],
+  einsatz:['angriff','luftangriff','angegriffen','greift','griffen','beschuss','beschoss','bombard','offensive','gefecht','abgeschossen','abfang','einsatz','operation','strike','attack'],
+  uebung:['übung','manöver','exercise'],
+  stationierung:['stationier','verleg','entsend','entsandt','disloz','rotation','deploy'],
+  politik:['präsident','premierminister','regierung','minister','parlament','wahl','gipfel','erklärte','kündigte an','sprecher'],
+  abkommen:['abkommen','vertrag','vereinbar','unterzeichn','beitritt','beitreten','partnerschaft','kooperation','initiative','teilnehmen','zusammenarbeit','absichtserklärung'],
+  krise:['krise','spannung','eskal','ultimatum','drohung','droht','provokation','mobilisier'],
+  industrie:['hersteller','konzern','rüstungskonzern','produktion','werk','fabrik','industrie','fertigung','umsatz'],
+  cyber:['cyber','hacker','spionage','spion','nachrichtendienst','geheimdienst','desinformation'],
+  unfall:['absturz','abgestürzt','unfall','verunglückt','havarie','notlandung','crash']
+};
+var LB_EREIG_WORT=[['erstflug',['erstflug','jungfernflug','first flight','erstmals geflogen']],['rollout',['rollout','roll-out','enthüllt','vorgestellt','präsentiert']],['serie',['serienproduktion','serienfertigung','serienreife']],['indienst',['in dienst gestellt','indienststellung','in dienst genommen']],['auslieferung',['erste auslieferung','erstauslieferung','erstes exemplar ausgeliefert','ausgeliefert','auslieferung']],['ausmusterung',['ausgemustert','ausmusterung','ausser dienst gestellt']],['verlust',['abgestürzt','absturz','abgeschossen']],['ersteinsatz',['erstmals eingesetzt','erster einsatz','erstmals im einsatz']],['test',['testflug','erprobung','getestet','testschuss','testlauf','testphase']]];
+var LB_SYS_NAMEN=['Leopard','Abrams','Challenger','Merkava','Bradley','Marder','Puma','Boxer','Patriot','IRIS-T','Iris-T','NASAMS','HIMARS','Taurus','Storm Shadow','SCALP','Tomahawk','Iron Dome','David\'s Sling','Arrow','Eurofighter','Typhoon','Rafale','Gripen','Tornado','Lightning','Raptor','Global Hawk','Reaper','Bayraktar','Shahed','Lancet','Kinzhal','Kalibr','Iskander','Zircon','Sarmat','Avangard','Oreshnik','Caesar','PzH 2000','Gepard','Skyranger','Meteor','AMRAAM','Aster','SAMP/T','Harpoon','Aegis','Hornet','Super Hornet','Growler','Poseidon','Hercules','Atlas','Chinook','Black Hawk','Apache','Tiger','Cougar','Super Puma','Pilatus','Piranha','Mowag','CV90','K2','K9','Kaan','Tempest','GCAP','FCAS','Sentinel','Trident'];
+function lbLokalLaender(txt){
+  var low=txt.toLowerCase(), found=[];
+  var add=function(iso,pos){ if(iso&&LB_NAMEN[iso]&&!found.some(function(f){return f.iso===iso;}))found.push({iso:iso,pos:pos}); else { var f=found.find(function(f){return f.iso===iso;}); if(f&&pos<f.pos)f.pos=pos; } };
+  var re=/\b[A-Z]{3}\b/g, m; while((m=re.exec(txt))){ if(LB_NAMEN[m[0]])add(m[0],m.index); }
+  Object.keys(LB_NAMEN).forEach(function(iso){ var n=LB_NAMEN[iso].toLowerCase(), i=low.indexOf(n); while(i>=0){ var L=/[a-zäöüß]/, before=i?low.charAt(i-1):' ', a1=low.charAt(i+n.length)||' ', a2=low.charAt(i+n.length+1)||' '; if(!L.test(before)&&(!L.test(a1)||((a1==='s'||a1==='n')&&!L.test(a2)))){ add(iso,i); break; } i=low.indexOf(n,i+1); } });
+  Object.keys(LB_ADJ).forEach(function(w){ var i=low.indexOf(w); while(i>=0){ var before=i?low.charAt(i-1):' '; if(!/[a-zäöüß]/.test(before)){ add(LB_ADJ[w],i); break; } i=low.indexOf(w,i+1); } });
+  return found.sort(function(a,b){return a.pos-b.pos;}).map(function(f){return f.iso;}).slice(0,6);
+}
+function lbLokalDatum(txt){
+  var MON={januar:1,jan:1,februar:2,feb:2,märz:3,maerz:3,mär:3,april:4,apr:4,mai:5,juni:6,jun:6,juli:7,jul:7,august:8,aug:8,september:9,sept:9,sep:9,oktober:10,okt:10,november:11,nov:11,dezember:12,dez:12};
+  var pad=function(n){return (n<10?'0':'')+n;}, best=null, take=function(pos,y,mo,d){ if(y<1900||y>2100||mo<1||mo>12||d<1||d>31)return; if(!best||pos<best.pos)best={pos:pos,v:y+'-'+pad(mo)+'-'+pad(d)}; }, m;
+  var r1=/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/g; while((m=r1.exec(txt)))take(m.index,+m[3],+m[2],+m[1]);
+  var r2=/\b(\d{4})-(\d{2})-(\d{2})\b/g; while((m=r2.exec(txt)))take(m.index,+m[1],+m[2],+m[3]);
+  var r3=/\b(\d{1,2})\.?\s+(januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|jan|feb|mär|apr|jun|jul|aug|sept?|okt|nov|dez)\.?\s+(\d{4})\b/gi; while((m=r3.exec(txt)))take(m.index,+m[3],MON[m[2].toLowerCase()],+m[1]);
+  return best?best.v:today();
+}
+function lbLokalSysteme(txt){
+  var out=[], seen={}, add=function(v){ v=v.trim().replace(/[.,;:]$/,''); var k=v.toLowerCase(); if(v.length>1&&!seen[k]){ seen[k]=1; out.push(v); } };
+  lbSystemVorschlaege().forEach(function(v){ if(v.length>=3&&txt.toLowerCase().indexOf(v.toLowerCase())>=0)add(v); });
+  var re=/\b([A-Z][A-Za-z]{0,4}-\d{1,4}[A-Za-z]{0,3}\d?)(\s(?:Raider|Strike Eagle|Eagle|Fighting Falcon|Falcon|Viper|Lightning|Raptor|Super Hornet|Hornet|Tiger|Felon|Flanker|Fulcrum|Frogfoot|Hind|Havoc|Apache|Chinook|Stratofortress|Spirit|Globemaster|Hercules|Osprey|Mighty Dragon|II|III|IV))?\b/g, m;
+  while((m=re.exec(txt))){ if(/^(COVID|UPDATE|ISO)-/i.test(m[1]))continue; if(!out.some(function(o){return o.toLowerCase().indexOf(m[1].toLowerCase())>=0;}))add(m[1]+(m[2]||'')); }
+  LB_SYS_NAMEN.forEach(function(n){ var r=new RegExp('\\b'+n.replace(/[.*+?^${}()|[\]\\\/]/g,'\\$&')+'(\\s?[0-9][A-Z0-9]{0,4}|\\s(?:Mk|MK)\\s?\\d+)?\\b'); var mm=txt.match(r); if(mm&&!out.some(function(o){return o.toLowerCase().indexOf(mm[0].toLowerCase())>=0;}))add(mm[0]); });
+  return out.slice(0,10);
+}
+function lbLokalErkennen(txt){
+  var low=txt.toLowerCase(), zeilen=txt.split(/\r?\n/).map(function(z){return z.replace(/^[\s▪•\-–*#]+/,'').trim();}).filter(Boolean);
+  var titel='', rest=txt;
+  if(zeilen.length>1&&zeilen[0].length<=110&&!/[.!?]$/.test(zeilen[0])){ titel=zeilen[0]; rest=zeilen.slice(1).join('\n'); }
+  var laender=lbLokalLaender(txt);
+  if(!titel){ var satz=(txt.match(/^[\s\S]*?[.!?](\s|$)/)||[txt])[0].replace(/\s+/g,' ').trim(); titel=(laender.length?laender.slice(0,3).join('/')+': ':'')+(satz.length>80?satz.slice(0,78).replace(/\s\S*$/,'')+' …':satz.replace(/[.!?]$/,'')); }
+  var score={}; Object.keys(LB_KAT_WORT).forEach(function(k){ LB_KAT_WORT[k].forEach(function(w){ var i=low.indexOf(w); while(i>=0){ score[k]=(score[k]||0)+(i<200?2:1); i=low.indexOf(w,i+w.length); } }); });
+  var kat=Object.keys(score).sort(function(a,b){return score[b]-score[a];})[0]||'sonstiges';
+  var sysVorab=lbLokalSysteme(txt), ereig=''; if(sysVorab.length)LB_EREIG_WORT.some(function(e){ if(e[1].some(function(w){return low.indexOf(w)>=0;})){ ereig=e[0]; return true; } return false; });
+  if(ereig&&['erstflug','rollout','test','serie'].indexOf(ereig)>=0&&(score.entwicklung||0)>0&&kat!=='entwicklung'&&(score[kat]||0)<=(score.entwicklung||0)+2)kat='entwicklung';
+  var sich=/\b(gerücht|unbestätigt|nicht bestätigt|nicht verifiziert)/.test(low)?'unbestaetigt':/\b(soll|sollen|dürfte|dürften|mutmasslich|mutmaßlich|berichten zufolge|angeblich|offenbar|laut medienberichten)\b/.test(low)?'wahrscheinlich':'bestaetigt';
+  var tags=lbTagCounts().map(function(t){return t.label;}).filter(function(t){ return t.length>=3&&low.indexOf(t.toLowerCase())>=0; }).slice(0,8);
+  var sys=sysVorab; tags=tags.filter(function(t){ return !sys.some(function(s){return s.toLowerCase()===t.toLowerCase();}); });
+  var pre={laender:laender,datum:lbLokalDatum(txt),kategorie:kat,titel:titel.slice(0,200),text:rest.replace(/\s+\n/g,'\n').trim().slice(0,4000),sicherheit:sich,systeme:sys,tags:tags};
+  if(ereig)pre.ereignis=ereig;
+  return pre;
+}
+function lbLokalToast(pre){
+  var fehlt=[]; if(!pre.laender.length)fehlt.push('Länder');
+  showToast('Automatisch erkannt (ohne KI) — bitte prüfen'+(fehlt.length?', '+fehlt.join(', ')+' ergänzen':'')+' und Quelle eintragen.','ok');
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return;
+  var a=el.getAttribute('data-lb');
+  if(a==='ki-chat-copy'){
+    ev.preventDefault(); var ta=document.getElementById('lb-paste'), txt=ta&&ta.value.trim(); if(!txt){ showToast('Bitte zuerst oben den Text einfügen.'); return; }
+    var prompt=lbKiPrompt()+'\n\n--- TEXT ---\n'+txt.slice(0,12000);
+    var win=window.open('https://claude.ai/new','_blank','noopener');
+    var ok=function(){ showToast('Anweisung kopiert — in Claude einfügen und senden, dann die Antwort hier einfügen.','ok'); };
+    if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(prompt).then(ok,function(){ lbCopyFallback(prompt); ok(); });
+    else { lbCopyFallback(prompt); ok(); }
+    return;
+  }
+  if(a==='ki-chat-apply'){
+    ev.preventDefault(); var t=document.getElementById('lb-ki-antwort'), j=lbKiParse(t&&t.value);
+    if(!j){ showToast('Darin wurde kein JSON gefunden — die ganze Antwort von Claude kopieren.'); return; }
+    var pre=lbSanitizePre(j); if(!pre){ showToast('Antwort nicht auswertbar.'); return; }
+    LB_UI.formPre=pre; lbRender(); showToast('Vorschlag von Claude übernommen — bitte prüfen und Quelle ergänzen.','ok'); return;
+  }
+});
+function lbCopyFallback(t){ var x=document.createElement('textarea'); x.value=t; x.style.position='fixed'; x.style.opacity='0'; document.body.appendChild(x); x.select(); try{ document.execCommand('copy'); }catch(e){} x.remove(); }
+
 // ── Globale Suche (Strg+K): Lagebericht ist nicht privat, wird durchsucht ──
 var _pdSearchIndex_lb=pdSearchIndex;
 pdSearchIndex=function(){
@@ -17591,8 +17686,8 @@ function lbExtractFehler(e){
 // Fallback: Cloudflare-Worker /extract, falls einer eingetragen ist und kein Schlüssel vorhanden.
 function lbKiKey(){ try{ return localStorage.getItem('sos-anth')||''; }catch(e){ return ''; } }
 function lbKiKeyHTML(){
-  if(lbKiKey())return '<div class="lp-mu" style="font-size:11px;margin-bottom:6px"><i class="ti ti-key"></i> KI-Schlüssel auf diesem Gerät gespeichert · <span data-lb="ki-key-del" style="cursor:pointer;text-decoration:underline">entfernen</span></div>';
-  return '<div style="margin-bottom:8px"><div class="lp-mu" style="font-size:11px;margin-bottom:4px">Einmalig pro Gerät: Anthropic-API-Schlüssel eintragen (console.anthropic.com › API Keys). Wird nur hier auf dem Gerät gespeichert, nicht synchronisiert.</div>'
+  if(lbKiKey())return '<div class="lp-mu" style="font-size:11px;margin-top:6px"><i class="ti ti-key"></i> KI-Schlüssel auf diesem Gerät gespeichert — «Vorschlag holen» nutzt die API · <span data-lb="ki-key-del" style="cursor:pointer;text-decoration:underline">entfernen</span></div>';
+  return '<div style="margin-top:6px"><div class="lp-mu" style="font-size:11px;margin-bottom:4px">Anthropic-API-Schlüssel (console.anthropic.com › API Keys). Wird nur auf diesem Gerät gespeichert, nicht synchronisiert.</div>'
     +'<div class="lp-row" style="gap:6px"><input class="lp-in lp-mono" type="password" id="lb-ki-key" placeholder="sk-ant-…" autocomplete="off" style="flex:1;min-width:0"><button type="button" class="lp-btn gray" data-lb="ki-key-save">Speichern</button></div></div>';
 }
 function lbKiPrompt(){
@@ -17619,7 +17714,7 @@ function lbKiParse(txt){
 }
 function lbKiFehler(status,body){
   var t=JSON.stringify(body||{}).toLowerCase();
-  if(status===401||status===403)return 'Der KI-Schlüssel wird abgelehnt — oben «entfernen» und neu eintragen.';
+  if(status===401||status===403)return 'Der KI-Schlüssel wird abgelehnt — unter «Mehr Möglichkeiten» entfernen und neu eintragen.';
   if(status===400&&t.indexOf('credit')>=0)return 'Kein Guthaben mehr beim Anthropic-Konto (console.anthropic.com › Billing).';
   if(status===429||status===529||status>=500)return 'Die KI ist gerade überlastet — in einer Minute nochmals versuchen.';
   return 'Kein Vorschlag möglich (Fehler '+status+') — Felder manuell ausfüllen.';
@@ -17644,7 +17739,7 @@ function lbExtractRun(){
       .catch(function(){ done('Keine Verbindung zur KI — Internet prüfen oder Felder manuell ausfüllen.'); });
     return;
   }
-  if(!w){ done('Zuerst oben den KI-Schlüssel eintragen.'); var k=document.getElementById('lb-ki-key'); if(k)k.focus(); return; }
+  if(!w){ if(status)status.textContent=''; var loc=lbLokalErkennen(txt); LB_UI.formPre=loc; lbRender(); lbLokalToast(loc); return; }
   fetch(w+'/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:txt})})
     .then(function(r){ return r.json().then(function(j){ return {ok:r.ok,j:j}; }); })
     .then(function(res){
