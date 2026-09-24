@@ -3088,6 +3088,11 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
   <div id="werdegang-detail"></div>
 </div>
 
+<!-- ══ LAGEBERICHT ══ -->
+<div id="sec-lagebericht" style="display:none">
+  <div id="lb-root" class="lp"></div>
+</div>
+
 <!-- ══ AUFGABEN ══ -->
 <div id="sec-aufgaben" style="display:none">
   <div id="wp-backlog" class="lp" style="margin-bottom:16px"></div>
@@ -3373,7 +3378,7 @@ var D = {
 // nichts, was nur lokal existiert, geht verloren. Einzige Ausnahme: bewusst lokal gelöschte
 // Einträge können durch einen älteren Snapshot wieder auftauchen — das ist der bewusste
 // Kompromiss (lieber ein Karteileichen-Eintrag zurück als echte Daten verloren).
-var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
+var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
 // wplan & track sind hier bewusst NICHT drin — die brauchen einen ECHTEN Tiefen-Merge (siehe
 // mergeWplan/mergeTrack unten), weil ihre Werte pro Woche/Tag komplexe, häufig aktiv bearbeitete
 // Strukturen sind. Ein einfacher Object.assign auf oberster Ebene hätte (und hat!) eine ganze
@@ -3746,7 +3751,7 @@ function ringGaugeSVG(pct,color,size,stroke){
 }
 function getBCls(t,s){ if(s==='Heavy')return'bq'; if(s==='Medium')return'ba'; if(s==='Light')return'bl'; var x=(t||'').toLowerCase(); if(/quiz|prüfung|test|abgabe/.test(x))return'bq'; if(/übung|exercise/.test(x))return'bu'; if(/auftrag|pitch/.test(x))return'ba'; return'bl'; }
 function getBLbl(t,s){ if(s)return s; var x=(t||'').toLowerCase(); if(/quiz/.test(x))return'Quiz'; if(/prüfung/.test(x))return'Prüfung'; if(/test/.test(x))return'Test'; if(/übung/.test(x))return'Übung'; return'Aufgabe'; }
-function goSec(s){ s=sosPreGo(s); document.querySelectorAll('[id^="sec-"]').forEach(function(el){el.style.display='none';}); var sec=document.getElementById('sec-'+s); if(sec)sec.style.display='block'; sosAfterGo(s); try{startSectionLightcycles(s);}catch(e){} if(s==='tracking'){renderTracking();renderDailyList();renderWeekTable();renderCharts();renderJournalList();renderMeaningfulLife();renderDailyTracker();} if(s==='aufgaben')renderAufgaben('alle'); if(s==='lernplan')lpRender(); if(s==='countdown')renderCountdowns(); if(s==='werdegang')renderWerdegang(); if(s==='planung'){renderDeadlines();renderWochenplanPlanung();renderCalToday();fillWeekPicker();renderLernplanPrio();} if(s==='leben'){renderMonatsziele();renderJahresziele();renderHabFull();renderHabOverview();fillMonthPicker();} if(s==='liv'){renderLivCounter();renderLivSection();} if(s==='bucket')renderBucket(); if(s==='ppl')renderPPL(); if(s==='fussball'){renderFussball();renderNfl();loadF1Calendar();renderFlugshows();renderMiscEvents();} if(s==='arbeit')renderArbeit(); if(s==='wplan'){if(!CURRENT_WPLAN_WEEK)CURRENT_WPLAN_WEEK=getWeekKey(today());renderWplan();} if(s==='tools'){renderBdays();var sk=document.getElementById('set-kcal');if(sk)sk.value=D.kcalGoal||2200;applyHideSettings();var lastBak=localStorage.getItem('sos-last-backup');var ist=document.getElementById('import-status');if(ist)ist.innerHTML=lastBak?'<span style="color:var(--tx3)">Letztes Backup: <strong style="color:var(--tx2)">'+lastBak+'</strong></span>':'<span style="color:var(--amber)">⚠ Noch kein Backup erstellt — exportiere jetzt!</span>';} }
+function goSec(s){ s=sosPreGo(s); document.querySelectorAll('[id^="sec-"]').forEach(function(el){el.style.display='none';}); var sec=document.getElementById('sec-'+s); if(sec)sec.style.display='block'; sosAfterGo(s); try{startSectionLightcycles(s);}catch(e){} if(s==='tracking'){renderTracking();renderDailyList();renderWeekTable();renderCharts();renderJournalList();renderMeaningfulLife();renderDailyTracker();} if(s==='aufgaben')renderAufgaben('alle'); if(s==='lernplan')lpRender(); if(s==='countdown')renderCountdowns(); if(s==='werdegang')renderWerdegang(); if(s==='lagebericht')lbRender(); if(s==='planung'){renderDeadlines();renderWochenplanPlanung();renderCalToday();fillWeekPicker();renderLernplanPrio();} if(s==='leben'){renderMonatsziele();renderJahresziele();renderHabFull();renderHabOverview();fillMonthPicker();} if(s==='liv'){renderLivCounter();renderLivSection();} if(s==='bucket')renderBucket(); if(s==='ppl')renderPPL(); if(s==='fussball'){renderFussball();renderNfl();loadF1Calendar();renderFlugshows();renderMiscEvents();} if(s==='arbeit')renderArbeit(); if(s==='wplan'){if(!CURRENT_WPLAN_WEEK)CURRENT_WPLAN_WEEK=getWeekKey(today());renderWplan();} if(s==='tools'){renderBdays();var sk=document.getElementById('set-kcal');if(sk)sk.value=D.kcalGoal||2200;applyHideSettings();var lastBak=localStorage.getItem('sos-last-backup');var ist=document.getElementById('import-status');if(ist)ist.innerHTML=lastBak?'<span style="color:var(--tx3)">Letztes Backup: <strong style="color:var(--tx2)">'+lastBak+'</strong></span>':'<span style="color:var(--amber)">⚠ Noch kein Backup erstellt — exportiere jetzt!</span>';} }
 
 // ═══════════════════════════════════════════════════════════
 // FACH-DETAIL
@@ -3787,10 +3792,11 @@ var SOS_AREAS=[
   {id:'freizeit',label:'Freizeit',icon:'ball-football',tabs:[{id:'fussball',label:'Entertainment'},{id:'bucket',label:'Bucket List'}]},
   {id:'lounge',label:'Lounge',icon:'armchair',tabs:[{id:'lounge',label:'Lounge'}]},
   {id:'werdegang',label:'Werdegang',icon:'route',tabs:[{id:'werdegang',label:'Werdegang'}]},
+  {id:'lagebericht',label:'Lagebericht',icon:'world',tabs:[{id:'lagebericht',label:'Lagebericht'}]},
   {id:'einstellungen',label:'Einstellungen',icon:'settings',fixed:true,foot:true,tabs:[{id:'set-allgemein',label:'Allgemein'},{id:'set-links',label:'Links'},{id:'set-sync',label:'Cloud-Sync'},{id:'set-hangar',label:'Hangar'}]}
 ];
 var SOS_SEC_AREA={dash:'cockpit',wplan:'wochenplan',planung:'wochenplan',aufgaben:'wochenplan',countdown:'wochenplan',faecher:'lernen',fach:'lernen',noten:'lernen',lernplan:'lernen',ppl:'lernen',
-  tracking:'logbuch',leben:'logbuch',arbeit:'arbeit',liv:'liv',fussball:'freizeit',bucket:'freizeit',lounge:'lounge',werdegang:'werdegang',tools:'einstellungen'};
+  tracking:'logbuch',leben:'logbuch',arbeit:'arbeit',liv:'liv',fussball:'freizeit',bucket:'freizeit',lounge:'lounge',werdegang:'werdegang',lagebericht:'lagebericht',tools:'einstellungen'};
 var SOS_CUR={sec:'dash',tab:'dash'}, SOS_LAST={}, SOS_SET_TAB='allgemein', SOS_SEM=1;
 var SOS_MAIN_IDS=SOS_AREAS.filter(function(a){return !a.foot;}).map(function(a){return a.id;});
 
@@ -8132,7 +8138,7 @@ function trkDayTyp(d){
 }
 function trkLern(d){ var b=0; wpBlocksOn(d).forEach(function(x){ if(x.kategorie==='lernen'&&wpZaehlt(x))b+=(x.daten&&x.daten.minuten)||0; }); var s=0; lpEnsure().sessions.forEach(function(x){ if(x.status==='abgeschlossen'&&lpSessDate(x)===d)s+=x.nettoMin||0; }); return Math.round(Math.max(b,s)); }
 function trkSport(d){ var m=0, n=[]; var tr=D.track&&D.track[d]; ((tr&&tr.sports)||[]).forEach(function(s){ m+=s.min||0; if(s.name)n.push(s.name); }); return {min:Math.round(m),namen:n}; }
-function trkKcal(d){ var k=0, tr=D.track&&D.track[d]; ((tr&&tr.meals)||[]).forEach(function(x){ k+=x.kcal||0; }); return Math.round(k); }
+function trkKcal(d){ try{ taSnackEntry(d); }catch(e){} var k=0, tr=D.track&&D.track[d]; ((tr&&tr.meals)||[]).forEach(function(x){ k+=x.kcal||0; }); return Math.round(k); }
 function trkSleepH(d){ var s=D.track&&D.track[d]&&D.track[d].sleep; return s?(s.h||0)+(s.m||0)/60:null; }
 function trkWeight(d){ var w=D.track&&D.track[d]&&D.track[d].weight; return w&&w.m!=null?w.m:null; }
 function trkPills(key,vals,cur,ds){ return '<div class="trk-pills">'+vals.map(function(v){ return '<button type="button" class="trk-pill'+(String(cur)===String(v[0])?' on':'')+'" data-trk="set" data-k="'+key+'" data-v="'+v[0]+'">'+v[1]+'</button>'; }).join('')+'</div>'; }
@@ -10934,13 +10940,29 @@ document.addEventListener('keydown',function(ev){
 });
 
 // Tagesabschluss: zusätzlich nach Snacks und Getränken zwischendurch fragen (kcal)
-function taSnackEntry(d){ var day=D.track&&D.track[d]; return ((day&&day.meals)||[]).find(function(m){ return m&&m.taSnack; })||null; }
-function taKcalRest(d){ var day=D.track&&D.track[d], k=0; ((day&&day.meals)||[]).forEach(function(m){ if(m&&!m.taSnack)k+=+m.kcal||0; }); return Math.round(k); }
+function taSnackId(d){ return 'ta-snack:'+d; }
+// Räumt einmalig Snack-Duplikate auf, die vor der festen id entstanden sind (z. B. nach Sync zwischen zwei Geräten
+// mit unterschiedlichem Stand) — mehrere Snack-Einträge desselben Tages werden auf einen zusammengeführt.
+function taSnackEntry(d){
+  var day=D.track&&D.track[d]; if(!day||!Array.isArray(day.meals))return null;
+  var id=taSnackId(d), dupes=day.meals.filter(function(m){return m&&(m.id===id||m.taSnack);});
+  if(!dupes.length)return null;
+  if(dupes.length>1){
+    var keep=dupes.find(function(m){return m.id===id;})||dupes[dupes.length-1];
+    keep.id=id; keep.taSnack=true;
+    day.meals=day.meals.filter(function(m){ return m===keep || !(m&&(m.id===id||m.taSnack)); });
+    try{ saveD(); }catch(e){}
+    return keep;
+  }
+  return dupes[0];
+}
+function taKcalRest(d){ try{ taSnackEntry(d); }catch(e){} var day=D.track&&D.track[d], k=0; ((day&&day.meals)||[]).forEach(function(m){ if(m&&!m.taSnack)k+=+m.kcal||0; }); return Math.round(k); }
 function taSnackSave(){
   var inp=document.getElementById('ta-snack'), d=(typeof WP_TA!=='undefined'&&WP_TA)?WP_TA.date:null; if(!inp||!d)return;
-  var v=Math.max(0,Math.min(9999,Math.round(+inp.value)||0)), e=taSnackEntry(d);
-  if(v>0){ if(e){ if(e.kcal===v)return; e.kcal=v; } else { var day=getDayFor(d); day.meals=day.meals||[]; day.meals.push({name:'Snacks & Getränke',kcal:v,typ:'Snack',taSnack:true}); } }
-  else if(e){ var dd=getDayFor(d); dd.meals=dd.meals.filter(function(m){return !m.taSnack;}); }
+  var v=Math.max(0,Math.min(9999,Math.round(+inp.value)||0)), e=taSnackEntry(d), id=taSnackId(d);
+  // feste id, damit ein einzelner Snack-Eintrag pro Tag beim Sync nicht dupliziert (statt Inhalts-Abgleich wie bei Einträgen ohne id/wpId)
+  if(v>0){ if(e){ if(e.kcal===v)return; e.kcal=v; e.id=id; } else { var day=getDayFor(d); day.meals=day.meals||[]; day.meals.push({id:id,name:'Snacks & Getränke',kcal:v,typ:'Snack',taSnack:true}); } }
+  else if(e){ var dd=getDayFor(d); dd.meals=dd.meals.filter(function(m){return m!==e;}); markDeleted(id); }
   else return;
   saveD();
 }
@@ -16335,6 +16357,252 @@ function bindAll(){
 }
 
 // ═══════════════════════════════════════════════════════════
+// LAGEBERICHT — Weltlage: Karte, Länder-Dossier, Zeitstrahl, manuelles Erfassen.
+// Kein XP, keine Meilen, im Lernmodus nicht erreichbar, nicht privat (läuft im Gist-Sync mit).
+// ═══════════════════════════════════════════════════════════
+var LB_KAT=[['beschaffung','Beschaffung'],['einsatz','Einsatz'],['uebung','Übung'],['politik','Politik'],['abkommen','Abkommen'],['krise','Krise'],['industrie','Industrie'],['unfall','Unfall']];
+var LB_SICHER=[['bestaetigt','Bestätigt'],['wahrscheinlich','Wahrscheinlich'],['unbestaetigt','Unbestätigt']];
+var LB_LEVEL=[['ruhig','Ruhig','#1d3b4a'],['beobachten','Beobachten','#2e6b4c'],['erhoeht','Erhöht','#8a6a1f'],['angespannt','Angespannt','#a35a25'],['akut','Akut','#a32f3c']];
+var LB_BEZ=[['buendnis','Bündnis'],['partnerschaft','Partnerschaft'],['lieferung','Lieferung'],['konflikt','Konflikt'],['verhandlung','Verhandlung']];
+var LB_BESCH_STATUS=[['geplant','Geplant'],['bestellt','Bestellt'],['geliefert','Geliefert'],['inDienst','In Dienst'],['ausgemustert','Ausgemustert']];
+var LB_ROLLEN=['Staatsoberhaupt','Regierungschef','Verteidigung'];
+var LB_NAMEN=null, LB_UI={tab:'karte',land:null,zLand:null,form:false,mapColor:'level'};
+SY_LIST_LABEL.lbMeldungen='Lagebericht-Meldungen'; SY_LIST_LABEL.lbLaender='Lagebericht-Länder'; SY_LIST_LABEL.lbBeziehungen='Lagebericht-Beziehungen';
+
+function lbMeldungen(){ if(!Array.isArray(D.lbMeldungen))D.lbMeldungen=[]; return D.lbMeldungen; }
+function lbLaenderListe(){ if(!Array.isArray(D.lbLaender))D.lbLaender=[]; return D.lbLaender; }
+function lbBeziehungen(){ if(!Array.isArray(D.lbBeziehungen))D.lbBeziehungen=[]; return D.lbBeziehungen; }
+function lbLand(iso,create){
+  var l=lbLaenderListe(), f=l.find(function(x){return x.iso===iso;});
+  if(!f&&create){ f={id:'lbl:'+iso,iso:iso,lageLevel:'ruhig',levelSeit:today(),fuehrung:[],beschaffungen:[],notizen:'',watchlist:false,ts:Date.now()}; l.push(f); }
+  return f||null;
+}
+function lbName(iso){ return (LB_NAMEN&&LB_NAMEN[iso])||iso; }
+function lbLevelInfo(k){ return LB_LEVEL.find(function(x){return x[0]===k;})||LB_LEVEL[0]; }
+function lbKatLabel(k){ var x=LB_KAT.find(function(y){return y[0]===k;}); return x?x[1]:k; }
+function lbSicherLabel(k){ var x=LB_SICHER.find(function(y){return y[0]===k;}); return x?x[1]:k; }
+function lbTouch(o){ o.ts=Date.now(); }
+async function lbLoadNamen(){
+  if(LB_NAMEN)return LB_NAMEN;
+  try{ LB_NAMEN=await fetch('karte/laendernamen.json').then(function(r){return r.json();}); }catch(e){ LB_NAMEN={}; }
+  return LB_NAMEN;
+}
+function lbIsoSearch(q){
+  q=(q||'').trim().toLowerCase(); if(!q)return [];
+  var out=[];
+  if(/^[a-z]{3}$/i.test(q)&&LB_NAMEN&&LB_NAMEN[q.toUpperCase()])out.push(q.toUpperCase());
+  Object.keys(LB_NAMEN||{}).forEach(function(iso){ if(out.indexOf(iso)<0&&LB_NAMEN[iso].toLowerCase().indexOf(q)>=0)out.push(iso); });
+  return out.slice(0,8);
+}
+
+// ── Karte ──
+function lbLoadSvg(){
+  var host=document.getElementById('lb-map'); if(!host||host.getAttribute('data-loaded'))return;
+  host.setAttribute('data-loaded','1');
+  fetch('karte/world.svg').then(function(r){ if(!r.ok)throw 0; return r.text(); }).then(function(txt){
+    host.innerHTML=txt;
+    host.querySelectorAll('.c').forEach(function(p){ p.addEventListener('click',function(){ lbOpenLand(p.getAttribute('data-iso')||p.id); }); });
+    lbPaintMap();
+  }).catch(function(){ host.removeAttribute('data-loaded'); host.innerHTML='<div class="lp-mu" style="padding:24px;text-align:center">Karte konnte nicht geladen werden — liegt <code>karte/world.svg</code> neben index.html?</div>'; });
+}
+function lbActivityCount(iso,days){ var lim=lpAdd(today(),-days); return lbMeldungen().filter(function(m){return m.datum>=lim&&(m.laender||[]).indexOf(iso)>=0;}).length; }
+function lbPaintMap(){
+  var host=document.getElementById('lb-map'); if(!host)return;
+  var byKat={}; lbMeldungen().forEach(function(m){ (m.laender||[]).forEach(function(iso){ byKat[iso]=byKat[iso]||{}; byKat[iso][m.kategorie]=(byKat[iso][m.kategorie]||0)+1; }); });
+  host.querySelectorAll('.c').forEach(function(p){
+    var iso=p.getAttribute('data-iso')||p.id;
+    p.classList.remove('lvl-ruhig','lvl-beobachten','lvl-erhoeht','lvl-angespannt','lvl-akut','sel');
+    if(LB_UI.mapColor==='level'){ var land=lbLand(iso); p.classList.add('lvl-'+(land?land.lageLevel:'ruhig')); }
+    if(LB_UI.land===iso)p.classList.add('sel');
+  });
+  var mk=host.querySelector('#lb-marks'); if(!mk){ mk=document.createElementNS('http://www.w3.org/2000/svg','g'); mk.id='lb-marks'; var svg=host.querySelector('svg'); if(svg)svg.appendChild(mk); }
+  if(mk)mk.innerHTML='';
+  if(LB_UI.mapColor==='aktivitaet'&&mk){
+    Object.keys(byKat).forEach(function(iso){
+      var p=host.querySelector('[data-iso="'+iso+'"],#'+iso); if(!p)return;
+      var box; try{ box=p.getBBox(); }catch(e){ return; }
+      var n=Object.keys(byKat[iso]).reduce(function(a,k){return a+byKat[iso][k];},0);
+      var top=Object.keys(byKat[iso]).sort(function(a,b){return byKat[iso][b]-byKat[iso][a];})[0];
+      var col={beschaffung:'#4d7cff',einsatz:'#a32f3c',uebung:'#2e6b4c',politik:'#8a6a1f',abkommen:'#00cfff',krise:'#ff6b6b',industrie:'#a66bff',unfall:'#ffb020'}[top]||'#00e5ff';
+      var c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('cx',box.x+box.width/2); c.setAttribute('cy',box.y+box.height/2); c.setAttribute('r',Math.min(9,3+n*1.3)); c.setAttribute('fill',col); c.setAttribute('opacity','.85'); c.setAttribute('stroke','#0b1620'); c.setAttribute('stroke-width','.6');
+      mk.appendChild(c);
+    });
+  }
+}
+
+// ── Dossier ──
+function lbOpenLand(iso){ if(!iso)return; LB_UI.land=iso; LB_UI.tab='dossier'; lbRender(); }
+function lbDossierHTML(iso){
+  var l=lbLand(iso)||{iso:iso,lageLevel:'ruhig',fuehrung:[],beschaffungen:[]}, lvl=lbLevelInfo(l.lageLevel);
+  var h='<div class="lp-row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px"><div>'
+    +'<button type="button" class="lp-btn gray" data-lb="tab" data-v="karte" style="margin-bottom:8px"><i class="ti ti-arrow-left"></i> Zur Karte</button>'
+    +'<div style="font-size:20px;font-weight:500">'+lpEsc(lbName(iso))+' <span class="lp-mono lp-mu" style="font-size:12px">'+iso+'</span></div></div>'
+    +'<button type="button" class="lp-btn '+(l.watchlist?'fill':'gray')+'" data-lb="watchlist" data-iso="'+iso+'"><i class="ti ti-star"></i> '+(l.watchlist?'Auf Watchlist':'Watchlist')+'</button></div>';
+  h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:6px">LAGE-LEVEL</div><div class="lp-row" style="gap:6px;flex-wrap:wrap">'
+    +LB_LEVEL.map(function(x){ return '<button type="button" class="wp-pill'+(l.lageLevel===x[0]?' on':'')+'" style="'+(l.lageLevel===x[0]?'background:'+x[2]+';border-color:'+x[2]:'')+'" data-lb="level" data-iso="'+iso+'" data-v="'+x[0]+'">'+x[1]+'</button>'; }).join('')
+    +'</div>'+(l.levelSeit?'<div class="lp-mu" style="font-size:11px;margin-top:6px">seit '+lpEsc(lpFmt(l.levelSeit))+'</div>':'')+'</div>';
+  // Führung
+  h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:6px">FÜHRUNG</div>';
+  var akt=(l.fuehrung||[]).filter(function(f){return !f.bis;}), alt=(l.fuehrung||[]).filter(function(f){return f.bis;});
+  LB_ROLLEN.forEach(function(r){
+    var cur=akt.find(function(f){return f.rolle===r;});
+    h+='<div class="lp-row" style="justify-content:space-between;gap:8px;padding:4px 0"><span class="lp-mu" style="min-width:120px">'+r+'</span><span style="flex:1;min-width:0">'+(cur?lpEsc(cur.name)+' <span class="lp-mu lp-mono" style="font-size:10px">seit '+lpEsc(lpFmt(cur.seit))+'</span>':'<span class="lp-mu">offen</span>')+'</span>'
+      +'<button type="button" class="lp-x" data-lb="fuehrung-edit" data-iso="'+iso+'" data-rolle="'+lpEsc(r)+'" aria-label="ändern"><i class="ti ti-pencil"></i></button></div>';
+  });
+  if(alt.length)h+='<details style="margin-top:6px"><summary class="lp-mu" style="cursor:pointer;font-size:11px">'+alt.length+' frühere anzeigen</summary>'+alt.slice().reverse().map(function(f){ return '<div class="lp-mu" style="font-size:11px;padding:2px 0">'+lpEsc(f.rolle)+': '+lpEsc(f.name)+' ('+lpEsc(lpFmt(f.seit))+'–'+lpEsc(lpFmt(f.bis))+')</div>'; }).join('')+'</details>';
+  h+='</div>';
+  // Beschaffungen
+  var besch=(l.beschaffungen||[]).slice().sort(function(a,b){return (b.datum||'')<(a.datum||'')?-1:1;});
+  h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">BESCHAFFUNGEN</span><button type="button" class="lp-btn gray" data-lb="besch-new" data-iso="'+iso+'">+ Eintrag</button></div>'
+    +(besch.length?besch.map(function(b){ return '<div class="lp-row" style="justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--lp-border)"><span style="flex:1;min-width:0"><b style="font-weight:500">'+lpEsc(b.system)+'</b>'+(b.stueckzahl?' × '+lpEsc(b.stueckzahl):'')+(b.notiz?'<div class="lp-mu" style="font-size:11px">'+lpEsc(b.notiz)+'</div>':'')+'</span><span class="tbadge bq" style="align-self:center">'+lpEsc((LB_BESCH_STATUS.find(function(s){return s[0]===b.status;})||[,b.status])[1])+'</span><span class="lp-mono lp-mu" style="font-size:11px;align-self:center">'+lpEsc(lpFmtShort(b.datum))+'</span><button type="button" class="lp-x" data-lb="besch-del" data-iso="'+iso+'" data-id="'+lpEsc(b.id)+'">✕</button></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Keine Beschaffungen erfasst.</div>')+'</div>';
+  // Beziehungen
+  var bez=lbBeziehungen().filter(function(b){return b.von===iso||b.nach===iso;});
+  h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">BEZIEHUNGEN</span><button type="button" class="lp-btn gray" data-lb="bez-new" data-iso="'+iso+'">+ Beziehung</button></div>'
+    +(bez.length?bez.map(function(b){ var other=b.von===iso?b.nach:b.von; return '<div class="lp-row" style="justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid var(--lp-border)"><span style="flex:1;min-width:0">'+lpEsc((LB_BEZ.find(function(t){return t[0]===b.typ;})||[,b.typ])[1])+' · '+lpEsc(lbName(other))+(b.notiz?'<div class="lp-mu" style="font-size:11px">'+lpEsc(b.notiz)+'</div>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px;align-self:center">'+lpEsc(lpFmt(b.seit))+(b.bis?'–'+lpEsc(lpFmt(b.bis)):'')+'</span><button type="button" class="lp-x" data-lb="bez-del" data-id="'+lpEsc(b.id)+'">✕</button></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Keine Beziehungen erfasst.</div>')+'</div>';
+  // Meldungen
+  var meld=lbMeldungen().filter(function(m){return (m.laender||[]).indexOf(iso)>=0;}).sort(function(a,b){return (b.datum||'')<(a.datum||'')?-1:1;});
+  h+='<div class="lp-cd"><div class="lp-row" style="justify-content:space-between;margin-bottom:6px"><span class="lp-cap">MELDUNGEN · '+meld.length+'</span>'+(meld.length>5?'<span class="lp-mu" style="cursor:pointer;font-size:11px" data-lb="zeitstrahl-land" data-iso="'+iso+'">alle im Zeitstrahl</span>':'')+'</div>'
+    +(meld.length?meld.slice(0,5).map(lbMeldungRowHTML).join(''):'<div class="lp-mu" style="font-size:12px">Noch keine Meldungen zu '+lpEsc(lbName(iso))+'.</div>')+'</div>';
+  return h;
+}
+
+// ── Meldung: Zeile + Erfassen ──
+function lbMeldungRowHTML(m){
+  var lvl=(LB_KAT.find(function(k){return k[0]===m.kategorie;})||[,m.kategorie])[1];
+  return '<div class="lp-inner" style="margin-bottom:6px" data-lb="meld-open" data-id="'+lpEsc(m.id)+'" style="cursor:pointer">'
+    +'<div class="lp-row" style="justify-content:space-between;gap:8px"><span class="tbadge bq">'+lpEsc(lvl)+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmtShort(m.datum))+' · '+lpEsc(lbSicherLabel(m.sicherheit))+'</span></div>'
+    +'<div style="font-size:13px;font-weight:500;margin-top:4px">'+lpEsc(m.titel)+'</div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-top:2px">'+(m.laender||[]).map(lbName).join(', ')+(m.tags&&m.tags.length?' · '+m.tags.map(function(t){return '#'+t;}).join(' '):'')+'</div></div>';
+}
+function lbMeldungOpenHTML(m){
+  var h='<div class="lp-cd" style="margin-bottom:12px"><button type="button" class="lp-btn gray" data-lb="meld-close" style="margin-bottom:10px"><i class="ti ti-arrow-left"></i> Zurück</button>'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap;margin-bottom:6px"><span class="tbadge bq">'+lpEsc(lbKatLabel(m.kategorie))+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmt(m.datum))+' · '+lpEsc(lbSicherLabel(m.sicherheit))+'</span></div>'
+    +'<div style="font-size:18px;font-weight:500;margin-bottom:6px">'+lpEsc(m.titel)+'</div>'
+    +'<div class="lp-mu" style="font-size:12px;margin-bottom:10px">'+(m.laender||[]).map(lbName).join(', ')+'</div>'
+    +'<div style="white-space:pre-wrap;font-size:13px;line-height:1.5">'+lpEsc(m.text)+'</div>'
+    +(m.tags&&m.tags.length?'<div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-top:10px">'+m.tags.map(function(t){return '<span class="wp-pill">#'+lpEsc(t)+'</span>';}).join('')+'</div>':'')
+    +(m.einschaetzung?'<div style="border-left:3px solid var(--lp-accent);padding:8px 12px;margin-top:12px;background:color-mix(in srgb,var(--lp-accent) 8%,transparent)"><div class="lp-cap" style="margin-bottom:4px">EINSCHÄTZUNG</div><div style="font-size:13px;white-space:pre-wrap">'+lpEsc(m.einschaetzung)+'</div></div>':'')
+    +'<div class="lp-mu" style="font-size:11px;margin-top:12px">Quelle: '+(m.quelle&&m.quelle.url?'<a href="'+lpEsc(m.quelle.url)+'" target="_blank" rel="noopener">'+lpEsc(m.quelle.name)+'</a>':lpEsc(m.quelle&&m.quelle.name||'—'))+(m.quelle&&m.quelle.datum?' · '+lpEsc(lpFmt(m.quelle.datum)):'')+'</div>'
+    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="lp-btn danger" data-lb="meld-del" data-id="'+lpEsc(m.id)+'">Löschen</button></div></div>';
+  return h;
+}
+function lbFormHTML(pre){
+  pre=pre||{};
+  var chips=(pre.laender||[]).map(function(iso){ return '<span class="wp-pill" data-lb="land-chip" data-iso="'+iso+'">'+lpEsc(lbName(iso))+' <b style="font-weight:400">✕</b></span>'; }).join('');
+  return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:8px">NEUE MELDUNG</div>'
+    +'<div class="lp-fld"><label>Länder</label><div style="flex:1;min-width:0"><div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-bottom:6px" id="lb-land-chips">'+chips+'</div><input class="lp-in" id="lb-land-q" list="lb-land-dl" placeholder="Land tippen und Enter" style="width:100%"/><datalist id="lb-land-dl">'+Object.keys(LB_NAMEN||{}).map(function(iso){return '<option value="'+lpEsc(LB_NAMEN[iso])+'">';}).join('')+'</datalist></div></div>'
+    +'<div class="lp-fld"><label>Datum</label><input class="lp-in lp-mono" type="date" id="lb-datum" value="'+(pre.datum||today())+'" style="max-width:150px"/></div>'
+    +'<div class="lp-fld"><label>Kategorie</label><select class="lp-in" id="lb-kat">'+LB_KAT.map(function(k){return '<option value="'+k[0]+'"'+(pre.kategorie===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></div>'
+    +'<div class="lp-fld"><label>Sicherheit</label><select class="lp-in" id="lb-sicher">'+LB_SICHER.map(function(k){return '<option value="'+k[0]+'"'+(pre.sicherheit===k[0]?' selected':'')+'>'+k[1]+'</option>';}).join('')+'</select></div>'
+    +'<div class="lp-fld"><label>Titel</label><input class="lp-in" id="lb-titel" value="'+lpEsc(pre.titel||'')+'" style="flex:1"/></div>'
+    +'<div class="lp-fld" style="align-items:flex-start"><label>Text</label><textarea class="lp-in" id="lb-text" rows="4" style="flex:1;width:100%">'+lpEsc(pre.text||'')+'</textarea></div>'
+    +'<div class="lp-fld"><label>Tags</label><input class="lp-in" id="lb-tags" placeholder="mit Komma trennen" value="'+lpEsc((pre.tags||[]).join(', '))+'" style="flex:1"/></div>'
+    +'<div class="lp-cap" style="margin:10px 0 4px">QUELLE (PFLICHT)</div>'
+    +'<div class="lp-fld"><label>Name</label><input class="lp-in" id="lb-q-name" value="'+lpEsc(pre.quelle&&pre.quelle.name||'')+'" style="flex:1"/></div>'
+    +'<div class="lp-fld"><label>URL</label><input class="lp-in" id="lb-q-url" placeholder="optional" value="'+lpEsc(pre.quelle&&pre.quelle.url||'')+'" style="flex:1"/></div>'
+    +'<div class="lp-fld" style="align-items:flex-start"><label>Einschätzung</label><textarea class="lp-in" id="lb-einsch" rows="2" placeholder="deine eigene Meinung, getrennt vom Text (optional)" style="flex:1;width:100%">'+lpEsc(pre.einschaetzung||'')+'</textarea></div>'
+    +'<div id="lb-form-err" class="hg-err" style="display:none"></div>'
+    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button type="button" class="lp-btn gray" data-lb="form-close">Abbrechen</button><button type="button" class="lp-btn fill" data-lb="form-save">Speichern</button></div></div>';
+}
+function lbFormLaender(){ return [].map.call(document.querySelectorAll('#lb-land-chips [data-iso]'),function(e){return e.getAttribute('data-iso');}); }
+function lbFormSave(){
+  var laender=lbFormLaender(), titel=(document.getElementById('lb-titel').value||'').trim(), qname=(document.getElementById('lb-q-name').value||'').trim();
+  var err=document.getElementById('lb-form-err'), msg=!laender.length?'Mindestens ein Land wählen.':!titel?'Bitte einen Titel eingeben.':!qname?'Quelle (Name) ist Pflicht.':null;
+  if(msg){ err.textContent=msg; err.style.display='block'; return; }
+  err.style.display='none';
+  var tags=(document.getElementById('lb-tags').value||'').split(',').map(function(t){return t.trim();}).filter(Boolean);
+  var m={id:uid(),datum:document.getElementById('lb-datum').value||today(),laender:laender,kategorie:document.getElementById('lb-kat').value,titel:titel,text:(document.getElementById('lb-text').value||'').trim(),
+    sicherheit:document.getElementById('lb-sicher').value,tags:tags,quelle:{name:qname,url:(document.getElementById('lb-q-url').value||'').trim(),datum:today()},einschaetzung:(document.getElementById('lb-einsch').value||'').trim(),erstellt:today()};
+  lbMeldungen().push(m); laender.forEach(function(iso){ lbLand(iso,true); });
+  saveD(); LB_UI.form=false; lbRender(); showToast('Meldung gespeichert ✓','ok');
+}
+
+// ── Zeitstrahl ──
+function lbZeitstrahlHTML(){
+  var l=lbMeldungen().slice().sort(function(a,b){return (b.datum||'')<(a.datum||'')?-1:1;});
+  if(LB_UI.zLand)l=l.filter(function(m){return (m.laender||[]).indexOf(LB_UI.zLand)>=0;});
+  var h=LB_UI.zLand?'<div class="lp-row" style="justify-content:space-between;margin-bottom:10px"><span class="lp-cap">ZEITSTRAHL · '+lpEsc(lbName(LB_UI.zLand))+'</span><button type="button" class="lp-x" data-lb="zeitstrahl-clear">✕ Filter</button></div>':'<div class="lp-cap" style="margin-bottom:10px">ZEITSTRAHL</div>';
+  if(!l.length)return h+'<div class="lp-mu">Noch keine Meldungen.</div>';
+  var mon=null;
+  l.forEach(function(m){
+    var mk=(m.datum||'').slice(0,7);
+    if(mk!==mon){ mon=mk; h+='<div class="lp-cap" style="margin:14px 0 6px;color:var(--lp-muted)">'+lpEsc(mon)+'</div>'; }
+    h+=lbMeldungRowHTML(m);
+  });
+  return h;
+}
+
+// ── Rendering ──
+function lbTabsHTML(){
+  var tabs=[['karte','Karte'],['zeitstrahl','Zeitstrahl']];
+  return '<div class="lp-seg" style="margin-bottom:12px">'+tabs.map(function(t){ return '<button type="button" class="'+(LB_UI.tab===t[0]?'on':'')+'" data-lb="tab" data-v="'+t[0]+'">'+t[1]+'</button>'; }).join('')+'</div>';
+}
+function lbRender(){
+  var el=document.getElementById('lb-root'); if(!el)return;
+  if(!LB_NAMEN){ lbLoadNamen().then(lbRender); el.innerHTML='<div class="lp-mu" style="padding:20px">Lädt…</div>'; return; }
+  var h='<div class="lp-row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:4px"><div><div class="lp-cap">LAGEBERICHT</div><div style="font-size:17px;font-weight:500">Weltlage · '+lbMeldungen().length+' Meldungen</div></div>'
+    +'<button type="button" class="lp-btn fill" data-lb="form-open"><i class="ti ti-plus"></i> Meldung erfassen</button></div>';
+  var openMeld=LB_UI.openMeld?lbMeldungen().find(function(m){return m.id===LB_UI.openMeld;}):null;
+  if(openMeld){ el.innerHTML=h+lbMeldungOpenHTML(openMeld); return; }
+  if(LB_UI.form){ el.innerHTML=h+lbFormHTML(); return; }
+  if(LB_UI.tab==='dossier'&&LB_UI.land){ el.innerHTML=h+lbDossierHTML(LB_UI.land); return; }
+  h+=lbTabsHTML();
+  if(LB_UI.tab==='zeitstrahl'){ el.innerHTML=h+lbZeitstrahlHTML(); return; }
+  h+='<div class="lp-row" style="gap:8px;margin-bottom:8px;flex-wrap:wrap"><span class="lp-seg"><button type="button" class="'+(LB_UI.mapColor==='level'?'on':'')+'" data-lb="mapcolor" data-v="level">Lage-Level</button><button type="button" class="'+(LB_UI.mapColor==='aktivitaet'?'on':'')+'" data-lb="mapcolor" data-v="aktivitaet">Aktivität</button></span></div>'
+    +'<div id="lb-map" style="overflow-x:auto;border-radius:12px;border:1px solid var(--lp-border)"></div>'
+    +'<div class="lp-row lp-mu" style="gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px">'+LB_LEVEL.map(function(x){ return '<span><span style="color:'+x[2]+'">●</span> '+x[1]+'</span>'; }).join('')+'</div>';
+  el.innerHTML=h;
+  lbLoadSvg();
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lb]'); if(!el)return; ev.preventDefault();
+  var a=el.getAttribute('data-lb'), iso=el.getAttribute('data-iso'), id=el.getAttribute('data-id');
+  switch(a){
+    case 'tab': LB_UI.tab=el.getAttribute('data-v'); LB_UI.openMeld=null; LB_UI.form=false; return lbRender();
+    case 'mapcolor': LB_UI.mapColor=el.getAttribute('data-v'); lbPaintMap(); return;
+    case 'watchlist': var l=lbLand(iso,true); l.watchlist=!l.watchlist; lbTouch(l); saveD(); return lbRender();
+    case 'level': var l2=lbLand(iso,true); if(l2.lageLevel!==el.getAttribute('data-v')){ l2.lageLevel=el.getAttribute('data-v'); l2.levelSeit=today(); lbTouch(l2); saveD(); } return lbRender();
+    case 'fuehrung-edit':
+      var rolle=el.getAttribute('data-rolle'), l3=lbLand(iso,true), cur=(l3.fuehrung||[]).find(function(f){return f.rolle===rolle&&!f.bis;});
+      var name=prompt('Name («'+rolle+'», '+lbName(iso)+') — leer lassen zum Entfernen:',cur?cur.name:'');
+      if(name===null)return;
+      if(cur){ cur.bis=today(); }
+      if(name.trim()){ l3.fuehrung=l3.fuehrung||[]; l3.fuehrung.push({rolle:rolle,name:name.trim(),seit:today(),bis:''}); }
+      lbTouch(l3); saveD(); return lbRender();
+    case 'besch-new':
+      var sys=prompt('System / Bezeichnung:'); if(!sys||!sys.trim())return;
+      var stk=prompt('Stückzahl (optional):')||'';
+      var l4=lbLand(iso,true); l4.beschaffungen=l4.beschaffungen||[];
+      l4.beschaffungen.push({id:uid(),system:sys.trim(),stueckzahl:stk.trim(),status:'geplant',datum:today(),notiz:''}); lbTouch(l4); saveD(); return lbRender();
+    case 'besch-del':
+      var l5=lbLand(iso); if(!l5)return; l5.beschaffungen=(l5.beschaffungen||[]).filter(function(b){return b.id!==id;}); lbTouch(l5); saveD(); return lbRender();
+    case 'bez-new':
+      var q=prompt('Anderes Land (Name eintippen):'); if(!q)return;
+      var hit=lbIsoSearch(q)[0]; if(!hit){ showToast('Land nicht gefunden.'); return; }
+      var typ=prompt('Typ: buendnis, partnerschaft, lieferung, konflikt, verhandlung','partnerschaft'); if(!typ)return;
+      lbBeziehungen().push({id:uid(),von:iso,nach:hit,typ:typ.trim(),seit:today(),bis:'',notiz:''}); saveD(); return lbRender();
+    case 'bez-del': D.lbBeziehungen=lbBeziehungen().filter(function(b){return b.id!==id;}); markDeleted(id); saveD(); return lbRender();
+    case 'zeitstrahl-land': LB_UI.zLand=iso; LB_UI.tab='zeitstrahl'; return lbRender();
+    case 'zeitstrahl-clear': LB_UI.zLand=null; return lbRender();
+    case 'meld-open': LB_UI.openMeld=id; return lbRender();
+    case 'meld-close': LB_UI.openMeld=null; return lbRender();
+    case 'meld-del': if(!confirm('Meldung löschen?'))return; D.lbMeldungen=lbMeldungen().filter(function(m){return m.id!==id;}); markDeleted(id); LB_UI.openMeld=null; saveD(); return lbRender();
+    case 'form-open': LB_UI.form=true; return lbRender();
+    case 'form-close': LB_UI.form=false; return lbRender();
+    case 'form-save': return lbFormSave();
+    case 'land-chip': el.remove(); return;
+  }
+});
+document.addEventListener('keydown',function(ev){
+  if(ev.key!=='Enter'||!ev.target||ev.target.id!=='lb-land-q')return; ev.preventDefault();
+  var v=ev.target.value.trim(); if(!v)return;
+  var hit=lbIsoSearch(v)[0]; if(!hit){ showToast('Land nicht gefunden.'); return; }
+  if(!document.querySelector('#lb-land-chips [data-iso="'+hit+'"]'))document.getElementById('lb-land-chips').insertAdjacentHTML('beforeend','<span class="wp-pill" data-lb="land-chip" data-iso="'+hit+'">'+lpEsc(lbName(hit))+' <b style="font-weight:400">✕</b></span>');
+  ev.target.value='';
+});
+function lbInit(){ try{ lbLoadNamen(); }catch(e){} }
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
@@ -16352,6 +16620,7 @@ pdInit();
 pwInit();
 exInit();
 ppInit();
+lbInit();
 
 // Auto-refresh Scores und LivCounter
 setInterval(function(){renderLivCounter();renderDayTimer();renderFocus();},60000);
