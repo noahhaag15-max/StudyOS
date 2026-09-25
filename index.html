@@ -520,6 +520,13 @@ body.lp-lm-on { overflow: hidden; }
 .lm-opt { text-align: left; justify-content: flex-start; }
 .lm-opt.sel { font-weight: 500; }
 .lm-opt.sel.ok { background: var(--lp-ok-t); } .lm-opt.sel.review { background: var(--lp-review-t); } .lm-opt.sel.danger { background: var(--lp-danger-t); } .lm-opt.sel.gray { background: var(--lp-new-t); }
+/* Auswahl deutlich zeigen: Radio-Punkt, Rahmen und kräftigerer Hintergrund (vorher war «Noch nicht ganz» ausgewählt kaum sichtbar) */
+.lm-opt::before { content: '○'; margin-right: 8px; opacity: .55; font-size: 13px; }
+.lm-opt.sel::before { content: '●'; opacity: 1; }
+.lm-opt.sel { border-width: 2px; box-shadow: 0 0 0 1px currentColor inset; }
+.lm-opt.sel.gray { background: color-mix(in srgb, var(--lp-text) 14%, var(--lp-bg)); color: var(--lp-text); border-color: var(--lp-text); }
+.lm-opt.sel.ok { background: color-mix(in srgb, var(--lp-ok) 22%, var(--lp-bg)); }
+.lm-opt:not(.sel) { opacity: .8; }
 @media (max-width: 699px) {
   .lp-dgrid, .lp-two { grid-template-columns: 1fr; }
   .lp-heute-btn { display: none; } .lp-bigstart { display: block; } .lp-minlink { display: block; }
