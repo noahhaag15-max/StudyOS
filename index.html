@@ -18191,6 +18191,93 @@ document.addEventListener('click',function(ev){
   var id=el.getAttribute('data-id'); LAB_EXP[id]=!LAB_EXP[id]; lpRender();
 });
 
+// ═══ WOCHENPLAN-IMPORT — Termine als Textliste einfügen, Doppelte werden übersprungen ═══
+// Zeile:  28.09.2026 | 07:45-12:15 | AIS-Dienst | arbeit | fix
+// Spanne: 02.10.2026-04.10.2026 | Air & Space Days | spanne | sonst
+function wpImpDatum(t){ t=String(t||'').trim(); var m=t.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/); if(m)return m[3]+'-'+('0'+m[2]).slice(-2)+'-'+('0'+m[1]).slice(-2); return /^\d{4}-\d{2}-\d{2}$/.test(t)?t:null; }
+function wpImpZeit(t){ var m=String(t||'').trim().match(/^(\d{1,2})[:.](\d{2})$/); if(!m||+m[1]>23||+m[2]>59)return null; return ('0'+m[1]).slice(-2)+':'+m[2]; }
+function wpImpKat(t){ t=String(t||'').trim().toLowerCase(); if(!t)return 'aufgabe'; var k=wpKats().find(function(x){return x.id===t||String(x.name).toLowerCase()===t;}); return k?k.id:null; }
+function wpImpParse(txt){
+  var out=[];
+  String(txt||'').split(/\r?\n/).forEach(function(line,n){
+    var raw=line.trim(); if(!raw||raw.charAt(0)==='#')return;
+    var f=raw.split('|').map(function(x){return x.trim();}), r={zeile:n+1,raw:raw};
+    var dr=f[0].split(/\s*[–-]\s*(?=\d)/);
+    if(dr.length===2&&wpImpDatum(dr[0])&&wpImpDatum(dr[1])){
+      r.art='spanne'; r.von=wpImpDatum(dr[0]); r.bis=wpImpDatum(dr[1]); r.titel=f[1]||''; r.typ=(f[3]||f[2]||'sonst').toLowerCase().replace('spanne','').trim()||'sonst';
+      if(!SP_TYPEN.some(function(x){return x[0]===r.typ;}))r.typ='sonst';
+      if(!r.titel)r.fehler='Titel fehlt'; else if(r.bis<r.von)r.fehler='«bis» liegt vor «von»';
+      out.push(r); return;
+    }
+    r.art='block'; r.tag=wpImpDatum(f[0]);
+    var zt=(f[1]||'').split(/\s*[–-]\s*/); r.start=wpImpZeit(zt[0]); r.ende=wpImpZeit(zt[1]);
+    r.titel=f[2]||''; r.kategorie=wpImpKat(f[3]); r.typ=(f[4]||'fix').toLowerCase();
+    if(['fix','aufgabe','fenster'].indexOf(r.typ)<0)r.typ='fix';
+    if(!r.tag)r.fehler='Datum nicht erkannt'; else if(!r.start||!r.ende)r.fehler='Zeit nicht erkannt (z. B. 07:45-12:15)'; else if(r.ende<=r.start)r.fehler='Ende liegt vor dem Start'; else if(!r.titel)r.fehler='Titel fehlt'; else if(!r.kategorie)r.fehler='Kategorie «'+f[3]+'» unbekannt';
+    out.push(r);
+  });
+  out.forEach(function(r){
+    if(r.fehler)return;
+    if(r.art==='block'){
+      var t=r.titel.toLowerCase(), dup=wpBlocksOn(r.tag).find(function(b){ return String(b.titel||'').toLowerCase()===t&&b.start<r.ende&&b.ende>r.start; });
+      if(dup)r.doppelt='besteht schon ('+dup.start+'–'+dup.ende+')';
+    } else {
+      var d2=spList().find(function(x){ return String(x.titel||'').toLowerCase()===r.titel.toLowerCase()&&x.von<=r.bis&&x.bis>=r.von; });
+      if(d2)r.doppelt='Zeitspanne besteht schon';
+    }
+  });
+  return out;
+}
+function wpImpPreviewHTML(l){
+  if(!l.length)return '<div class="lp-mu" style="font-size:12px">Noch nichts erkannt.</div>';
+  var neu=l.filter(function(r){return !r.fehler&&!r.doppelt;}).length;
+  return '<div class="lp-mu" style="font-size:11px;margin-bottom:4px">'+neu+' neu · '+l.filter(function(r){return r.doppelt;}).length+' doppelt (übersprungen) · '+l.filter(function(r){return r.fehler;}).length+' mit Fehler</div>'
+    +l.map(function(r){
+      var ic=r.fehler?'<span style="color:var(--lp-review)">⚠</span>':r.doppelt?'<span class="lp-mu">↷</span>':'<span style="color:var(--c-ok)">＋</span>';
+      var txt=r.art==='spanne'?lpFmtShort(r.von)+'–'+lpFmtShort(r.bis)+' · '+lpEsc(r.titel)+' <span class="lp-mu">(Zeitspanne)</span>'
+        :(r.tag?lpDayLbl(r.tag)+' '+lpFmtShort(r.tag):'?')+' '+(r.start||'?')+'–'+(r.ende||'?')+' · '+lpEsc(r.titel)+(r.kategorie?' <span class="lp-mu">('+lpEsc(wpKat(r.kategorie).name)+')</span>':'');
+      return '<div class="lp-row" style="gap:6px;font-size:12px;padding:2px 0'+(r.doppelt?';opacity:.55':'')+'">'+ic+'<span style="flex:1;min-width:0">'+txt+(r.fehler?' <span style="color:var(--lp-review)">— Zeile '+r.zeile+': '+lpEsc(r.fehler)+'</span>':r.doppelt?' <span class="lp-mu">— '+lpEsc(r.doppelt)+'</span>':'')+'</span></div>';
+    }).join('');
+}
+function wpImpOpen(){
+  syModal('wp-imp','<div class="lp-cap" style="margin-bottom:6px">TERMINE IMPORTIEREN</div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Eine Zeile pro Termin: <span class="lp-mono">TT.MM.JJJJ | 07:45-12:15 | Titel | Kategorie | fix</span><br>Mehrtägig (Zeitspanne): <span class="lp-mono">02.10.2026-04.10.2026 | Titel | spanne | sonst</span><br>Termine mit gleichem Titel zur gleichen Zeit werden als doppelt übersprungen.</div>'
+    +'<textarea class="lp-in lp-mono" id="wp-imp-txt" rows="8" style="width:100%;font-size:12px" placeholder="28.09.2026 | 07:45-12:15 | AIS-Dienst | arbeit | fix"></textarea>'
+    +'<div id="wp-imp-prev" style="margin-top:8px;max-height:34vh;overflow:auto"></div>'
+    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:10px"><button type="button" class="lp-btn gray" data-wpi="close">Abbrechen</button><button type="button" class="lp-btn fill" data-wpi="run" id="wp-imp-run" disabled>Importieren</button></div>');
+}
+function wpImpRefresh(){
+  var t=document.getElementById('wp-imp-txt'), l=wpImpParse(t?t.value:''), n=l.filter(function(r){return !r.fehler&&!r.doppelt;}).length, b=document.getElementById('wp-imp-run');
+  document.getElementById('wp-imp-prev').innerHTML=wpImpPreviewHTML(l);
+  if(b){ b.disabled=!n; b.textContent=n?'Importieren ('+n+')':'Importieren'; }
+}
+function wpImpRun(){
+  var t=document.getElementById('wp-imp-txt'), l=wpImpParse(t?t.value:'').filter(function(r){return !r.fehler&&!r.doppelt;}); if(!l.length)return;
+  var nb=0, ns=0, first=null;
+  l.forEach(function(r){
+    if(r.art==='block'){ wpAdd(wpNew({tag:r.tag,start:r.start,ende:r.ende,titel:r.titel,kategorie:r.kategorie,typ:r.typ,quelle:'import'})); nb++; if(!first||r.tag<first)first=r.tag; }
+    else { spList().push({id:uid(),typ:r.typ,titel:r.titel,von:r.von,bis:r.bis,farbe:'',notiz:''}); ns++; if(!first||r.von<first)first=r.von; }
+  });
+  saveD(); var m=document.getElementById('wp-imp'); if(m)m.remove();
+  if(first)WP_UI.week=lpMonday(first);
+  wpRender(); try{ ckRender(); }catch(e){}
+  showToast(nb+' Termin'+(nb===1?'':'e')+(ns?' und '+ns+' Zeitspanne'+(ns===1?'':'n'):'')+' importiert ✓','ok');
+}
+var _wpRender_imp=wpRender;
+wpRender=function(){
+  _wpRender_imp();
+  var root=document.getElementById('wp-root'), v=root&&root.querySelector('[data-wp="vorlagen"]');
+  if(v&&!root.querySelector('[data-wpi="open"]'))v.insertAdjacentHTML('afterend','<button type="button" class="wp-pill" data-wpi="open" title="Termine aus einer Liste einfügen"><i class="ti ti-file-import"></i> Import</button>');
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wpi]'); if(!el)return; ev.preventDefault();
+  var a=el.getAttribute('data-wpi');
+  if(a==='open')return wpImpOpen();
+  if(a==='close'){ var m=document.getElementById('wp-imp'); if(m)m.remove(); return; }
+  if(a==='run')return wpImpRun();
+});
+document.addEventListener('input',function(ev){ if(ev.target&&ev.target.id==='wp-imp-txt')wpImpRefresh(); });
+
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
