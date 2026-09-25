@@ -18255,7 +18255,7 @@ function wpImpRun(){
   var t=document.getElementById('wp-imp-txt'), l=wpImpParse(t?t.value:'').filter(function(r){return !r.fehler&&!r.doppelt;}); if(!l.length)return;
   var nb=0, ns=0, first=null;
   l.forEach(function(r){
-    if(r.art==='block'){ wpAdd(wpNew({tag:r.tag,start:r.start,ende:r.ende,titel:r.titel,kategorie:r.kategorie,typ:r.typ,quelle:'import'})); nb++; if(!first||r.tag<first)first=r.tag; }
+    if(r.art==='block'){ var nbk=wpNew({tag:r.tag,start:r.start,ende:r.ende,titel:r.titel,kategorie:r.kategorie,typ:r.typ==='fix'?'aufgabe':r.typ,quelle:'import'}); if(r.typ==='fix')nbk.termin=true; wpAdd(nbk); nb++; if(!first||r.tag<first)first=r.tag; }
     else { spList().push({id:uid(),typ:r.typ,titel:r.titel,von:r.von,bis:r.bis,farbe:'',notiz:''}); ns++; if(!first||r.von<first)first=r.von; }
   });
   saveD(); var m=document.getElementById('wp-imp'); if(m)m.remove();
@@ -18263,8 +18263,14 @@ function wpImpRun(){
   wpRender(); try{ ckRender(); }catch(e){}
   showToast(nb+' Termin'+(nb===1?'':'e')+(ns?' und '+ns+' Zeitspanne'+(ns===1?'':'n'):'')+' importiert ✓','ok');
 }
+function wpImpEntsperren(){
+  var W=wpEnsure(), n=0;
+  Object.keys(W.wochen||{}).forEach(function(k){ (W.wochen[k].bloecke||[]).forEach(function(b){ if(b.quelle==='import'&&b.typ==='fix'){ b.typ='aufgabe'; b.termin=true; lpTouch(b); n++; } }); });
+  if(n)saveD();
+}
 var _wpRender_imp=wpRender;
 wpRender=function(){
+  try{ wpImpEntsperren(); }catch(e){}
   _wpRender_imp();
   var root=document.getElementById('wp-root'), v=root&&root.querySelector('[data-wp="vorlagen"]');
   if(v&&!root.querySelector('[data-wpi="open"]'))v.insertAdjacentHTML('afterend','<button type="button" class="wp-pill" data-wpi="open" title="Termine aus einer Liste einfügen"><i class="ti ti-file-import"></i> Import</button>');
