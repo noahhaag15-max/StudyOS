@@ -18401,6 +18401,46 @@ mrText=function(ym,kurz){
   return t;
 };
 
+// ═══ STREAK: alle echten Aktivitäten zählen (nicht nur Wochenplan-Blöcke) + Aufschlüsselung per Tipp auf 🔥 ═══
+var _spielAktiverTag_alt=spielAktiverTag;
+function spielAktivGrund(d){
+  var g=[];
+  try{ if(lpSessionsOn(d).length)g.push('Lernsession'); }catch(e){}
+  try{ if(lpEnsure().settings.minimumTag===d)g.push('Minimum-Tag'); }catch(e){}
+  try{ if(wpBlocksOn(d).some(function(b){ return (b.typ==='aufgabe'||b.typ==='fix')&&(b.status==='ok'||b.status==='teil'); }))g.push('Block abgehakt'); }catch(e){}
+  try{ if((lpLabs()||[]).some(function(l){ return (l.durchgaenge||[]).some(function(x){return x.datum===d;}); }))g.push('Lab'); }catch(e){}
+  try{ if((D.lpAufgaben||[]).some(function(a){ return (a.log||[]).some(function(x){return x.datum===d;}); }))g.push('Aufgaben-Pool'); }catch(e){}
+  try{ if(vsEnsure().some(function(v){ return v.typ!=='wochenplan'&&(v.eintraege||[]).some(function(x){return x.datum===d;}); }))g.push('Vorsatz'); }catch(e){}
+  try{ if((D.woechentlich||[]).some(function(t){return t.erledigtAm===d;}))g.push('Aufgabe erledigt'); }catch(e){}
+  try{ var S=spielEnsure(); if(S.tage&&S.tage[d]&&S.tage[d].ts)g.push('Tagesabschluss'); }catch(e){}
+  try{ if(!g.length&&(D.buchungen||[]).some(function(b){return b.datum===d&&(b.xp||0)>0;}))g.push('XP verdient'); }catch(e){}
+  return g;
+}
+spielAktiverTag=function(d){ return spielAktivGrund(d).length>0; };
+function spielStreakHTML(){
+  var td=today(), free=+cfg('zeiten.freierTag'), s0=spielStart(), st=spielStreak(), S=spielEnsure(), rows='', d=td, lauf=true, heuteAktiv=spielAktiverTag(td);
+  for(var i=0;i<21;i++){
+    if(s0&&d<s0){ rows+='<div class="lp-mu" style="font-size:11px;padding:4px 0">— Spielstart '+lpFmt(s0)+' (davor zählt nichts) —</div>'; break; }
+    var g=spielAktivGrund(d), frei=lpWd(d)===free, icon, txt;
+    if(g.length){ icon='<span style="color:var(--c-ok)">✓</span>'; txt=g.join(', '); }
+    else if(frei){ icon='<span class="lp-mu">·</span>'; txt='freier Tag — wird übersprungen, bricht nichts ab'; }
+    else if(d===td){ icon='<span class="lp-mu">…</span>'; txt='heute noch nichts — zählt, sobald du etwas erledigst'; }
+    else { icon='<span class="lp-mu">○</span>'; txt='nichts erfasst'+(lauf?' — Unterbruch, die aktuelle Streak beginnt am Tag danach':''); }
+    if(!g.length&&!frei&&d!==td)lauf=false;
+    rows+='<div class="lp-row" style="gap:8px;font-size:12px;padding:3px 0;border-top:1px solid var(--lp-border)'+(!lauf&&!g.length?';opacity:.7':'')+'"><span style="width:14px;text-align:center">'+icon+'</span><span class="lp-mono lp-mu" style="min-width:74px">'+lpDayLbl(d)+' '+lpFmtShort(d)+'</span><span style="flex:1;min-width:0">'+lpEsc(txt)+'</span></div>';
+    d=lpAdd(d,-1);
+  }
+  return '<div class="lp-cap" style="margin-bottom:4px">STREAK</div><div style="font-size:18px;font-weight:500;margin-bottom:2px">🔥 '+st+' Tag'+(st===1?'':'e')+' <span class="lp-mu" style="font-size:12px;font-weight:400">· Rekord '+Math.max(S.rekord||0,st)+'</span></div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-bottom:8px">Ein Tag zählt, wenn du etwas erledigt hast: Block ✓/◐, Lernsession, Lab, Aufgaben-Pool, Vorsatz, Backlog-Aufgabe oder Tagesabschluss. Der freie Tag bricht die Streak nie ab.'+(heuteAktiv?'':' Heute zählt noch nicht — die Streak läuft bis gestern.')+'</div>'
+    +'<div style="max-height:52vh;overflow:auto">'+rows+'</div><div class="lp-row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="lp-btn gray" data-streak="close">Schliessen</button></div>';
+}
+document.addEventListener('click',function(ev){
+  var p=ev.target.closest&&ev.target.closest('.ck-pill[title="Streak"]');
+  if(p){ ev.preventDefault(); syModal('streak-info',spielStreakHTML()); return; }
+  if(ev.target.closest&&ev.target.closest('[data-streak="close"]')){ var m=document.getElementById('streak-info'); if(m)m.remove(); }
+});
+(function(){ var st=document.createElement('style'); st.textContent='.ck-pill[title="Streak"]{cursor:pointer}'; document.head.appendChild(st); })();
+
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
