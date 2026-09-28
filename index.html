@@ -6732,7 +6732,7 @@ function vsCockpitHTML(){
 
 // ── Tagesabschluss: Vorsätze abfragen ──
 function vsTaHTML(d){
-  var l=vsEnsure().filter(function(v){return v.imTagesabschluss&&v.typ!=='wochenplan';}); if(!l.length)return '';
+  var l=vsEnsure().filter(function(v){return v.typ!=='wochenplan';}); if(!l.length)return '';
   var h='<div class="lp-cap" style="margin:10px 0 6px">VORSÄTZE</div>';
   l.forEach(function(v){
     var n=vsMalOn(v,d), id=lpEsc(v.id), c;
@@ -18290,6 +18290,116 @@ document.addEventListener('click',function(ev){
   if(a==='run')return wpImpRun();
 });
 document.addEventListener('input',function(ev){ if(ev.target&&ev.target.id==='wp-imp-txt')wpImpRefresh(); });
+
+// ═══ LOGBUCH IM TAGESABSCHLUSS UND IM MONATSRÜCKBLICK — Check-in, Konsum, Tagebuch; gleiche Daten wie im Logbuch ═══
+var TA_KONSUM=[['drinks','Alkohol',[[0,'0'],[1,'1'],[2,'2'],[3,'3'],[4,'4'],[5,'5+']]],['snus','Snus',[[0,'0'],[1,'1'],[2,'2'],[3,'3'],[5,'5+'],[10,'10+']]],['porn','Porn',[[0,'0'],[1,'1'],[2,'2'],[3,'3+']]]];
+function taLbPills(k,vals,cur){ return '<span class="lp-row" style="gap:3px;flex-wrap:wrap">'+vals.map(function(v){ return '<button type="button" class="pill'+(String(cur)===String(v[0])?' on':'')+'" data-talb="set" data-k="'+k+'" data-v="'+v[0]+'" style="min-width:26px">'+v[1]+'</button>'; }).join('')+'</span>'; }
+function taLogbuchHTML(d){
+  var dt=(D.dailyTracker&&D.dailyTracker[d])||{}, j=(D.journal&&D.journal[d])||{}, typ=j.typ||trkDayTyp(d), fr=TRK_FRAGEN[typ]||TRK_FRAGEN.anderes;
+  var h='<div class="lp-inner" id="ta-logbuch" style="margin-top:8px"><div class="lp-cap" style="margin-bottom:6px">LOGBUCH</div>';
+  h+='<div class="lp-mu" style="font-size:11px;margin-bottom:2px">Check-in</div>'+TRK_CHECK.map(function(c){ return '<div class="q" style="flex-wrap:wrap"><span style="flex:1;min-width:90px">'+c[1]+' <span class="lp-mu" style="font-size:10px">'+c[2]+' → '+c[3]+'</span></span>'+taLbPills(c[0],[[1,'1'],[2,'2'],[3,'3'],[4,'4'],[5,'5']],dt[c[0]])+'</div>'; }).join('');
+  h+='<div class="lp-mu" style="font-size:11px;margin:6px 0 2px">Konsum</div>'+TA_KONSUM.map(function(k){ return '<div class="q" style="flex-wrap:wrap"><span style="flex:1;min-width:70px">'+k[1]+'</span>'+taLbPills(k[0],k[2],dt[k[0]])+'</div>'; }).join('');
+  h+='<div class="lp-mu" style="font-size:11px;margin:8px 0 2px">Tagebuch <span style="opacity:.7">· '+lpEsc((TRK_TYPEN.find(function(t){return t[0]===typ;})||[,typ])[1])+'</span></div>'
+    +'<div style="font-size:12px;margin:2px 0">'+lpEsc(fr[0])+'</div><textarea class="lp-in" id="ta-ja" rows="2" style="width:100%">'+lpEsc(j.a||'')+'</textarea>'
+    +'<div style="font-size:12px;margin:6px 0 2px">'+lpEsc(fr[1])+'</div><textarea class="lp-in" id="ta-jb" rows="2" style="width:100%">'+lpEsc(j.b||'')+'</textarea>'
+    +'<div class="lp-mu" id="ta-j-st" style="font-size:10px;text-align:right;min-height:12px"></div></div>';
+  return h;
+}
+function taJournalSave(){
+  var d=WP_TA&&WP_TA.date, a=document.getElementById('ta-ja'), b=document.getElementById('ta-jb'); if(!d||!a||!b)return;
+  var A=a.value.trim(), B=b.value.trim(), old=(D.journal&&D.journal[d])||{};
+  if((old.a||'')===A&&(old.b||'')===B)return;
+  if(!A&&!B&&!old.a&&!old.b)return;
+  var typ=old.typ||trkDayTyp(d), fr=TRK_FRAGEN[typ]||TRK_FRAGEN.anderes; if(!D.journal)D.journal={};
+  D.journal[d]=Object.assign({},old,{typ:typ,qa:fr[0],a:A,qb:fr[1],b:B,ts:Date.now()}); saveD();
+  var st=document.getElementById('ta-j-st'); if(st)st.textContent='gespeichert ✓';
+}
+var _wpTaRender_lb=wpTaRender;
+wpTaRender=function(){
+  _wpTaRender_lb.apply(this,arguments);
+  try{
+    var host=document.getElementById('wp-ta'), d=WP_TA&&WP_TA.date; if(!host||!d||host.querySelector('#ta-logbuch'))return;
+    var after=host.querySelector('#ta-snack-row'), html=taLogbuchHTML(d);
+    if(after)after.insertAdjacentHTML('afterend',html); else { var box=host.querySelector('.lp-inner'); if(box)box.insertAdjacentHTML('beforebegin',html); }
+  }catch(x){}
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-talb="set"]'); if(!el)return; ev.preventDefault();
+  var d=WP_TA&&WP_TA.date; if(!d)return;
+  var k=el.getAttribute('data-k'), v=parseInt(el.getAttribute('data-v'),10), dt=trkDt(d);
+  if(dt[k]===v)delete dt[k]; else dt[k]=v; dt.ts=Date.now(); saveD(); try{ spielRebuche(d); }catch(e){}
+  el.parentNode.querySelectorAll('[data-talb]').forEach(function(b){ b.classList.toggle('on',+b.getAttribute('data-v')===dt[k]); });
+});
+var TA_JT=null;
+document.addEventListener('input',function(ev){ if(ev.target&&(ev.target.id==='ta-ja'||ev.target.id==='ta-jb')){ var st=document.getElementById('ta-j-st'); if(st)st.textContent=''; clearTimeout(TA_JT); TA_JT=setTimeout(taJournalSave,700); } });
+document.addEventListener('click',function(ev){ var el=ev.target.closest&&ev.target.closest('[data-wp="ta-fin"],[data-wp="ta-close"]'); if(el){ clearTimeout(TA_JT); taJournalSave(); } },true);
+
+// ── Monatsrückblick: Logbuch-Werte ──
+function mrLogbuch(ym){
+  var td=today(), days=mrDays(ym).filter(function(d){return d<=td;}), r={konsum:{},check:{},jn:[],pu:0,steps:[],screen:[],erfasst:0};
+  TA_KONSUM.forEach(function(k){ r.konsum[k[0]]={sum:0,tage:0,erf:0}; });
+  TRK_CHECK_ALL.forEach(function(c){ r.check[c[0]]=[]; });
+  days.forEach(function(d){
+    var dt=D.dailyTracker&&D.dailyTracker[d], j=D.journal&&D.journal[d];
+    if(dt){
+      var any=false;
+      TA_KONSUM.forEach(function(k){ var v=dt[k[0]]; if(v!=null){ any=true; r.konsum[k[0]].erf++; r.konsum[k[0]].sum+=v; if(v>0)r.konsum[k[0]].tage++; } });
+      TRK_CHECK_ALL.forEach(function(c){ if(dt[c[0]]!=null){ any=true; r.check[c[0]].push(+dt[c[0]]); } });
+      if(dt.pushups)r.pu+=dt.pushups; if(dt.steps!=null)r.steps.push(dt.steps); if(dt.screentime!=null)r.screen.push(dt.screentime);
+      if(any)r.erfasst++;
+    }
+    if(j&&(j.a||j.b||j.high||j.neg||j.take))r.jn.push(d);
+  });
+  return r;
+}
+function mrCmpInv(cur,prev,fmt,unit){   // weniger ist besser (Konsum, Anspannung)
+  if(cur==null||prev==null||prev===0&&cur===0)return '';
+  var d=cur-prev; if(Math.abs(d)<0.05)return '<span class="lp-mu" style="font-size:11px">wie im Vormonat</span>';
+  var t=fmt(Math.abs(d))+(unit||'');
+  return d<0?'<span style="font-size:11px;color:var(--c-ok)">▼ −'+t+' zum Vormonat</span>':'<span class="lp-mu" style="font-size:11px">▲ +'+t+' zum Vormonat</span>';
+}
+function mrLogbuchHTML(ym){
+  var s=mrLogbuch(ym), p=mrLogbuch(mrShift(ym,-1)), f0=function(x){return nrF(x,0);}, f1=function(x){return nrF(x,1);};
+  if(!s.erfasst&&!s.jn.length)return '';
+  var h='<div class="lp-cap" style="margin:12px 0 4px">LOGBUCH</div><div class="mr-grid">';
+  TA_KONSUM.forEach(function(k){ var a=s.konsum[k[0]], b=p.konsum[k[0]]; if(!a.erf)return;
+    h+=mrTile('shield-lock',k[1],a.sum+' ×','<span class="lp-mu" style="font-size:11px">an '+a.tage+' von '+a.erf+' erfassten Tagen</span><br>'+(b.erf?mrCmpInv(a.sum,b.sum,f0,' ×'):'')); });
+  TRK_CHECK_ALL.forEach(function(c){ var a=mrAvg(s.check[c[0]]), b=mrAvg(p.check[c[0]]); if(a==null||c[0]==='energie')return;
+    h+=mrTile(c[0]==='stress'?'wave-sine':c[0]==='fokus'?'focus-2':'mood-smile',c[1]+' Ø',nrF(a,1)+' / 5',c[0]==='stress'?mrCmpInv(a,b,f1):mrCmp(a,b,f1)); });
+  if(s.pu)h+=mrTile('arm-flex','Pushups',fmtCH(s.pu),mrCmp(s.pu,p.pu,function(x){return fmtCH(x);}));
+  if(s.steps.length)h+=mrTile('walk','Schritte Ø',fmtCH(Math.round(mrAvg(s.steps))),mrCmp(mrAvg(s.steps),p.steps.length?mrAvg(p.steps):null,function(x){return fmtCH(Math.round(x));}));
+  if(s.screen.length)h+=mrTile('device-mobile','Bildschirmzeit Ø',fmtMinsHM(Math.round(mrAvg(s.screen))),mrCmpInv(mrAvg(s.screen),p.screen.length?mrAvg(p.screen):null,function(x){return Math.round(x)+' Min';}));
+  h+='</div>';
+  if(s.jn.length){
+    h+='<details style="margin-top:8px"><summary class="lp-cap" style="cursor:pointer">TAGEBUCH · '+s.jn.length+' EINTR'+(s.jn.length===1?'AG':'ÄGE')+'</summary><div style="margin-top:6px">'
+      +s.jn.map(function(d){ var j=D.journal[d], L=[];
+        if(j.a)L.push('<div><span class="lp-mu">'+lpEsc(j.qa||'')+'</span> '+lpEsc(j.a)+'</div>'); if(j.b)L.push('<div><span class="lp-mu">'+lpEsc(j.qb||'')+'</span> '+lpEsc(j.b)+'</div>');
+        if(j.high)L.push('<div><span style="color:var(--c-ok)">Highlights</span> '+lpEsc(j.high)+'</div>'); if(j.neg)L.push('<div><span class="lp-mu">Schwierig</span> '+lpEsc(j.neg)+'</div>'); if(j.take)L.push('<div><span class="lp-mu">Takeaways</span> '+lpEsc(j.take)+'</div>');
+        return '<div class="trk-old" style="font-size:12px;margin-bottom:8px"><b>'+lpDayLbl(d)+' '+lpFmt(d)+'</b>'+L.join('')+'</div>'; }).join('')+'</div></details>';
+  }
+  return h;
+}
+var _mrHasData_lb=mrHasData;
+mrHasData=function(st){ if(_mrHasData_lb(st))return true; try{ var l=mrLogbuch(st.ym); return l.erfasst>0||l.jn.length>0; }catch(e){ return false; } };
+var _mrHTML_lb=mrHTML;
+mrHTML=function(ym){
+  var h=_mrHTML_lb(ym), extra=''; try{ extra=mrLogbuchHTML(ym); }catch(e){}
+  if(!extra)return h;
+  var mark='<div class="lp-row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="lp-btn gray" data-mr="copy"';
+  return h.indexOf(mark)>=0?h.replace(mark,extra+mark):h;
+};
+var _mrText_lb=mrText;
+mrText=function(ym,kurz){
+  var t=_mrText_lb(ym,kurz); try{
+    var s=mrLogbuch(ym), L=[];
+    TA_KONSUM.forEach(function(k){ var a=s.konsum[k[0]]; if(a.erf)L.push(k[1]+': '+a.sum+'× an '+a.tage+' von '+a.erf+' erfassten Tagen'); });
+    TRK_CHECK_ALL.forEach(function(c){ var a=mrAvg(s.check[c[0]]); if(a!=null)L.push(c[1]+' Ø '+nrF(a,1)+' / 5'); });
+    if(s.pu)L.push('Pushups: '+s.pu); if(s.steps.length)L.push('Schritte Ø '+Math.round(mrAvg(s.steps)));
+    if(!kurz&&s.jn.length){ L.push('','TAGEBUCH'); s.jn.forEach(function(d){ var j=D.journal[d]; L.push('- '+lpFmt(d)+': '+[j.a,j.b,j.high,j.neg,j.take].filter(Boolean).join(' / ')); }); }
+    if(L.length)t+='\n\nLOGBUCH\n'+L.join('\n');
+  }catch(e){}
+  return t;
+};
 
 // ═══════════════════════════════════════════════════════════
 // INIT
