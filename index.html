@@ -11871,6 +11871,9 @@ function lpAutoPlan(){
         queue.push(ctx);
       });
     });
+    // nach Abgabedatum sortieren (Etappen-Deadline, sonst Meilenstein des Themas); ohne Datum hinten in Eingabereihenfolge
+    queue.forEach(function(c,i){ c._i=i; c._due=c.e.deadline||(c.t&&c.t.meilenstein)||''; });
+    queue.sort(function(a,b){ if(a._due&&b._due&&a._due!==b._due)return a._due<b._due?-1:1; if(!!a._due!==!!b._due)return a._due?-1:1; return a._i-b._i; });
     if(queue.length)fq.push({fname:fname,queue:queue,st:st,puff:st.pufferStart});
   });
   fq.sort(function(a,b){ return lpAmpelRank(a.st.ampel)-lpAmpelRank(b.st.ampel)||((a.st.days==null?9999:a.st.days)-(b.st.days==null?9999:b.st.days)); });
@@ -11884,7 +11887,8 @@ function lpAutoPlan(){
       var pool=fq.filter(function(x){ return x.queue.length&&(!x.puff||d<x.puff); });
       if(!pool.length)break;
       pool.sort(function(a,b){
-        var na=a.st.tempo==null?0:a.st.tempo, nb=b.st.tempo==null?0:b.st.tempo;
+        var na=a.st.tempo==null?0:a.st.tempo, nb=b.st.tempo==null?0:b.st.tempo, da=a.queue[0]._due||'9999', db=b.queue[0]._due||'9999';
+        if(da!==db)return da<db?-1:1;                                   // früheste Abgabe zuerst
         return ((b.fname!==last?1:0)-(a.fname!==last?1:0))||(lpAmpelRank(a.st.ampel)-lpAmpelRank(b.st.ampel))||(nb-na);
       });
       var pick=pool[0]; last=pick.fname;
