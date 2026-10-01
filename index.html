@@ -18031,7 +18031,7 @@ document.addEventListener('click',function(ev){
 
 // ── Labs (Programming): Erstlösung, Festigen 0/3, Rückwärtsplanung ──
 function lpLabs(){ if(!Array.isArray(D.lpLabs))D.lpLabs=[]; return D.lpLabs; }
-function lpLabsOf(fachId){ return lpLabs().filter(function(l){return l.fachId===fachId;}).sort(function(a,b){ var da=a.abgabeDatum||'9999', db=b.abgabeDatum||'9999'; if(da!==db)return da<db?-1:1; return (a.nummer||0)-(b.nummer||0); }); }   // nach Abgabedatum, dann Nummer
+function lpLabsOf(fachId){ return lpLabs().filter(function(l){return l.fachId===fachId;}).sort(function(a,b){ var da=(typeof labDue==='function'?labDue(a):a.abgabeDatum)||'9999', db=(typeof labDue==='function'?labDue(b):b.abgabeDatum)||'9999'; if(da!==db)return da<db?-1:1; return (a.nummer||0)-(b.nummer||0); }); }   // nach Abgabedatum, dann Nummer
 var LAB_STATUS_VAR={offen:'var(--lp-new)',inArbeit:'var(--lp-review)',geloest:'var(--lp-ok)',voll:'var(--lp-master)'};
 function labStatusLabel(l){ if(l.status==='voll')return 'Voll (3/3)'; if(l.status==='geloest')return 'Gelöst · Festigen '+(l.festigenZaehler||0)+'/3'; if(l.status==='inArbeit')return 'In Arbeit'; return 'Offen'; }
 function labSpaetesterStart(l){
@@ -18524,6 +18524,9 @@ lpRender=function(){ var r=_lpRender_aom.apply(this,arguments); try{ if(CURRENT_
 
 // ═══ LABS v2 — Prozentstand von Lab und Code-Review statt Festigen-Zyklus ═══
 // Punkte pro Woche: beides 100 % → 2 · etwas gemacht → 1 · nichts → 0. Wiederholen nur, wenn «mit Hilfe» markiert.
+function labArt(l){ if(l.art)return l.art; if(/code.?review/i.test(l.titel||'')&&!l.abgabeDatum)return 'cr'; return 'beides'; }
+function labHat(l,art){ var a=labArt(l); return a==='beides'||a===art; }
+function labDue(l){ var d=[]; if(labHat(l,'lab')&&l.abgabeDatum)d.push(l.abgabeDatum); if(labHat(l,'cr')&&labCrAbgabe(l))d.push(labCrAbgabe(l)); return d.sort()[0]||''; }
 function labPct(l,art){ var v=art==='cr'?l.crPct:l.pct; return v==null||v===''?null:+v; }
 function labMigrate2(l){
   if(l.v2)return false; l.v2=true; l.pctLog=l.pctLog||[];
@@ -18531,11 +18534,12 @@ function labMigrate2(l){
   return true;
 }
 function labPunkteAuto(l){
-  var a=labPct(l,'lab'), c=labPct(l,'cr');
+  var a=labPct(l,'lab'), c=labPct(l,'cr'), art=labArt(l);
+  if(art!=='beides'){ var v=art==='cr'?c:a; if(v==null)return (l.punkte!=null&&l.punkte!=='')?+l.punkte:null; return v>=100?1:(v>0?0.5:0); }
   if(a==null&&c==null)return (l.punkte!=null&&l.punkte!=='')?+l.punkte:null;
   if(a>=100&&c>=100)return 2; if((a||0)>0||(c||0)>0)return 1; return 0;
 }
-function labSync(l){ var a=labPct(l,'lab')||0, c=labPct(l,'cr')||0; l.status=(a>=100&&c>=100)?'voll':(a>0||c>0)?'inArbeit':'offen'; var p=labPunkteAuto(l); if(p!=null)l.punkte=p; }
+function labSync(l){ var a=labPct(l,'lab')||0, c=labPct(l,'cr')||0, art=labArt(l); if(art!=='beides'){ var v=art==='cr'?c:a; a=v; c=v; } l.status=(a>=100&&c>=100)?'voll':(a>0||c>0)?'inArbeit':'offen'; var p=labPunkteAuto(l); if(p!=null)l.punkte=p; }
 labStatusLabel=function(l){ if(l.status==='voll')return l.mitHilfe?'Fertig · wiederholen':'Fertig ✓'; if(l.status==='inArbeit')return 'In Arbeit'; return 'Offen'; };
 labNaechsteWdh=function(l){ if(!l.mitHilfe)return null; var last=(l.pctLog||[]).map(function(x){return x.datum;}).sort().pop()||l.hilfeAm||today(); return lpAdd(last,2); };
 function labCrAbgabe(l){ return l.crAbgabe||l.abgabeDatum||''; }
@@ -18552,9 +18556,11 @@ labCardHTML=function(l){
   var id=lpEsc(l.id), c=LAB_STATUS_VAR[l.status]||'var(--lp-muted)', a=labPct(l,'lab'), cr=labPct(l,'cr'), p=labPunkteAuto(l), td=today(), wdh=labNaechsteWdh(l);
   if(!LAB_EXP[l.id]){
     var meta=[];
-    if(a!=null||cr!=null)meta.push('Lab '+(a==null?'–':a+'%')+' · CR '+(cr==null?'–':cr+'%'));
+    var art0=labArt(l);
+    if(art0==='beides'&&(a!=null||cr!=null))meta.push('Lab '+(a==null?'–':a+'%')+' · CR '+(cr==null?'–':cr+'%'));
+    else if(art0==='lab'&&a!=null)meta.push('Lab '+a+'%'); else if(art0==='cr'&&cr!=null)meta.push('CR '+cr+'%');
     if(wdh&&wdh<=td)meta.push('<span style="color:var(--c-accent)">Wdh. fällig</span>');
-    else if(l.status!=='voll'&&l.abgabeDatum)meta.push('Abgabe '+lpFmtShort(l.abgabeDatum));
+    else if(l.status!=='voll'&&labDue(l))meta.push('Abgabe '+lpFmtShort(labDue(l)));
     if(p!=null)meta.push(p+' Pkt.');
     return '<div class="lp-row" data-lab="exp" data-id="'+id+'" style="gap:8px;align-items:center;padding:7px 2px;border-top:1px solid var(--lp-border);cursor:pointer">'
       +'<span style="width:7px;height:7px;border-radius:50%;background:'+c+';flex-shrink:0"></span>'
@@ -18564,15 +18570,16 @@ labCardHTML=function(l){
   return '<div class="lp-inner" style="margin:6px 0 8px;border-left:3px solid '+c+'">'
     +'<div class="lp-row" data-lab="exp" data-id="'+id+'" style="justify-content:space-between;gap:6px;cursor:pointer;align-items:center"><span style="font-size:14px;font-weight:500">'+lpEsc(l.titel)+'</span>'
     +'<span class="lp-row" style="gap:6px;align-items:center"><span class="lp-tag" style="background:color-mix(in srgb,'+c+' 18%,transparent);color:'+c+'">'+labStatusLabel(l)+'</span><span class="lp-mu" style="font-size:11px;white-space:nowrap;padding:2px 6px;border:1px solid var(--lp-border);border-radius:99px">zuklappen <i class="ti ti-chevron-up"></i></span></span></div>'
-    +labPctRow(l,'lab','Lab')+labPctRow(l,'cr','Code-Review')
+    +'<div class="lp-seg" style="margin-top:8px">'+[['beides','Lab + Code-Review'],['lab','nur Lab'],['cr','nur Code-Review']].map(function(x){ return '<button type="button" class="'+(labArt(l)===x[0]?'on':'')+'" data-lab2="art" data-v="'+x[0]+'" data-id="'+id+'">'+x[1]+'</button>'; }).join('')+'</div>'
+    +(labHat(l,'lab')?labPctRow(l,'lab','Lab'):'')+(labHat(l,'cr')?labPctRow(l,'cr','Code-Review'):'')
     +'<div class="lp-row" style="gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap"><label class="lp-row" style="gap:6px;align-items:center;font-size:12px;cursor:pointer"><input type="checkbox" data-lab2="hilfe" data-id="'+id+'"'+(l.mitHilfe?' checked':'')+'/> mit Hilfe gelöst → später wiederholen</label>'
     +(l.mitHilfe&&wdh?'<span class="lp-mu lp-mono" style="font-size:11px">Wdh. '+(wdh<=td?'fällig':lpFmtShort(wdh))+'</span><button type="button" class="lp-btn gray" data-lab2="wdh" data-id="'+id+'" style="padding:4px 8px">Wiederholt ✓</button>':'')+'</div>'
     +'<div class="lp-row" style="gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">'
-    +'<label class="lp-mu" style="font-size:11px">Abgabe Lab <input class="lp-in lp-mono" type="date" data-lpc="lab.abgabeDatum" data-id="'+id+'" value="'+(l.abgabeDatum||'')+'" style="max-width:150px"/></label>'
-    +'<label class="lp-mu" style="font-size:11px">Abgabe Code-Review <input class="lp-in lp-mono" type="date" data-lab2="crab" data-id="'+id+'" value="'+lpEsc(l.crAbgabe||'')+'" placeholder="wie Lab" style="max-width:150px"/></label></div>'
+    +(labHat(l,'lab')?'<label class="lp-mu" style="font-size:11px">Abgabe Lab <input class="lp-in lp-mono" type="date" data-lpc="lab.abgabeDatum" data-id="'+id+'" value="'+(l.abgabeDatum||'')+'" style="max-width:150px"/></label>':'')
+    +(labHat(l,'cr')?'<label class="lp-mu" style="font-size:11px">Abgabe Code-Review <input class="lp-in lp-mono" type="date" data-lab2="crab" data-id="'+id+'" value="'+lpEsc(l.crAbgabe||'')+'" style="max-width:150px"/></label>':'')+'</div>'
     +'<div class="lp-row" style="gap:8px;margin-top:8px;align-items:center;justify-content:space-between;flex-wrap:wrap"><input class="lp-in" data-lab2="titel" data-id="'+id+'" value="'+lpEsc(l.titel)+'" style="flex:1;min-width:160px" title="Titel"/>'
     +'<span class="lp-mono" style="font-size:13px">'+(p==null?'– Pkt.':p+' Pkt.')+'</span><button type="button" class="lp-x" data-lab="del" data-id="'+id+'" title="Lab löschen">✕</button></div>'
-    +'<div class="lp-mu" style="font-size:10px;margin-top:6px">Punkte automatisch: Lab und Code-Review beide 100 % → 2 · etwas gemacht → 1 · nichts → 0.</div></div>';
+    +'<div class="lp-mu" style="font-size:10px;margin-top:6px">'+(labArt(l)==='beides'?'Punkte automatisch: Lab und Code-Review beide 100 % → 2 · etwas gemacht → 1 · nichts → 0.':'Punkte automatisch: 100 % → 1 · angefangen → ½ · nichts → 0 (Lab und Code-Review einer Woche zusammen max. 2).')+'</div></div>';
 };
 function labSetPct(id,art,v){
   var l=lpLabs().find(function(x){return x.id===id;}); if(!l)return;
@@ -18595,6 +18602,7 @@ document.addEventListener('click',function(ev){
   var el=ev.target.closest&&ev.target.closest('[data-lab2]'); if(!el||el.tagName==='INPUT')return;
   var a=el.getAttribute('data-lab2'), id=el.getAttribute('data-id'), l=lpLabs().find(function(x){return x.id===id;}); if(!l)return; ev.preventDefault();
   if(a==='p100')return labSetPct(id,el.getAttribute('data-art'),100);
+  if(a==='art'){ l.art=el.getAttribute('data-v'); if(l.art==='cr'&&!l.crAbgabe&&l.abgabeDatum){ l.crAbgabe=l.abgabeDatum; } labSync(l); lpTouch(l); saveD(); return lpRender(); }
   if(a==='wdh'){ l.mitHilfe=false; l.wdhAm=today(); l.pctLog=l.pctLog||[]; l.pctLog.push({datum:today(),art:'wdh',pct:100,ts:Date.now()}); lpTouch(l); saveD(); showToast('Wiederholung erledigt ✓','ok'); return lpRender(); }
 });
 // «+ Lab» ohne Eingabefenster: legt «Lab n» an und klappt es auf (Titel im Lab änderbar)
@@ -18667,8 +18675,8 @@ function aomItems(fach){
   lpLabsOf(f.id).forEach(function(l){
     labMigrate2(l);
     var a=labPct(l,'lab')||0, c=labPct(l,'cr')||0;
-    if(l.abgabeDatum)out.push({t:'Lab «'+l.titel+'»'+(a&&a<100?' ('+a+' %)':'')+(a>=100&&l.mitHilfe?' (mit Hilfe)':''),d:l.abgabeDatum,v:a>=100?(l.mitHilfe?0.5:1):(a>0?0.5:0)});
-    var crd=labCrAbgabe(l); if(crd)out.push({t:'Code-Review «'+l.titel+'»'+(c&&c<100?' ('+c+' %)':''),d:crd,v:c>=100?1:(c>0?0.5:0)});
+    if(labHat(l,'lab')&&l.abgabeDatum)out.push({t:'Lab «'+l.titel+'»'+(a&&a<100?' ('+a+' %)':'')+(a>=100&&l.mitHilfe?' (mit Hilfe)':''),d:l.abgabeDatum,v:a>=100?(l.mitHilfe?0.5:1):(a>0?0.5:0)});
+    var crd=labCrAbgabe(l); if(labHat(l,'cr')&&crd)out.push({t:'Code-Review «'+l.titel+'»'+(c&&c<100?' ('+c+' %)':''),d:crd,v:c>=100?1:(c>0?0.5:0)});
   });
   (D.woechentlich||[]).forEach(function(t){
     if(!t.faellig||!aomMatch(t.name+' '+(t.notizen||''),keys))return;
