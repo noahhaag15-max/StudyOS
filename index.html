@@ -18464,16 +18464,18 @@ function aomStats(fach){
   var st=lpFachStats(fach);
   if(st.total&&f.pruefung){ var eS=Math.min(st.total,st.done+st.rueck); if(eS>0)add('Etappen laut Lernplan',Math.min(st.done,eS),eS); }
   // 5) Eigene Einplanung: Lernblöcke dieses Fachs im Wochenplan bis gestern
-  var eIds={}; themen.forEach(function(t){ lpEtappenOf(t.id).forEach(function(e){ eIds[e.id]=1; }); });
+  // Nachgeholt zählt: ein eingeplanter Block gilt als erledigt, sobald seine Etappe erledigt ist (egal wann)
+  var eIds={}, eDone={}; themen.forEach(function(t){ var m=lpModus(t); lpEtappenOf(t.id).forEach(function(e){ eIds[e.id]=1; if(lpEtappeDone(e,m))eDone[e.id]=1; }); });
   var bS=0, bI=0, W=wpEnsure();
   Object.keys(W.wochen||{}).forEach(function(k){ (W.wochen[k].bloecke||[]).forEach(function(b){
     var q=String(b.quelle||''), eid=q.indexOf('etappe:')===0?q.slice(7):null; if(!eid||!eIds[eid])return;
     if(b.status==='verschoben')return;
-    if(b.tag<td){ bS++; bI+=b.status==='ok'?1:(b.status==='teil'?0.5:0); }
-    else if(b.tag===td&&(b.status==='ok'||b.status==='teil')){ bS++; bI+=b.status==='ok'?1:0.5; }
-    else if(b.tag>=td)next.push({d:b.tag,t:'Lernblock «'+b.titel+'»'});
+    var wert=eDone[eid]?1:(b.status==='ok'?1:(b.status==='teil'?0.5:0));
+    if(b.tag<td){ bS++; bI+=wert; }
+    else if(wert>0){ bS++; bI+=wert; }                                  // heute/später schon erledigt: zählt gleich mit
+    else next.push({d:b.tag,t:'Lernblock «'+b.titel+'»'});
   }); });
-  add('Eingeplante Lernblöcke',bI,bS);
+  add('Eingeplante Lernblöcke (nachgeholt zählt)',bI,bS);
   next.sort(function(a,b){return a.d<b.d?-1:1;});
   return {soll:soll,ist:ist,rows:rows,next:next.slice(0,3),pruefung:f.pruefung||''};
 }
