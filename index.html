@@ -12081,7 +12081,7 @@ function lpWocheHTML(){
     var e=lpEtappe(LP_UI.moveChip.id);
     if(e)h+='<div class="lp-inner lp-fld" style="margin-top:8px"><span style="font-size:12px">«'+lpEsc(lpCut(e.titel,28))+'» verschieben auf</span>'
       +'<input class="lp-in" type="date" data-mv="date" value="'+lpEsc((LP_UI.moveChip.kind==='wdh'?e.naechsteWiederholung:e.geplantAm)||td)+'"/>'
-      +'<button type="button" class="lp-btn fill" data-lpa="chip-ok">Verschieben</button><button type="button" class="lp-btn gray" data-lpa="chip-cancel">Abbrechen</button></div>';
+      +'<button type="button" class="lp-btn fill" data-lpa="chip-ok">Verschieben</button><button type="button" class="lp-btn gray" data-lpa="chip-cancel">Abbrechen</button></div>'+(LP_UI.moveChip.kind==='wdh'?lpWdhChipHTML(e):'');
   }
   h+='<div class="lp-row lp-mu" style="margin-top:8px;gap:14px;flex-wrap:wrap"><span><span style="color:var(--lp-review)">■</span> Wiederholung</span><span><span style="color:var(--lp-accent)">■</span> Neue Etappe</span><span>Max. '+max+'/Tag · Blöcke verschiebbar (ziehen oder antippen)</span></div></div>';
   h+='<div class="lp-two"><div class="lp-cd"><div class="lp-row" style="justify-content:space-between;margin-bottom:10px"><span style="font-size:14px;font-weight:500">Lernzeit</span><span class="lp-mu">letzte 4 Wochen</span></div>'
@@ -18734,6 +18734,57 @@ aomRender=function(fach){
       +(s.vor.length?'<div style="font-size:11px;color:var(--c-ok);margin-top:4px">Voraus: '+s.vor.map(function(x){return lpEsc(x.t)+' ('+lpFmtShort(x.d)+')';}).join(', ')+'</div>':'')+'</div></details>':'')
     +'</div>';
 };
+
+// ═══ WIEDERHOLUNG NACH WAHL — nach jeder Session fragen: keine · bald (automatisch) · generell · Intensivvorbereitung ═══
+function lpWdhPuffer(e){ var t=lpThema(e.themaId), f=t?lpFachById(t.fachId):null; return (f&&f.pruefung)?lpAdd(f.pruefung,-(f.pufferTage==null?8:f.pufferTage)):''; }
+function lpWdhZiel(e,mode){
+  var td=today(), ps=lpWdhPuffer(e);
+  if(mode==='intensiv')return ps?(ps>td?ps:lpAdd(td,1)):lpAdd(td,56);
+  if(ps){ var span=lpDayDiff(td,ps); return span>14?lpAdd(td,Math.round(span/2)):lpAdd(td,7); }
+  return lpAdd(td,28);
+}
+function lpSetWdhModus(e,mode){
+  if(!e)return; var m=lpModus(lpThema(e.themaId)); e.wdhModus=mode;
+  if(mode==='keine'){ e.naechsteWiederholung=null; e.wdhPlan=null; e.gesperrtBis=0; if(m==='konzept')e.wdhDone=2; }
+  else if(mode==='bald'){ if(!e.naechsteWiederholung){ e.naechsteWiederholung=lpAdd(today(),1); if(m==='konzept'){ e.wdhPlan=[e.naechsteWiederholung]; e.wdhDone=0; } } }
+  else { var d=lpWdhZiel(e,mode); e.naechsteWiederholung=d; e.gesperrtBis=0; if(m==='konzept'){ e.wdhPlan=[d]; e.wdhDone=0; } }
+  lpTouch(e);
+}
+var LP_WDH_OPT=[['keine','Keine Wiederholung nötig'],['bald','Bald wiederholen (automatisch nach Lernstand)'],['generell','Generelle Wiederholung bis zur Prüfung'],['intensiv','Intensivvorbereitung vor der Prüfung']];
+function lpWdhLabel(e,k){ var o=LP_WDH_OPT.find(function(x){return x[0]===k;})[1]; if(k==='generell'||k==='intensiv')o+=' · ~'+lpFmtShort(lpWdhZiel(e,k)); return o; }
+function lpLmWdhDefault(modus,sel){ if(modus==='drill')return sel==='ok'?'intensiv':(sel?'bald':null); return sel==='erledigt'?'intensiv':null; }
+var _lpLmFinishHTML_wdh=lpLmFinishHTML;
+lpLmFinishHTML=function(){
+  var h=_lpLmFinishHTML_wdh.apply(this,arguments);
+  try{
+    var e=lpEtappe(LM.etappeId), modus=lpModus(lpThema(e.themaId)), def=lpLmWdhDefault(modus,LM.sel); if(!def)return h;
+    var cur=LM.wdh||def;
+    var sec='<div style="margin-top:10px"><div class="lp-mu" style="margin-bottom:6px">Wiederholung?</div><div style="display:flex;flex-direction:column;gap:5px">'
+      +LP_WDH_OPT.map(function(o){ return '<button type="button" class="lp-btn gray lm-opt'+(cur===o[0]?' sel':'')+'" data-lpwdhsel="'+o[0]+'" style="font-size:12px">'+lpEsc(lpWdhLabel(e,o[0]))+'</button>'; }).join('')+'</div></div>';
+    var mark='<div class="lp-mu" style="border-top:1px solid var(--lp-border);margin-top:10px;padding-top:8px">';
+    return h.indexOf(mark)>=0?h.replace(mark,sec+mark):h;
+  }catch(x){ return h; }
+};
+var _lpLmFinishSave_wdh=lpLmFinishSave;
+lpLmFinishSave=function(){
+  var id=LM&&LM.etappeId, e0=id?lpEtappe(id):null, modus=e0?lpModus(lpThema(e0.themaId)):null, sel=LM&&LM.sel, mode=LM&&(LM.wdh||lpLmWdhDefault(modus,sel));
+  _lpLmFinishSave_wdh.apply(this,arguments);
+  if(LM&&LM.mode==='break'&&mode&&id){ lpSetWdhModus(lpEtappe(id),mode); LM.wdh=null; saveD(); try{ lpRenderDash(); }catch(x){} }
+};
+function lpWdhChipHTML(e){
+  return '<div class="lp-inner" style="margin-top:6px"><div class="lp-mu" style="font-size:12px;margin-bottom:6px">Braucht «'+lpEsc(lpCut(e.titel,28))+'» überhaupt eine Wiederholung?</div><div class="lp-row" style="gap:6px;flex-wrap:wrap">'
+    +'<button type="button" class="lp-btn gray" data-lpwdhset="keine" data-id="'+lpEsc(e.id)+'">Keine nötig</button>'
+    +'<button type="button" class="lp-btn gray" data-lpwdhset="generell" data-id="'+lpEsc(e.id)+'">Generell · ~'+lpFmtShort(lpWdhZiel(e,'generell'))+'</button>'
+    +'<button type="button" class="lp-btn gray" data-lpwdhset="intensiv" data-id="'+lpEsc(e.id)+'">Intensivvorbereitung · ~'+lpFmtShort(lpWdhZiel(e,'intensiv'))+'</button></div></div>';
+}
+document.addEventListener('click',function(ev){
+  var b=ev.target.closest&&ev.target.closest('[data-lpwdhsel]');
+  if(b){ ev.preventDefault(); ev.stopPropagation(); if(LM){ LM.wdh=b.getAttribute('data-lpwdhsel'); lpLmRender(); } return; }
+  var c=ev.target.closest&&ev.target.closest('[data-lpwdhset]');
+  if(c){ ev.preventDefault(); ev.stopPropagation(); var e=lpEtappe(c.getAttribute('data-id')), mode=c.getAttribute('data-lpwdhset'); if(!e)return;
+    lpSetWdhModus(e,mode); LP_UI.moveChip=null; saveD(); lpRender();
+    showToast(mode==='keine'?'Keine Wiederholung — aus der Planung genommen ✓':'Wiederholung verschoben auf ~'+lpFmt(e.naechsteWiederholung)+' ✓','ok'); }
+},true);
 
 // ═══════════════════════════════════════════════════════════
 // INIT
