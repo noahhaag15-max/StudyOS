@@ -18031,7 +18031,7 @@ document.addEventListener('click',function(ev){
 
 // ── Labs (Programming): Erstlösung, Festigen 0/3, Rückwärtsplanung ──
 function lpLabs(){ if(!Array.isArray(D.lpLabs))D.lpLabs=[]; return D.lpLabs; }
-function lpLabsOf(fachId){ return lpLabs().filter(function(l){return l.fachId===fachId;}).sort(function(a,b){return (a.nummer||0)-(b.nummer||0);}); }
+function lpLabsOf(fachId){ return lpLabs().filter(function(l){return l.fachId===fachId;}).sort(function(a,b){ var da=a.abgabeDatum||'9999', db=b.abgabeDatum||'9999'; if(da!==db)return da<db?-1:1; return (a.nummer||0)-(b.nummer||0); }); }   // nach Abgabedatum, dann Nummer
 var LAB_STATUS_VAR={offen:'var(--lp-new)',inArbeit:'var(--lp-review)',geloest:'var(--lp-ok)',voll:'var(--lp-master)'};
 function labStatusLabel(l){ if(l.status==='voll')return 'Voll (3/3)'; if(l.status==='geloest')return 'Gelöst · Festigen '+(l.festigenZaehler||0)+'/3'; if(l.status==='inArbeit')return 'In Arbeit'; return 'Offen'; }
 function labSpaetesterStart(l){
@@ -18789,6 +18789,22 @@ document.addEventListener('click',function(ev){
     lpSetWdhModus(e,mode); LP_UI.moveChip=null; saveD(); lpRender();
     showToast(mode==='keine'?'Keine Wiederholung — aus der Planung genommen ✓':'Wiederholung verschoben auf ~'+lpFmt(e.naechsteWiederholung)+' ✓','ok'); }
 },true);
+
+// ═══ FACH-BALKEN: Fortschritt über Etappen UND Pool-Aufgaben (gelöst 1 · angefangen/mit Hilfe ½ · Teilaufgaben anteilig) ═══
+function lpFachFortschritt(name){
+  var f=lpFach(name,false), tot=0, val=0; if(!f)return null;
+  lpThemenOf(f.id).forEach(function(t){
+    var m=lpModus(t);
+    if(m==='pool'){ (D.lpAufgaben||[]).forEach(function(x){ if(x.themaId!==t.id)return; tot++; val+=(x.status==='sitzt'||x.status==='pruefungsfest')?1:(x.status==='ueben'?0.5:0); }); return; }
+    lpEtappenOf(t.id).forEach(function(e){
+      tot++; if(lpEtappeDone(e,m)){ var lg=e.log||[]; val+=(lg.length&&lg[lg.length-1].ergebnis==='hilfe')?0.5:1; return; }
+      var cp=lpCpProg(e); val+=cp.total?cp.done/cp.total:(((e.stufe||0)>0||(e.log||[]).length)?0.5:0);
+    });
+  });
+  return tot?{pct:Math.round(val/tot*100),val:val,tot:tot}:null;
+}
+var _lpFachStats_bar=lpFachStats;
+lpFachStats=function(name){ var r=_lpFachStats_bar.apply(this,arguments); try{ var p=lpFachFortschritt(name); if(p)r.pct=p.pct; }catch(e){} return r; };
 
 // ═══════════════════════════════════════════════════════════
 // INIT
