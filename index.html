@@ -18441,6 +18441,75 @@ document.addEventListener('click',function(ev){
 });
 (function(){ var st=document.createElement('style'); st.textContent='.ck-pill[title="Streak"]{cursor:pointer}'; document.head.appendChild(st); })();
 
+// ═══ AM-ARSCH-O-METER NEU — Soll bis heute (Abgaben, eigener Plan) gegen Ist; Zukünftiges zählt nicht ═══
+function aomStats(fach){
+  var td=today(), f=lpFach(fach,false), rows=[], next=[], soll=0, ist=0;
+  if(!f)return {soll:0,ist:0,rows:rows,next:next};
+  var add=function(label,i,s2,note){ if(s2<=0&&!note)return; rows.push({label:label,ist:i,soll:s2,note:note||''}); soll+=s2; ist+=i; };
+  // 1) Labs: Abgabe bis heute → gelöst sein
+  var labs=lpLabsOf(f.id), lS=0, lI=0;
+  labs.forEach(function(l){
+    if(l.abgabeDatum&&l.abgabeDatum<=td){ lS++; lI+=(l.status==='geloest'||l.status==='voll')?1:(l.status==='inArbeit'?0.5:0); }
+    else if(l.abgabeDatum&&l.abgabeDatum>td&&l.status!=='geloest'&&l.status!=='voll')next.push({d:l.abgabeDatum,t:'Lab «'+l.titel+'» Abgabe'});
+  });
+  add('Labs bis heute abgegeben',lI,lS);
+  // 2) Fällige Lab-Wiederholungen (Festigen)
+  var wd=0; labs.forEach(function(l){ var w=labNaechsteWdh(l); if(w&&w<td)wd++; else if(w)next.push({d:w,t:'Wiederholung «'+l.titel+'»'}); });
+  if(wd)add('Lab-Wiederholungen überfällig ('+wd+', zählen halb)',0,wd*0.5);
+  // 3) Aufgaben-Pool: überfällige Wiederholungen
+  var themen=lpThemenOf(f.id), tIds={}; themen.forEach(function(t){ tIds[t.id]=1; });
+  var pd=(D.lpAufgaben||[]).filter(function(a){ return tIds[a.themaId]&&a.naechsteWdh&&a.naechsteWdh<td&&a.status!=='pruefungsfest'; }).length;
+  if(pd)add('Pool-Aufgaben überfällig ('+pd+', zählen halb)',0,pd*0.5);
+  // 4) Lernplan: Etappen-Soll nach eigenem Tempo (nur mit Prüfungsdatum)
+  var st=lpFachStats(fach);
+  if(st.total&&f.pruefung){ var eS=Math.min(st.total,st.done+st.rueck); if(eS>0)add('Etappen laut Lernplan',Math.min(st.done,eS),eS); }
+  // 5) Eigene Einplanung: Lernblöcke dieses Fachs im Wochenplan bis gestern
+  var eIds={}; themen.forEach(function(t){ lpEtappenOf(t.id).forEach(function(e){ eIds[e.id]=1; }); });
+  var bS=0, bI=0, W=wpEnsure();
+  Object.keys(W.wochen||{}).forEach(function(k){ (W.wochen[k].bloecke||[]).forEach(function(b){
+    var q=String(b.quelle||''), eid=q.indexOf('etappe:')===0?q.slice(7):null; if(!eid||!eIds[eid])return;
+    if(b.status==='verschoben')return;
+    if(b.tag<td){ bS++; bI+=b.status==='ok'?1:(b.status==='teil'?0.5:0); }
+    else if(b.tag===td&&(b.status==='ok'||b.status==='teil')){ bS++; bI+=b.status==='ok'?1:0.5; }
+    else if(b.tag>=td)next.push({d:b.tag,t:'Lernblock «'+b.titel+'»'});
+  }); });
+  add('Eingeplante Lernblöcke',bI,bS);
+  next.sort(function(a,b){return a.d<b.d?-1:1;});
+  return {soll:soll,ist:ist,rows:rows,next:next.slice(0,3),pruefung:f.pruefung||''};
+}
+function aomRender(fach){
+  var el=document.getElementById('fach-aom'); if(!el||!fach)return;
+  var s=aomStats(fach), pct=s.soll>0?Math.round(s.ist/s.soll*100):100, nichts=s.soll===0;
+  var lbl,col,emo;
+  if(pct>=100){lbl=nichts?'Nichts fällig — alles im Plan':'Gönn dir ein Bier 🍺';col='#2ecc7f';emo='🍺';}
+  else if(pct>=90){lbl='Du bist krass am grinden';col='#00c8aa';emo='🔥';}
+  else if(pct>=70){lbl='Oha wie gut';col='#4f7cff';emo='💪';}
+  else if(pct>=50){lbl='Start to believe';col='#a070ff';emo='🌱';}
+  else if(pct>=30){lbl='Friiiied';col='#ffaa30';emo='😬';}
+  else {lbl='Massiv am Arsch';col='#ff4060';emo='💀';}
+  var fmt=function(x){ return String(Math.round(x*10)/10).replace('.',','); };
+  var stufen=[['💀 Massiv','0%',0],['😬 Friiiied','30%',30],['🌱 Believe','50%',50],['💪 Oha','70%',70],['🔥 Grinden','90%',90],['🍺 Bier','100%',100]], aktiv=0;
+  stufen.forEach(function(x,i){ if(pct>=x[2])aktiv=i; });
+  el.innerHTML='<div style="background:var(--bg2);border:1px solid '+col+'40;border-radius:var(--r2);padding:16px 20px">'
+    +'<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+    +'<div style="text-align:center;flex-shrink:0"><div style="font-size:36px;line-height:1">'+emo+'</div><div style="font-family:var(--mono);font-size:9px;color:var(--tx3);margin-top:4px;text-transform:uppercase;letter-spacing:.1em">Am Arsch-O-Meter</div></div>'
+    +ringGaugeSVG(Math.min(100,pct),col,56,6)
+    +'<div style="flex:1;min-width:180px"><div style="font-size:18px;font-weight:700;color:'+col+';margin-bottom:4px">'+lbl+'</div>'
+    +'<div style="font-size:11px;color:var(--tx3)">'+(nichts?'Bis heute ist nichts fällig.':'Bis heute: '+fmt(s.ist)+' von '+fmt(s.soll)+' erledigt')+'</div></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10px;text-align:center">'
+    +stufen.map(function(x,i){ var a=i===aktiv; return '<div style="padding:4px;border-radius:4px;background:'+(a?col+'22':'var(--bg3)')+';color:'+(a?col:'var(--tx3)')+'">'+x[0]+'<br>'+x[1]+'</div>'; }).join('')
+    +'</div></div>'
+    +(s.rows.length?'<div style="margin-top:10px;display:flex;flex-direction:column;gap:3px">'+s.rows.map(function(r){
+        var ok=r.ist>=r.soll; return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px"><span style="color:var(--tx2)">'+lpEsc(r.label)+'</span><span style="font-family:var(--mono);color:'+(ok?'var(--c-ok)':'var(--tx2)')+'">'+fmt(r.ist)+' / '+fmt(r.soll)+(ok?' ✓':'')+'</span></div>'; }).join('')+'</div>':'')
+    +(s.next.length?'<div style="margin-top:8px;font-size:11px;color:var(--tx3)">Als Nächstes: '+s.next.map(function(n){ return lpEsc(n.t)+' <span style="font-family:var(--mono)">'+lpFmtShort(n.d)+'</span>'; }).join(' · ')+'</div>':'')
+    +(!s.pruefung?'<div style="margin-top:6px;font-size:10px;color:var(--tx3)">Tipp: Mit einem Prüfungsdatum zählt auch dein Lernplan-Tempo mit.</div>':'')
+    +'</div>';
+}
+var _renderFachDetail_aom=renderFachDetail;
+renderFachDetail=function(){ _renderFachDetail_aom.apply(this,arguments); try{ aomRender(CURRENT_FACH); }catch(e){} };
+var _lpRender_aom=lpRender;
+lpRender=function(){ var r=_lpRender_aom.apply(this,arguments); try{ if(CURRENT_FACH&&document.getElementById('fach-aom'))aomRender(CURRENT_FACH); }catch(e){} return r; };
+
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
