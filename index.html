@@ -18671,12 +18671,25 @@ function aomItems(fach){
     var done=t.erledigt||t.status==='Erledigt', half=!done&&/arbeit|begonnen|teil/i.test(t.status||'')&&!/nicht/i.test(t.status||'');
     out.push({t:'Aufgabe «'+t.name+'»',d:String(t.faellig).slice(0,10),v:done?1:(half?0.5:0)});
   });
+  // Lernplan: bearbeitete Etappen/Aufgaben zählen sofort (gelöst 1 · mit Hilfe ½ · angefangen = Anteil Teilaufgaben),
+  // nie bearbeitete erst ab dem Meilenstein des Themas.
   lpThemenOf(f.id).forEach(function(th){
-    var m=lpModus(th);
-    if(m==='pool'){ (D.lpAufgaben||[]).forEach(function(x){ if(x.themaId!==th.id||!(x.log||[]).length||!x.naechsteWdh)return; out.push({t:'Pool «'+th.name+'» Aufgabe '+(x.nummer||x.titel||''),d:x.naechsteWdh,v:(x.status==='sitzt'||x.status==='pruefungsfest')?1:(x.status==='ueben'?0.5:0)}); }); return; }
+    var m=lpModus(th), ms=th.meilenstein||'';
+    if(m==='pool'){
+      (D.lpAufgaben||[]).forEach(function(x){
+        if(x.themaId!==th.id)return; var touched=(x.log||[]).length>0; if(!touched&&!ms)return;
+        var v=(x.status==='sitzt'||x.status==='pruefungsfest')?1:(x.status==='ueben'?0.5:0);
+        out.push({t:'«'+(x.titel||('Aufgabe '+(x.nummer||'')))+'» ('+th.name+')',d:touched?'':ms,v:v});
+      });
+      return;
+    }
     lpEtappenOf(th.id).forEach(function(e){
-      if(lpEtappeDone(e,m))return; var cp=lpCpProg(e);
-      if(cp.done>0||(e.stufe||0)>0)out.push({t:'Etappe «'+e.titel+'» ('+th.name+(cp.total?', '+cp.done+'/'+cp.total+' Checkpoints':'')+')',d:'',v:0.5});
+      var cp=lpCpProg(e), done=lpEtappeDone(e,m), lg=e.log||[], last=lg.length?lg[lg.length-1].ergebnis:'';
+      var touched=done||cp.done>0||(e.stufe||0)>0||lg.length>0;
+      if(!touched&&!ms)return;
+      var v=done?(last==='hilfe'?0.5:1):(cp.total?cp.done/cp.total:(touched?0.5:0));
+      if(!done&&!cp.total&&last==='hilfe')v=0.5;
+      out.push({t:'«'+e.titel+'» ('+th.name+(cp.total&&!done?', '+cp.done+'/'+cp.total+' Teilaufgaben':'')+(done&&last==='hilfe'?', mit Hilfe':'')+')',d:touched?'':ms,v:v});
     });
   });
   return out;
