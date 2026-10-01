@@ -18477,7 +18477,8 @@ function aomStats(fach){
   }); });
   add('Eingeplante Lernblöcke (nachgeholt zählt)',bI,bS);
   next.sort(function(a,b){return a.d<b.d?-1:1;});
-  return {soll:soll,ist:ist,rows:rows,next:next.slice(0,3),pruefung:f.pruefung||''};
+  var wEnd=lpAdd(lpMonday(td),6);
+  return {soll:soll,ist:ist,rows:rows,woche:next.filter(function(n){return n.d<=wEnd;}),next:next.filter(function(n){return n.d>wEnd;}).slice(0,1),pruefung:f.pruefung||''};
 }
 function aomRender(fach){
   var el=document.getElementById('fach-aom'); if(!el||!fach)return;
@@ -18503,7 +18504,9 @@ function aomRender(fach){
     +'</div></div>'
     +(s.rows.length?'<div style="margin-top:10px;display:flex;flex-direction:column;gap:3px">'+s.rows.map(function(r){
         var ok=r.ist>=r.soll; return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px"><span style="color:var(--tx2)">'+lpEsc(r.label)+'</span><span style="font-family:var(--mono);color:'+(ok?'var(--c-ok)':'var(--tx2)')+'">'+fmt(r.ist)+' / '+fmt(r.soll)+(ok?' ✓':'')+'</span></div>'; }).join('')+'</div>':'')
-    +(s.next.length?'<div style="margin-top:8px;font-size:11px;color:var(--tx3)">Als Nächstes: '+s.next.map(function(n){ return lpEsc(n.t)+' <span style="font-family:var(--mono)">'+lpFmtShort(n.d)+'</span>'; }).join(' · ')+'</div>':'')
+    +'<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--lp-border)"><div style="font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--c-accent);margin-bottom:4px">Diese Woche noch fällig</div>'
+    +(s.woche.length?s.woche.map(function(n){ var heute=n.d===today(); return '<div style="display:flex;gap:8px;font-size:12px;padding:2px 0"><span style="font-family:var(--mono);min-width:62px;color:'+(heute?'var(--c-accent)':'var(--tx3)')+'">'+(heute?'heute':lpDayLbl(n.d)+' '+lpFmtShort(n.d))+'</span><span style="color:var(--tx2)">'+lpEsc(n.t)+'</span></div>'; }).join(''):'<div style="font-size:12px;color:var(--tx3)">Nichts mehr bis Sonntag ✓</div>')
+    +(s.next.length?'<div style="font-size:11px;color:var(--tx3);margin-top:4px">Danach: '+lpEsc(s.next[0].t)+' <span style="font-family:var(--mono)">'+lpDayLbl(s.next[0].d)+' '+lpFmtShort(s.next[0].d)+'</span></div>':'')+'</div>'
     +(!s.pruefung?'<div style="margin-top:6px;font-size:10px;color:var(--tx3)">Tipp: Mit einem Prüfungsdatum zählt auch dein Lernplan-Tempo mit.</div>':'')
     +'</div>';
 }
