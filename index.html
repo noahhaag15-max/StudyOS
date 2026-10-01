@@ -18657,6 +18657,71 @@ aomStats=function(fach){
   return {soll:soll,ist:ist,rows:rows,woche:items.filter(function(n){return !n.d||n.d<=wEnd;}),next:items.filter(function(n){return n.d>wEnd;}).slice(0,1),pruefung:f.pruefung||'',det:det};
 };
 
+// ═══ AM-ARSCH-O-METER v4 — einfach: was per heute fällig ist zählt (erledigt 1 · angefangen/mit Hilfe ½ · offen 0) ═══
+function aomItems(fach){
+  var f=lpFach(fach,false), out=[], keys=aomKeys(fach); if(!f)return out;
+  lpLabsOf(f.id).forEach(function(l){
+    labMigrate2(l);
+    var a=labPct(l,'lab')||0, c=labPct(l,'cr')||0;
+    if(l.abgabeDatum)out.push({t:'Lab «'+l.titel+'»'+(a&&a<100?' ('+a+' %)':'')+(a>=100&&l.mitHilfe?' (mit Hilfe)':''),d:l.abgabeDatum,v:a>=100?(l.mitHilfe?0.5:1):(a>0?0.5:0)});
+    var crd=labCrAbgabe(l); if(crd)out.push({t:'Code-Review «'+l.titel+'»'+(c&&c<100?' ('+c+' %)':''),d:crd,v:c>=100?1:(c>0?0.5:0)});
+  });
+  (D.woechentlich||[]).forEach(function(t){
+    if(!t.faellig||!aomMatch(t.name+' '+(t.notizen||''),keys))return;
+    var done=t.erledigt||t.status==='Erledigt', half=!done&&/arbeit|begonnen|teil/i.test(t.status||'')&&!/nicht/i.test(t.status||'');
+    out.push({t:'Aufgabe «'+t.name+'»',d:String(t.faellig).slice(0,10),v:done?1:(half?0.5:0)});
+  });
+  lpThemenOf(f.id).forEach(function(th){
+    var m=lpModus(th);
+    if(m==='pool'){ (D.lpAufgaben||[]).forEach(function(x){ if(x.themaId!==th.id||!(x.log||[]).length||!x.naechsteWdh)return; out.push({t:'Pool «'+th.name+'» Aufgabe '+(x.nummer||x.titel||''),d:x.naechsteWdh,v:(x.status==='sitzt'||x.status==='pruefungsfest')?1:(x.status==='ueben'?0.5:0)}); }); return; }
+    lpEtappenOf(th.id).forEach(function(e){
+      if(lpEtappeDone(e,m))return; var cp=lpCpProg(e);
+      if(cp.done>0||(e.stufe||0)>0)out.push({t:'Etappe «'+e.titel+'» ('+th.name+(cp.total?', '+cp.done+'/'+cp.total+' Checkpoints':'')+')',d:'',v:0.5});
+    });
+  });
+  return out;
+}
+aomStats=function(fach){
+  var td=today(), wEnd=lpAdd(lpMonday(td),6), f=lpFach(fach,false), it=aomItems(fach);
+  var due=it.filter(function(x){return !x.d||x.d<=td;}), soll=due.length, ist=due.reduce(function(a,x){return a+x.v;},0);
+  var vor=it.filter(function(x){return x.d>td&&x.v>0;}), vorsprung=vor.reduce(function(a,x){return a+x.v;},0);
+  var woche=it.filter(function(x){return x.v<1&&(!x.d||x.d<=wEnd);}).sort(function(a,b){return (a.d||'0')<(b.d||'0')?-1:1;});
+  var next=it.filter(function(x){return x.v<1&&x.d>wEnd;}).sort(function(a,b){return a.d<b.d?-1:1;}).slice(0,1);
+  return {soll:soll,ist:ist,det:due.map(function(x){return [x.t+(x.d?' ('+lpFmtShort(x.d)+')':''),x.v,1];}),vor:vor,vorsprung:vorsprung,woche:woche,next:next,rows:[],pruefung:f&&f.pruefung||''};
+};
+aomRender=function(fach){
+  var el=document.getElementById('fach-aom'); if(!el||!fach)return;
+  var s=aomStats(fach), pct=s.soll>0?Math.round(s.ist/s.soll*100):100, nichts=s.soll===0, td=today();
+  var lbl,col,emo;
+  if(pct>=100){lbl=nichts?'Nichts fällig — alles im Plan':'Gönn dir ein Bier 🍺';col='#2ecc7f';emo='🍺';}
+  else if(pct>=90){lbl='Du bist krass am grinden';col='#00c8aa';emo='🔥';}
+  else if(pct>=70){lbl='Oha wie gut';col='#4f7cff';emo='💪';}
+  else if(pct>=50){lbl='Start to believe';col='#a070ff';emo='🌱';}
+  else if(pct>=30){lbl='Friiiied';col='#ffaa30';emo='😬';}
+  else {lbl='Massiv am Arsch';col='#ff4060';emo='💀';}
+  var fmt=function(x){ return String(Math.round(x*10)/10).replace('.',','); };
+  var stufen=[['💀 Massiv','0%',0],['😬 Friiiied','30%',30],['🌱 Believe','50%',50],['💪 Oha','70%',70],['🔥 Grinden','90%',90],['🍺 Bier','100%',100]], aktiv=0;
+  stufen.forEach(function(x,i){ if(pct>=x[2])aktiv=i; });
+  var tag=function(d){ return !d?'offen':d<td?'überfällig':d===td?'heute':lpDayLbl(d)+' '+lpFmtShort(d); };
+  el.innerHTML='<div style="background:var(--bg2);border:1px solid '+col+'40;border-radius:var(--r2);padding:16px 20px">'
+    +'<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">'
+    +'<div style="text-align:center;flex-shrink:0"><div style="font-size:36px;line-height:1">'+emo+'</div><div style="font-family:var(--mono);font-size:9px;color:var(--tx3);margin-top:4px;text-transform:uppercase;letter-spacing:.1em">Am Arsch-O-Meter</div></div>'
+    +ringGaugeSVG(Math.min(100,pct),col,56,6)
+    +'<div style="flex:1;min-width:180px"><div style="font-size:18px;font-weight:700;color:'+col+';margin-bottom:4px">'+lbl+'</div>'
+    +'<div style="font-size:11px;color:var(--tx3)">'+(nichts?'Per heute ist nichts fällig.':'Per heute: '+fmt(s.ist)+' von '+s.soll+' erledigt')+'</div>'
+    +(s.vorsprung>0?'<div style="display:inline-block;margin-top:6px;padding:3px 10px;border-radius:99px;background:color-mix(in srgb,var(--c-ok) 18%,transparent);color:var(--c-ok);font-size:12px;font-weight:600">🚀 '+fmt(s.vorsprung)+' voraus <span style="font-weight:400;opacity:.85">— schon erledigt, obwohl erst später fällig</span></div>':'')+'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10px;text-align:center">'
+    +stufen.map(function(x,i){ var a=i===aktiv; return '<div style="padding:4px;border-radius:4px;background:'+(a?col+'22':'var(--bg3)')+';color:'+(a?col:'var(--tx3)')+'">'+x[0]+'<br>'+x[1]+'</div>'; }).join('')
+    +'</div></div>'
+    +'<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--lp-border)"><div style="font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--c-accent);margin-bottom:4px">Offen bis Sonntag</div>'
+    +(s.woche.length?s.woche.map(function(n){ return '<div style="display:flex;gap:8px;font-size:12px;padding:2px 0"><span style="font-family:var(--mono);min-width:74px;color:'+(n.d===td?'var(--c-accent)':'var(--tx3)')+'">'+tag(n.d)+'</span><span style="color:var(--tx2);flex:1">'+lpEsc(n.t)+'</span>'+(n.v>0?'<span style="font-family:var(--mono);font-size:10px;color:var(--tx3)">½</span>':'')+'</div>'; }).join(''):'<div style="font-size:12px;color:var(--tx3)">Bis Sonntag ist nichts mehr offen ✓</div>')
+    +(s.next.length?'<div style="font-size:11px;color:var(--tx3);margin-top:4px">Danach: '+lpEsc(s.next[0].t)+' <span style="font-family:var(--mono)">'+lpDayLbl(s.next[0].d)+' '+lpFmtShort(s.next[0].d)+'</span></div>':'')+'</div>'
+    +(s.det.length?'<details style="margin-top:8px"><summary style="cursor:pointer;font-size:11px;color:var(--tx3)">Was zählt? ('+s.det.length+' fällige Posten · erledigt 1 · angefangen/mit Hilfe ½ · offen 0)</summary><div style="margin-top:4px">'
+      +s.det.map(function(x){ return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px;padding:1px 0"><span style="color:var(--tx2)">'+lpEsc(x[0])+'</span><span style="font-family:var(--mono);color:'+(x[1]>=1?'var(--c-ok)':'var(--tx3)')+'">'+fmt(x[1])+'</span></div>'; }).join('')
+      +(s.vor.length?'<div style="font-size:11px;color:var(--c-ok);margin-top:4px">Voraus: '+s.vor.map(function(x){return lpEsc(x.t)+' ('+lpFmtShort(x.d)+')';}).join(', ')+'</div>':'')+'</div></details>':'')
+    +'</div>';
+};
+
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
