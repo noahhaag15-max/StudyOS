@@ -18188,7 +18188,8 @@ labCardHTML=function(l){
     +'<i class="ti ti-chevron-down" style="font-size:12px;opacity:.5"></i></div>';
 };
 lpLabsHTML=function(f){
-  var labs=lpLabsOf(f.id), R=nrRegeln?nrRegeln():null, sum=0; labs.forEach(function(l){sum+=+l.punkte||0;});
+  var labs=lpLabsOf(f.id), R=nrRegeln?nrRegeln():null, sum=0, mig=false;
+  labs.forEach(function(l){ if(typeof labMigrate2==='function'&&labMigrate2(l)){ labSync(l); mig=true; } }); if(mig)saveD(); labs.forEach(function(l){sum+=+l.punkte||0;});
   var offen=labs.filter(function(l){return l.status!=='voll';}).length;
   return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:14px;font-weight:500">Labs <span class="lp-mu lp-mono" style="font-size:11px;font-weight:400">'+(labs.length?offen+' offen'+(R?' · '+sum+'/'+R.labMax+' Pkt.':''):'')+'</span></span><button type="button" class="lp-btn gray" data-lab="new" data-fach="'+lpEsc(f.id)+'">＋ Lab</button></div>'
     +(labs.length?labs.map(labCardHTML).join(''):'<div class="lp-mu" style="font-size:12px">Noch keine Labs.</div>')+'</div>';
@@ -18408,7 +18409,7 @@ function spielAktivGrund(d){
   try{ if(lpSessionsOn(d).length)g.push('Lernsession'); }catch(e){}
   try{ if(lpEnsure().settings.minimumTag===d)g.push('Minimum-Tag'); }catch(e){}
   try{ if(wpBlocksOn(d).some(function(b){ return (b.typ==='aufgabe'||b.typ==='fix')&&(b.status==='ok'||b.status==='teil'); }))g.push('Block abgehakt'); }catch(e){}
-  try{ if((lpLabs()||[]).some(function(l){ return (l.durchgaenge||[]).some(function(x){return x.datum===d;}); }))g.push('Lab'); }catch(e){}
+  try{ if((lpLabs()||[]).some(function(l){ return (l.durchgaenge||[]).some(function(x){return x.datum===d;})||(l.pctLog||[]).some(function(x){return x.datum===d;}); }))g.push('Lab'); }catch(e){}
   try{ if((D.lpAufgaben||[]).some(function(a){ return (a.log||[]).some(function(x){return x.datum===d;}); }))g.push('Aufgaben-Pool'); }catch(e){}
   try{ if(vsEnsure().some(function(v){ return v.typ!=='wochenplan'&&(v.eintraege||[]).some(function(x){return x.datum===d;}); }))g.push('Vorsatz'); }catch(e){}
   try{ if((D.woechentlich||[]).some(function(t){return t.erledigtAm===d;}))g.push('Aufgabe erledigt'); }catch(e){}
@@ -18503,9 +18504,10 @@ function aomRender(fach){
     +stufen.map(function(x,i){ var a=i===aktiv; return '<div style="padding:4px;border-radius:4px;background:'+(a?col+'22':'var(--bg3)')+';color:'+(a?col:'var(--tx3)')+'">'+x[0]+'<br>'+x[1]+'</div>'; }).join('')
     +'</div></div>'
     +(s.rows.length?'<div style="margin-top:10px;display:flex;flex-direction:column;gap:3px">'+s.rows.map(function(r){
+        if(r.sub)return '<div style="font-size:11px;color:var(--tx2)">'+lpEsc(r.label)+'</div>';
         var ok=r.ist>=r.soll; return '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11px"><span style="color:var(--tx2)">'+lpEsc(r.label)+'</span><span style="font-family:var(--mono);color:'+(ok?'var(--c-ok)':'var(--tx2)')+'">'+fmt(r.ist)+' / '+fmt(r.soll)+(ok?' ✓':'')+'</span></div>'; }).join('')+'</div>':'')
     +'<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--lp-border)"><div style="font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--c-accent);margin-bottom:4px">Diese Woche noch fällig</div>'
-    +(s.woche.length?s.woche.map(function(n){ var heute=n.d===today(); return '<div style="display:flex;gap:8px;font-size:12px;padding:2px 0"><span style="font-family:var(--mono);min-width:62px;color:'+(heute?'var(--c-accent)':'var(--tx3)')+'">'+(heute?'heute':lpDayLbl(n.d)+' '+lpFmtShort(n.d))+'</span><span style="color:var(--tx2)">'+lpEsc(n.t)+'</span></div>'; }).join(''):'<div style="font-size:12px;color:var(--tx3)">Nichts mehr bis Sonntag ✓</div>')
+    +(s.woche.length?s.woche.map(function(n){ var heute=n.d===today(), ueber=n.d&&n.d<today(); return '<div style="display:flex;gap:8px;font-size:12px;padding:2px 0"><span style="font-family:var(--mono);min-width:62px;color:'+(heute?'var(--c-accent)':'var(--tx3)')+'">'+(!n.d?'offen':ueber?'überfällig':heute?'heute':lpDayLbl(n.d)+' '+lpFmtShort(n.d))+'</span><span style="color:var(--tx2)">'+lpEsc(n.t)+'</span></div>'; }).join(''):'<div style="font-size:12px;color:var(--tx3)">Nichts mehr bis Sonntag ✓</div>')
     +(s.next.length?'<div style="font-size:11px;color:var(--tx3);margin-top:4px">Danach: '+lpEsc(s.next[0].t)+' <span style="font-family:var(--mono)">'+lpDayLbl(s.next[0].d)+' '+lpFmtShort(s.next[0].d)+'</span></div>':'')+'</div>'
     +(!s.pruefung?'<div style="margin-top:6px;font-size:10px;color:var(--tx3)">Tipp: Mit einem Prüfungsdatum zählt auch dein Lernplan-Tempo mit.</div>':'')
     +'</div>';
@@ -18514,6 +18516,145 @@ var _renderFachDetail_aom=renderFachDetail;
 renderFachDetail=function(){ _renderFachDetail_aom.apply(this,arguments); try{ aomRender(CURRENT_FACH); }catch(e){} };
 var _lpRender_aom=lpRender;
 lpRender=function(){ var r=_lpRender_aom.apply(this,arguments); try{ if(CURRENT_FACH&&document.getElementById('fach-aom'))aomRender(CURRENT_FACH); }catch(e){} return r; };
+
+// ═══ LABS v2 — Prozentstand von Lab und Code-Review statt Festigen-Zyklus ═══
+// Punkte pro Woche: beides 100 % → 2 · etwas gemacht → 1 · nichts → 0. Wiederholen nur, wenn «mit Hilfe» markiert.
+function labPct(l,art){ var v=art==='cr'?l.crPct:l.pct; return v==null||v===''?null:+v; }
+function labMigrate2(l){
+  if(l.v2)return false; l.v2=true; l.pctLog=l.pctLog||[];
+  if(l.pct==null&&(l.status==='geloest'||l.status==='voll')){ l.pct=100; if((+l.punkte||0)>=2)l.crPct=100; }
+  return true;
+}
+function labPunkteAuto(l){
+  var a=labPct(l,'lab'), c=labPct(l,'cr');
+  if(a==null&&c==null)return (l.punkte!=null&&l.punkte!=='')?+l.punkte:null;
+  if(a>=100&&c>=100)return 2; if((a||0)>0||(c||0)>0)return 1; return 0;
+}
+function labSync(l){ var a=labPct(l,'lab')||0, c=labPct(l,'cr')||0; l.status=(a>=100&&c>=100)?'voll':(a>0||c>0)?'inArbeit':'offen'; var p=labPunkteAuto(l); if(p!=null)l.punkte=p; }
+labStatusLabel=function(l){ if(l.status==='voll')return l.mitHilfe?'Fertig · wiederholen':'Fertig ✓'; if(l.status==='inArbeit')return 'In Arbeit'; return 'Offen'; };
+labNaechsteWdh=function(l){ if(!l.mitHilfe)return null; var last=(l.pctLog||[]).map(function(x){return x.datum;}).sort().pop()||l.hilfeAm||today(); return lpAdd(last,2); };
+function labCrAbgabe(l){ return l.crAbgabe||l.abgabeDatum||''; }
+function labBar(v){ v=v==null?0:Math.max(0,Math.min(100,v)); return '<div class="ck-track" style="flex:1;min-width:60px;height:8px;margin:0"><i style="width:'+v+'%;background:'+(v>=100?'var(--c-ok)':'var(--c-accent)')+'"></i></div>'; }
+function labPctRow(l,art,label){
+  var v=labPct(l,art), id=lpEsc(l.id), hist=(l.pctLog||[]).filter(function(x){return x.art===art;}).slice(-4);
+  return '<div style="margin-top:8px"><div class="lp-row" style="gap:8px;align-items:center;flex-wrap:wrap"><span style="min-width:96px;font-size:13px">'+label+'</span>'+labBar(v)
+    +'<input class="lp-in lp-mono" type="number" min="0" max="100" step="1" inputmode="numeric" data-lab2-pct="'+art+'" data-id="'+id+'" value="'+(v==null?'':v)+'" placeholder="%" style="width:70px"/><span class="lp-mu">%</span>'
+    +(v!==100?'<button type="button" class="lp-btn gray" data-lab2="p100" data-art="'+art+'" data-id="'+id+'" style="padding:4px 8px">100 %</button>':'<span style="color:var(--c-ok)">✓</span>')+'</div>'
+    +(hist.length?'<div class="lp-mu lp-mono" style="font-size:10px;margin:2px 0 0 104px">'+hist.map(function(x){return lpFmtShort(x.datum)+' '+x.pct+' %';}).join(' → ')+'</div>':'')+'</div>';
+}
+labCardHTML=function(l){
+  if(labMigrate2(l)){ labSync(l); saveD(); }
+  var id=lpEsc(l.id), c=LAB_STATUS_VAR[l.status]||'var(--lp-muted)', a=labPct(l,'lab'), cr=labPct(l,'cr'), p=labPunkteAuto(l), td=today(), wdh=labNaechsteWdh(l);
+  if(!LAB_EXP[l.id]){
+    var meta=[];
+    if(a!=null||cr!=null)meta.push('Lab '+(a==null?'–':a+'%')+' · CR '+(cr==null?'–':cr+'%'));
+    if(wdh&&wdh<=td)meta.push('<span style="color:var(--c-accent)">Wdh. fällig</span>');
+    else if(l.status!=='voll'&&l.abgabeDatum)meta.push('Abgabe '+lpFmtShort(l.abgabeDatum));
+    if(p!=null)meta.push(p+' Pkt.');
+    return '<div class="lp-row" data-lab="exp" data-id="'+id+'" style="gap:8px;align-items:center;padding:7px 2px;border-top:1px solid var(--lp-border);cursor:pointer">'
+      +'<span style="width:7px;height:7px;border-radius:50%;background:'+c+';flex-shrink:0"></span>'
+      +'<span style="flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+lpEsc(l.titel)+'</span>'
+      +'<span class="lp-mono lp-mu" style="font-size:10px;white-space:nowrap">'+meta.join(' · ')+'</span><i class="ti ti-chevron-down" style="font-size:12px;opacity:.5"></i></div>';
+  }
+  return '<div class="lp-inner" style="margin:6px 0 8px;border-left:3px solid '+c+'">'
+    +'<div class="lp-row" data-lab="exp" data-id="'+id+'" style="justify-content:space-between;gap:6px;cursor:pointer;align-items:center"><span style="font-size:14px;font-weight:500">'+lpEsc(l.titel)+'</span>'
+    +'<span class="lp-row" style="gap:6px;align-items:center"><span class="lp-tag" style="background:color-mix(in srgb,'+c+' 18%,transparent);color:'+c+'">'+labStatusLabel(l)+'</span><span class="lp-mu" style="font-size:11px;white-space:nowrap;padding:2px 6px;border:1px solid var(--lp-border);border-radius:99px">zuklappen <i class="ti ti-chevron-up"></i></span></span></div>'
+    +labPctRow(l,'lab','Lab')+labPctRow(l,'cr','Code-Review')
+    +'<div class="lp-row" style="gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap"><label class="lp-row" style="gap:6px;align-items:center;font-size:12px;cursor:pointer"><input type="checkbox" data-lab2="hilfe" data-id="'+id+'"'+(l.mitHilfe?' checked':'')+'/> mit Hilfe gelöst → später wiederholen</label>'
+    +(l.mitHilfe&&wdh?'<span class="lp-mu lp-mono" style="font-size:11px">Wdh. '+(wdh<=td?'fällig':lpFmtShort(wdh))+'</span><button type="button" class="lp-btn gray" data-lab2="wdh" data-id="'+id+'" style="padding:4px 8px">Wiederholt ✓</button>':'')+'</div>'
+    +'<div class="lp-row" style="gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">'
+    +'<label class="lp-mu" style="font-size:11px">Abgabe Lab <input class="lp-in lp-mono" type="date" data-lpc="lab.abgabeDatum" data-id="'+id+'" value="'+(l.abgabeDatum||'')+'" style="max-width:150px"/></label>'
+    +'<label class="lp-mu" style="font-size:11px">Abgabe Code-Review <input class="lp-in lp-mono" type="date" data-lab2="crab" data-id="'+id+'" value="'+lpEsc(l.crAbgabe||'')+'" placeholder="wie Lab" style="max-width:150px"/></label></div>'
+    +'<div class="lp-row" style="gap:8px;margin-top:8px;align-items:center;justify-content:space-between;flex-wrap:wrap"><input class="lp-in" data-lab2="titel" data-id="'+id+'" value="'+lpEsc(l.titel)+'" style="flex:1;min-width:160px" title="Titel"/>'
+    +'<span class="lp-mono" style="font-size:13px">'+(p==null?'– Pkt.':p+' Pkt.')+'</span><button type="button" class="lp-x" data-lab="del" data-id="'+id+'" title="Lab löschen">✕</button></div>'
+    +'<div class="lp-mu" style="font-size:10px;margin-top:6px">Punkte automatisch: Lab und Code-Review beide 100 % → 2 · etwas gemacht → 1 · nichts → 0.</div></div>';
+};
+function labSetPct(id,art,v){
+  var l=lpLabs().find(function(x){return x.id===id;}); if(!l)return;
+  v=Math.max(0,Math.min(100,Math.round(+v))); if(isNaN(v))return;
+  if(labPct(l,art)===v)return;
+  if(art==='cr')l.crPct=v; else l.pct=v;
+  l.pctLog=l.pctLog||[]; l.pctLog.push({datum:today(),art:art,pct:v,ts:Date.now()});
+  labSync(l); lpTouch(l); saveD(); lpRender();
+  showToast((art==='cr'?'Code-Review':'Lab')+' '+v+' % gespeichert'+(l.punkte!=null?' · '+l.punkte+' Pkt.':''),'ok');
+}
+document.addEventListener('change',function(ev){
+  var t=ev.target; if(!t||!t.getAttribute)return;
+  var art=t.getAttribute('data-lab2-pct'); if(art){ if(t.value!=='')labSetPct(t.getAttribute('data-id'),art,t.value); return; }
+  var a=t.getAttribute('data-lab2'); if(!a)return; var l=lpLabs().find(function(x){return x.id===t.getAttribute('data-id');}); if(!l)return;
+  if(a==='hilfe'){ l.mitHilfe=t.checked; if(t.checked)l.hilfeAm=today(); lpTouch(l); saveD(); return lpRender(); }
+  if(a==='crab'){ l.crAbgabe=t.value; lpTouch(l); saveD(); return lpRender(); }
+  if(a==='titel'){ var v=t.value.trim(); if(!v){ t.value=l.titel; return; } l.titel=v; lpTouch(l); saveD(); return lpRender(); }
+});
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lab2]'); if(!el||el.tagName==='INPUT')return;
+  var a=el.getAttribute('data-lab2'), id=el.getAttribute('data-id'), l=lpLabs().find(function(x){return x.id===id;}); if(!l)return; ev.preventDefault();
+  if(a==='p100')return labSetPct(id,el.getAttribute('data-art'),100);
+  if(a==='wdh'){ l.mitHilfe=false; l.wdhAm=today(); l.pctLog=l.pctLog||[]; l.pctLog.push({datum:today(),art:'wdh',pct:100,ts:Date.now()}); lpTouch(l); saveD(); showToast('Wiederholung erledigt ✓','ok'); return lpRender(); }
+});
+// «+ Lab» ohne Eingabefenster: legt «Lab n» an und klappt es auf (Titel im Lab änderbar)
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lab="new"]'); if(!el)return; ev.preventDefault(); ev.stopImmediatePropagation();
+  var fid=el.getAttribute('data-fach'), n=lpLabsOf(fid).length+1, l=labNew(fid,n,'Lab '+n); l.v2=true; l.pctLog=[]; saveD(); LAB_EXP[l.id]=true; lpRender();
+},true);
+
+// ═══ AM-ARSCH-O-METER v3 — Prozentstände, angefangene Themen, vollständige Wochenliste ═══
+function aomKeys(fach){ return String(fach||'').toLowerCase().split(/[^a-zäöüéè]+/).filter(function(w){return w.length>=5;}).map(function(w){return w.slice(0,6);}); }
+function aomMatch(txt,keys){ txt=String(txt||'').toLowerCase(); return keys.some(function(k){return txt.indexOf(k)>=0;}); }
+aomStats=function(fach){
+  var td=today(), wEnd=lpAdd(lpMonday(td),6), f=lpFach(fach,false), rows=[], items=[], soll=0, ist=0;
+  if(!f)return {soll:0,ist:0,rows:rows,woche:[],next:[],pruefung:''};
+  var add=function(label,i,s2){ if(s2<=0)return; rows.push({label:label,ist:i,soll:s2}); soll+=s2; ist+=i; };
+  var keys=aomKeys(fach), item=function(d,t){ items.push({d:d,t:t}); };
+  // 1) Labs & Code-Reviews mit Abgabe bis heute: Prozentstand zählt anteilig
+  var lS=0, lI=0;
+  lpLabsOf(f.id).forEach(function(l){
+    labMigrate2(l);
+    var a=labPct(l,'lab')||0, c=labPct(l,'cr')||0, crd=labCrAbgabe(l);
+    if(l.abgabeDatum&&l.abgabeDatum<=td){ lS++; lI+=a/100; } else if(l.abgabeDatum&&a<100)item(l.abgabeDatum,'Lab «'+l.titel+'»'+(a?' ('+a+' %)':''));
+    if(crd&&crd<=td){ lS++; lI+=c/100; } else if(crd&&c<100)item(crd,'Code-Review «'+l.titel+'»'+(c?' ('+c+' %)':''));
+    var w=labNaechsteWdh(l); if(w){ if(w<td)add('Lab-Wiederholung «'+l.titel+'» (mit Hilfe)',0,0.5); if(w<=wEnd)item(w,'Wiederholen: Lab «'+l.titel+'»'); }
+  });
+  add('Labs & Code-Reviews bis heute',lI,lS);
+  // 2) Angefangene Themen: offene Checkpoints/Etappen und Pool-Aufgaben zählen
+  var themen=lpThemenOf(f.id), started={}, openStarted=0, tRows=[];
+  themen.forEach(function(t){
+    var m=lpModus(t), es=lpEtappenOf(t.id), al=(D.lpAufgaben||[]).filter(function(x){return x.themaId===t.id;});
+    var go=es.some(function(e){ return lpEtappeDone(e,m)||lpCpProg(e).done>0||(e.stufe||0)>0; })||al.some(function(x){return (x.log||[]).length;});
+    if(!go)return; started[t.id]=1;
+    var tS=0, tI=0;
+    if(m==='pool'){ al.forEach(function(x){ tS++; tI+=(x.status==='sitzt'||x.status==='pruefungsfest')?1:(x.status==='ueben'?0.5:0); }); }
+    else es.forEach(function(e){ var cp=lpCpProg(e); tS++; if(lpEtappeDone(e,m))tI+=1; else { tI+=cp.total?cp.done/cp.total:0; openStarted++; } });
+    if(tS>0){ tRows.push(t.name+' '+String(Math.round(tI*10)/10).replace('.',',')+'/'+tS); soll+=tS; ist+=tI; }
+    if(tS>tI&&m!=='pool'){ var n=es.filter(function(e){return !lpEtappeDone(e,m);}).length; if(n)item('','Thema «'+t.name+'»: '+n+' Etappe'+(n===1?'':'n')+' offen'); }
+  });
+  if(tRows.length)rows.push({label:'Angefangene Themen ('+tRows.join(' · ')+')',ist:null,soll:null,sub:true});
+  var curT=lpFachCurrentThema(themen); if(curT&&!started[curT.id]){ var cm=lpModus(curT), cn=lpEtappenOf(curT.id).filter(function(e){return !lpEtappeDone(e,cm);}).length; if(cn)item('','Aktuelles Thema «'+curT.name+'»: '+cn+' Etappe'+(cn===1?'':'n')+' offen'); }
+  // 3) Pool: fällige Wiederholungen (auch in nicht angefangenen Themen)
+  var pd=(D.lpAufgaben||[]).filter(function(x){ return themen.some(function(t){return t.id===x.themaId;})&&x.naechsteWdh&&x.naechsteWdh<=wEnd&&x.status!=='pruefungsfest'; });
+  var pUeber=pd.filter(function(x){return x.naechsteWdh<td&&(x.status==='sitzt');}).length; if(pUeber)add('Pool-Wiederholungen überfällig',0,pUeber*0.5);
+  if(pd.length){ var dmin=pd.map(function(x){return x.naechsteWdh;}).sort()[0]; item(dmin,pd.length+' Pool-Aufgabe'+(pd.length===1?'':'n')+' zur Wiederholung'); }
+  // 4) Lernplan-Tempo (nur mit Prüfungsdatum): Rückstand, der über die angefangenen Themen hinausgeht
+  var st=lpFachStats(fach); if(f.pruefung&&st.rueck>openStarted)add('Rückstand laut Lernplan-Tempo',0,st.rueck-openStarted);
+  // 5) Eigene Einplanung: Lernblöcke (verknüpft oder mit Fachnamen) — nachgeholt zählt
+  var eIds={}, eDone={}, eThema={}; themen.forEach(function(t){ var m=lpModus(t); lpEtappenOf(t.id).forEach(function(e){ eIds[e.id]=1; eThema[e.id]=t.id; if(lpEtappeDone(e,m))eDone[e.id]=1; }); });
+  var bS=0, bI=0, W=wpEnsure();
+  Object.keys(W.wochen||{}).forEach(function(k){ (W.wochen[k].bloecke||[]).forEach(function(b){
+    if(b.typ==='fix'||b.typ==='belohnung'||b.typ==='fenster'||b.status==='verschoben')return;
+    var q=String(b.quelle||''), eid=q.indexOf('etappe:')===0?q.slice(7):null, own=eid?!!eIds[eid]:((b.kategorie==='lernen'||b.kategorie==='uni')&&aomMatch(b.titel,keys));
+    if(!own)return;
+    var wert=(eid&&eDone[eid])?1:(b.status==='ok'?1:(b.status==='teil'?0.5:0));
+    if(b.tag<td){ if(!(eid&&started[eThema[eid]])){ bS++; bI+=wert; } }
+    else if(wert<1&&b.tag<=wEnd)item(b.tag,'Lernblock «'+b.titel+'»');
+    else if(wert<1)item(b.tag,'Lernblock «'+b.titel+'»');
+  }); });
+  add('Eingeplante Lernblöcke (nachgeholt zählt)',bI,bS);
+  // 6) Backlog-Aufgaben und Deadlines dieses Fachs
+  (D.woechentlich||[]).forEach(function(t){ if(t.erledigt||t.status==='Erledigt'||!t.faellig)return; if(!aomMatch(t.name+' '+(t.notizen||''),keys))return; var d=String(t.faellig).slice(0,10); item(d,'Aufgabe «'+t.name+'»'); if(d<td)add('Überfällige Aufgabe «'+t.name+'»',0,1); });
+  (D.deadlines||[]).forEach(function(x){ if(!x.date)return; if(!(x.fach===fach||aomMatch((x.fach||'')+' '+x.name,keys)))return; var d=String(x.date).slice(0,10); if(d>=td)item(d,(x.typ||'Deadline')+': '+x.name); });
+  items.sort(function(a,b){ return (a.d||'0')<(b.d||'0')?-1:1; });
+  return {soll:soll,ist:ist,rows:rows,woche:items.filter(function(n){return !n.d||n.d<=wEnd;}),next:items.filter(function(n){return n.d>wEnd;}).slice(0,1),pruefung:f.pruefung||''};
+};
 
 // ═══════════════════════════════════════════════════════════
 // INIT
