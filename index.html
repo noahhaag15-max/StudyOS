@@ -6435,7 +6435,7 @@ function lnSuggest(d){
   var td=today(); if(d<td)return [];
   if(LN_MEMO.sug[d])return LN_MEMO.sug[d];
   var plan=lnPlan(), skip=lnSkip(), planned=lnPlanned(), out=[];
-  var items=(plan[d]||[]).filter(function(c){ return !skip[c.e.id+'|'+d]&&!planned[c.e.id]; });
+  var items=(plan[d]||[]).filter(function(c){ return c.kind==='wdh'&&!skip[c.e.id+'|'+d]&&!planned[c.e.id]; });   // nur Wiederholungen vorschlagen, keine neuen Etappen
   if(!items.length){ LN_MEMO.sug[d]=[]; return []; }
   var have=wpBlocksOn(d).filter(function(b){ return b.status!=='verschoben'&&b.kategorie==='lernen'&&b.typ==='aufgabe'; }).length;
   var free=Math.max(0,lpDayCap(d)-have);
