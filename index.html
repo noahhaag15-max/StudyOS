@@ -6435,7 +6435,7 @@ function lnSuggest(d){
   var td=today(); if(d<td)return [];
   if(LN_MEMO.sug[d])return LN_MEMO.sug[d];
   var plan=lnPlan(), skip=lnSkip(), planned=lnPlanned(), out=[];
-  var items=(plan[d]||[]).filter(function(c){ return c.kind==='wdh'&&!skip[c.e.id+'|'+d]&&!planned[c.e.id]; });   // nur Wiederholungen vorschlagen, keine neuen Etappen
+  var items=(plan[d]||[]).filter(function(c){ return c.kind==='wdh'&&lpWdhGewaehlt(c.e)&&!skip[c.e.id+'|'+d]&&!planned[c.e.id]; });   // nur Wiederholungen vorschlagen, keine neuen Etappen
   if(!items.length){ LN_MEMO.sug[d]=[]; return []; }
   var have=wpBlocksOn(d).filter(function(b){ return b.status!=='verschoben'&&b.kategorie==='lernen'&&b.typ==='aufgabe'; }).length;
   var free=Math.max(0,lpDayCap(d)-have);
@@ -11860,8 +11860,8 @@ function lpAutoPlan(){
       var m=lpModus(t);
       lpEtappenOf(t.id).forEach(function(e){
         var ctx=lpEtappeCtx(fname,t,e);
-        if(lpReviewDue(e,m,td)){ ctx.kind='wdh'; put(nextOk(td),ctx); return; }
-        if(e.naechsteWiederholung&&e.naechsteWiederholung>td&&((m==='drill'&&(e.stufe||0)>=1)||(m==='konzept'&&e.erledigt&&(e.wdhDone||0)<2))){
+        if(lpReviewDue(e,m,td)&&lpWdhGewaehlt(e)){ ctx.kind='wdh'; put(nextOk(td),ctx); return; }
+        if(lpWdhGewaehlt(e)&&e.naechsteWiederholung&&e.naechsteWiederholung>td&&((m==='drill'&&(e.stufe||0)>=1)||(m==='konzept'&&e.erledigt&&(e.wdhDone||0)<2))){
           ctx.kind='wdh'; put(nextOk(e.naechsteWiederholung),ctx); return;
         }
         var open=(m==='drill')?(e.stufe||0)===0:!e.erledigt;
@@ -18839,6 +18839,71 @@ function lpFachFortschritt(name){
 }
 var _lpFachStats_bar=lpFachStats;
 lpFachStats=function(name){ var r=_lpFachStats_bar.apply(this,arguments); try{ var p=lpFachFortschritt(name); if(p)r.pct=p.pct; }catch(e){} return r; };
+
+// ═══ WIEDERHOLUNG v2 — nach jeder Session: wiederholen? Ja/Nein · bei Ja: Woche wählen oder Intensivlernplan ═══
+// Nur so gewählte Wiederholungen werden eingeplant und vorgeschlagen (keine Automatik mehr).
+function lpWdhGewaehlt(e){ return !!e&&(e.wdhModus==='woche'||e.wdhModus==='intensiv'||e.wdhModus==='generell'); }
+function lpWdhWochen(e){
+  var td=today(), mon=lpMonday(td), ps=lpWdhPuffer(e), out=[];
+  for(var i=0;i<12;i++){ var m=lpAdd(mon,i*7); if(ps&&m>=ps)break; var start=i===0?td:m; if(i===0&&lpAdd(m,6)<=td)continue;
+    out.push({d:start,label:(i===0?'diese Woche':i===1?'nächste Woche':'KW '+getKW(new Date(m+'T00:00:00Z')))+' · '+lpFmtShort(m)}); }
+  return out;
+}
+lpSetWdhModus=function(e,mode,datum){
+  if(!e)return; var m=lpModus(lpThema(e.themaId)); e.wdhModus=mode;
+  if(mode==='keine'){ e.naechsteWiederholung=null; e.wdhPlan=null; e.gesperrtBis=0; if(m==='konzept')e.wdhDone=2; }
+  else { var d=mode==='woche'?(datum||lpAdd(today(),7)):lpWdhZiel(e,'intensiv'); e.naechsteWiederholung=d; e.gesperrtBis=0; if(m==='konzept'){ e.wdhPlan=[d]; e.wdhDone=0; } }
+  lpTouch(e);
+};
+function lpWdhAuswahlHTML(e,ja,woche,attr){
+  var pill=function(on,label,a){ return '<button type="button" class="wp-pill'+(on?' on':'')+'" '+a+'>'+label+'</button>'; };
+  var h='<div class="lp-row" style="gap:6px;flex-wrap:wrap">'+pill(ja===true,'Ja, wiederholen',attr+'="ja"')+pill(ja===false,'Nein',attr+'="nein"')+'</div>';
+  if(ja===true){
+    h+='<div class="lp-mu" style="font-size:11px;margin:8px 0 4px">Wann?</div><div class="lp-row" style="gap:5px;flex-wrap:wrap">'
+      +lpWdhWochen(e).map(function(w){ return pill(woche===w.d,w.label,attr+'="w:'+w.d+'"'); }).join('')
+      +pill(woche==='intensiv','🎯 Intensivlernplan · ab '+lpFmtShort(lpWdhZiel(e,'intensiv')),attr+'="intensiv"')+'</div>';
+  }
+  return h;
+}
+lpLmFinishHTML=function(){
+  var h=_lpLmFinishHTML_wdh.apply(this,arguments);
+  try{
+    var e=lpEtappe(LM.etappeId), modus=lpModus(lpThema(e.themaId));
+    var fertig=modus==='drill'?!!LM.sel:LM.sel==='erledigt'; if(!fertig)return h;
+    var sec='<div style="margin-top:10px"><div class="lp-mu" style="margin-bottom:6px">Soll das wiederholt werden?</div>'+lpWdhAuswahlHTML(e,LM.wdhJa,LM.wdhWann,'data-lpwdh2')+'</div>';
+    var mark='<div class="lp-mu" style="border-top:1px solid var(--lp-border);margin-top:10px;padding-top:8px">';
+    return h.indexOf(mark)>=0?h.replace(mark,sec+mark):h;
+  }catch(x){ return h; }
+};
+lpLmFinishSave=function(){
+  var id=LM&&LM.etappeId, e0=id?lpEtappe(id):null, modus=e0?lpModus(lpThema(e0.themaId)):null, sel=LM&&LM.sel;
+  var fertig=modus==='drill'?!!sel:sel==='erledigt';
+  if(fertig&&LM.wdhJa==null){ showToast('Bitte wählen: soll das wiederholt werden?'); return; }
+  if(fertig&&LM.wdhJa===true&&!LM.wdhWann){ showToast('Bitte eine Woche oder den Intensivlernplan wählen.'); return; }
+  var ja=LM.wdhJa, wann=LM.wdhWann;
+  _lpLmFinishSave_wdh.apply(this,arguments);
+  if(LM&&LM.mode==='break'&&fertig&&id){
+    var e=lpEtappe(id);
+    if(ja===false)lpSetWdhModus(e,'keine'); else if(wann==='intensiv')lpSetWdhModus(e,'intensiv'); else lpSetWdhModus(e,'woche',wann);
+    LM.wdhJa=null; LM.wdhWann=null; saveD(); try{ lpRenderDash(); }catch(x){}
+  }
+};
+lpWdhChipHTML=function(e){
+  var st=LP_UI.wdhChip&&LP_UI.wdhChip.id===e.id?LP_UI.wdhChip:{id:e.id,ja:null};
+  return '<div class="lp-inner" style="margin-top:6px"><div class="lp-mu" style="font-size:12px;margin-bottom:6px">Soll «'+lpEsc(lpCut(e.titel,28))+'» wiederholt werden?</div>'+lpWdhAuswahlHTML(e,st.ja,null,'data-lpwdh3')+'</div>';
+};
+document.addEventListener('click',function(ev){
+  var b=ev.target.closest&&ev.target.closest('[data-lpwdh2]');
+  if(b&&LM){ ev.preventDefault(); ev.stopPropagation(); var v=b.getAttribute('data-lpwdh2');
+    if(v==='ja'){ LM.wdhJa=true; } else if(v==='nein'){ LM.wdhJa=false; LM.wdhWann=null; } else if(v==='intensiv'){ LM.wdhWann='intensiv'; } else if(v.indexOf('w:')===0){ LM.wdhWann=v.slice(2); }
+    return lpLmRender(); }
+  var c=ev.target.closest&&ev.target.closest('[data-lpwdh3]');
+  if(c&&LP_UI.moveChip){ ev.preventDefault(); ev.stopPropagation(); var e=lpEtappe(LP_UI.moveChip.id), v2=c.getAttribute('data-lpwdh3'); if(!e)return;
+    if(v2==='ja'){ LP_UI.wdhChip={id:e.id,ja:true}; return lpRender(); }
+    if(v2==='nein')lpSetWdhModus(e,'keine'); else if(v2==='intensiv')lpSetWdhModus(e,'intensiv'); else lpSetWdhModus(e,'woche',v2.slice(2));
+    LP_UI.moveChip=null; LP_UI.wdhChip=null; saveD(); try{ LN_MEMO.sug={}; }catch(x){} lpRender();
+    showToast(v2==='nein'?'Wird nicht wiederholt ✓':'Wiederholung ab '+lpFmt(e.naechsteWiederholung)+' eingeplant ✓','ok'); }
+},true);
 
 // ═══════════════════════════════════════════════════════════
 // INIT
