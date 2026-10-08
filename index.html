@@ -18353,7 +18353,7 @@ function mrLogbuch(ym){
       if(dt.pushups)r.pu+=dt.pushups; if(dt.steps!=null)r.steps.push(dt.steps); if(dt.screentime!=null)r.screen.push(dt.screentime);
       if(any)r.erfasst++;
     }
-    if(j&&(j.a||j.b||j.high||j.neg||j.take))r.jn.push(d);
+    if(j&&(j.a||j.b||j.high||j.neg||j.take||(j.antworten||[]).some(function(x){return x;})))r.jn.push(d);
   });
   return r;
 }
@@ -18378,7 +18378,8 @@ function mrLogbuchHTML(ym){
   if(s.jn.length){
     h+='<details style="margin-top:8px"><summary class="lp-cap" style="cursor:pointer">TAGEBUCH · '+s.jn.length+' EINTR'+(s.jn.length===1?'AG':'ÄGE')+'</summary><div style="margin-top:6px">'
       +s.jn.map(function(d){ var j=D.journal[d], L=[];
-        if(j.a)L.push('<div><span class="lp-mu">'+lpEsc(j.qa||'')+'</span> '+lpEsc(j.a)+'</div>'); if(j.b)L.push('<div><span class="lp-mu">'+lpEsc(j.qb||'')+'</span> '+lpEsc(j.b)+'</div>');
+        if(Array.isArray(j.antworten)&&Array.isArray(j.fragen)){ j.fragen.forEach(function(q,qi){ if(j.antworten[qi])L.push('<div><span class="lp-mu">'+lpEsc(q)+'</span> '+lpEsc(j.antworten[qi])+'</div>'); }); }
+        else { if(j.a)L.push('<div><span class="lp-mu">'+lpEsc(j.qa||'')+'</span> '+lpEsc(j.a)+'</div>'); if(j.b)L.push('<div><span class="lp-mu">'+lpEsc(j.qb||'')+'</span> '+lpEsc(j.b)+'</div>'); }
         if(j.high)L.push('<div><span style="color:var(--c-ok)">Highlights</span> '+lpEsc(j.high)+'</div>'); if(j.neg)L.push('<div><span class="lp-mu">Schwierig</span> '+lpEsc(j.neg)+'</div>'); if(j.take)L.push('<div><span class="lp-mu">Takeaways</span> '+lpEsc(j.take)+'</div>');
         return '<div class="trk-old" style="font-size:12px;margin-bottom:8px"><b>'+lpDayLbl(d)+' '+lpFmt(d)+'</b>'+L.join('')+'</div>'; }).join('')+'</div></details>';
   }
@@ -18904,6 +18905,94 @@ document.addEventListener('click',function(ev){
     LP_UI.moveChip=null; LP_UI.wdhChip=null; saveD(); try{ LN_MEMO.sug={}; }catch(x){} lpRender();
     showToast(v2==='nein'?'Wird nicht wiederholt ✓':'Wiederholung ab '+lpFmt(e.naechsteWiederholung)+' eingeplant ✓','ok'); }
 },true);
+
+// ═══ LOGBUCH v2: klare Skalen im Tagesabschluss + anpassbare Tagebuch-Fragen (pro Tagestyp, synchronisiert) ═══
+CFG_DEFAULTS['trk.fragen']={};
+function trkFragen(typ){ var o=cfg('trk.fragen')||{}, l=o[typ]; return (Array.isArray(l)&&l.length)?l:(TRK_FRAGEN[typ]||TRK_FRAGEN.anderes); }
+function trkTypLabel(typ){ return (TRK_TYPEN.find(function(t){return t[0]===typ;})||[,typ])[1]; }
+function trkJAntworten(j,fr){ if(!j)return fr.map(function(){return '';}); if(Array.isArray(j.antworten))return fr.map(function(q,i){ var k=(j.fragen||[]).indexOf(q); return k>=0?(j.antworten[k]||''):(j.antworten[i]||''); }); return fr.map(function(q,i){ return i===0?(j.a||''):i===1?(j.b||''):''; }); }
+function trkJSpeichern(d,typ,fr,ans){
+  var old=(D.journal&&D.journal[d])||{}; if(!D.journal)D.journal={};
+  if(!ans.some(function(x){return x;})&&!(old.a||old.b||(old.antworten||[]).some(function(x){return x;})))return false;
+  D.journal[d]=Object.assign({},old,{typ:typ,fragen:fr.slice(),antworten:ans.slice(),qa:fr[0]||'',a:ans[0]||'',qb:fr[1]||'',b:ans[1]||'',ts:Date.now()}); saveD(); return true;
+}
+function trkJFelderHTML(pref,fr,ans){ return fr.map(function(q,i){ return '<div style="font-size:12px;margin:'+(i?'8px':'2px')+' 0 3px">'+lpEsc(q)+'</div><textarea class="lp-in" id="'+pref+i+'" data-jidx="'+i+'" rows="2" style="width:100%">'+lpEsc(ans[i]||'')+'</textarea>'; }).join(''); }
+function trkFragenEdit(typ){
+  syModal('trk-fragen','<div class="lp-cap" style="margin-bottom:6px">TAGEBUCH-FRAGEN</div>'
+    +'<div class="lp-row" style="gap:5px;flex-wrap:wrap;margin-bottom:8px">'+TRK_TYPEN.map(function(t){ return '<button type="button" class="wp-pill'+(t[0]===typ?' on':'')+'" data-trkf="typ" data-v="'+t[0]+'">'+lpEsc(t[1])+'</button>'; }).join('')+'</div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-bottom:4px">Fragen für «'+lpEsc(trkTypLabel(typ))+'» — eine pro Zeile (1–6):</div>'
+    +'<textarea class="lp-in" id="trkf-txt" rows="6" style="width:100%">'+lpEsc(trkFragen(typ).join('\n'))+'</textarea>'
+    +'<div class="lp-row" style="justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap"><button type="button" class="lp-btn gray" data-trkf="std" data-v="'+typ+'">Standard</button><span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-trkf="close">Abbrechen</button><button type="button" class="lp-btn fill" data-trkf="save" data-v="'+typ+'">Speichern</button></span></div>');
+}
+function trkFragenRefresh(){ try{ if(document.getElementById('wp-ta')&&WP_TA&&WP_TA.date){ var x=document.getElementById('ta-logbuch'); if(x)x.remove(); wpTaRender(); } }catch(e){} try{ trkRender(); }catch(e){} }
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-trkf]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var a=el.getAttribute('data-trkf'), v=el.getAttribute('data-v'), rm=function(){ var m=document.getElementById('trk-fragen'); if(m)m.remove(); };
+  if(a==='open')return trkFragenEdit(v);
+  if(a==='typ')return trkFragenEdit(v);
+  if(a==='close')return rm();
+  var o=JSON.parse(JSON.stringify(cfg('trk.fragen')||{}));
+  if(a==='std'){ delete o[v]; setCfg('trk.fragen',o,'logbuch'); rm(); showToast('Standardfragen wiederhergestellt ✓','ok'); return trkFragenRefresh(); }
+  if(a==='save'){ var l=(document.getElementById('trkf-txt').value||'').split(/\n/).map(function(x){return x.trim();}).filter(Boolean).slice(0,6);
+    if(!l.length){ showToast('Mindestens eine Frage eintragen.'); return; } o[v]=l; setCfg('trk.fragen',o,'logbuch'); rm(); showToast('Fragen gespeichert ✓','ok'); return trkFragenRefresh(); }
+},true);
+
+// Tagesabschluss: Logbuch-Teil neu gestalten
+function taLbSeg(k,vals,cur){ return '<span class="tal-seg">'+vals.map(function(v){ return '<button type="button" class="'+(String(cur)===String(v[0])?'on':'')+'" data-talb="set" data-k="'+k+'" data-v="'+v[0]+'">'+v[1]+'</button>'; }).join('')+'</span>'; }
+taLogbuchHTML=function(d){
+  var dt=(D.dailyTracker&&D.dailyTracker[d])||{}, j=(D.journal&&D.journal[d])||{}, typ=j.typ||trkDayTyp(d), fr=trkFragen(typ), ans=trkJAntworten(j,fr);
+  var row=function(label,hint,seg){ return '<div class="tal-row"><span class="tal-l">'+label+(hint?'<small>'+hint+'</small>':'')+'</span>'+seg+'</div>'; };
+  return '<div class="lp-inner" id="ta-logbuch" style="margin-top:8px"><div class="lp-cap" style="margin-bottom:4px">LOGBUCH</div>'
+    +'<div class="tal-h">Check-in</div>'+TRK_CHECK.map(function(c){ return row(c[1],c[2]+' → '+c[3],taLbSeg(c[0],[[1,'1'],[2,'2'],[3,'3'],[4,'4'],[5,'5']],dt[c[0]])); }).join('')
+    +'<div class="tal-h">Konsum</div>'+TA_KONSUM.map(function(k){ return row(k[1],'',taLbSeg(k[0],k[2],dt[k[0]])); }).join('')
+    +'<div class="tal-h lp-row" style="justify-content:space-between;align-items:center"><span>Tagebuch · '+lpEsc(trkTypLabel(typ))+'</span><a href="#" data-trkf="open" data-v="'+typ+'" style="font-size:11px;color:var(--c-accent)">Fragen anpassen</a></div>'
+    +trkJFelderHTML('ta-jq',fr,ans)+'<div class="lp-mu" id="ta-j-st" style="font-size:10px;text-align:right;min-height:12px"></div></div>';
+};
+taJournalSave=function(){
+  var d=WP_TA&&WP_TA.date; if(!d||!document.getElementById('ta-jq0'))return;
+  var j=(D.journal&&D.journal[d])||{}, typ=j.typ||trkDayTyp(d), fr=trkFragen(typ), ans=fr.map(function(q,i){ var t=document.getElementById('ta-jq'+i); return t?t.value.trim():''; });
+  if(trkJSpeichern(d,typ,fr,ans)){ var st=document.getElementById('ta-j-st'); if(st)st.textContent='gespeichert ✓'; }
+};
+document.addEventListener('input',function(ev){ var t=ev.target; if(t&&t.id&&t.id.indexOf('ta-jq')===0){ var st=document.getElementById('ta-j-st'); if(st)st.textContent=''; clearTimeout(TA_JT); TA_JT=setTimeout(taJournalSave,700); } });
+// Klick-Zustand für die neue Skala (bestehender Handler setzt den Wert; hier nur die Markierung)
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('.tal-seg [data-talb="set"]'); if(!el)return;
+  setTimeout(function(){ var d=WP_TA&&WP_TA.date, dt=(D.dailyTracker&&D.dailyTracker[d])||{}, k=el.getAttribute('data-k'); el.parentNode.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on',+b.getAttribute('data-v')===dt[k]); }); },0);
+});
+
+// Logbuch-Seite: Tagebuch mit anpassbaren Fragen
+var _trkRender_jf=trkRender;
+trkRender=function(){
+  _trkRender_jf.apply(this,arguments);
+  try{
+    var ja=document.getElementById('trk-ja'); if(!ja)return; var card=ja.closest('.trk-card'); if(!card)return;
+    var d=trkDate(), j=(D.journal&&D.journal[d])||{}, typ=(TRK_UI.typ&&TRK_UI.typDate===d)?TRK_UI.typ:trkDayTyp(d), fr=trkFragen(typ), ans=trkJAntworten(j.typ&&j.typ!==typ?null:j,fr);
+    var seg=card.querySelector('.trk-typ'), segHTML=seg?seg.outerHTML:'';
+    card.innerHTML='<div class="lp-row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><span class="lp-cap"><i class="ti ti-notebook"></i> TAGES-JOURNAL</span>'+segHTML+'</div>'
+      +trkJFelderHTML('trk-jq',fr,ans)
+      +'<div class="lp-row" style="justify-content:space-between;align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap"><a href="#" data-trkf="open" data-v="'+typ+'" style="font-size:11px;color:var(--c-accent)">Fragen anpassen</a><button type="button" class="lp-btn fill" data-trkj="save" data-v="'+typ+'">Speichern</button></div>';
+  }catch(e){}
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-trkj="save"]'); if(!el)return; ev.preventDefault();
+  var d=trkDate(), typ=el.getAttribute('data-v'), fr=trkFragen(typ), ans=fr.map(function(q,i){ var t=document.getElementById('trk-jq'+i); return t?t.value.trim():''; });
+  if(!ans.some(function(x){return x;})){ showToast('Mindestens ein Feld ausfüllen.'); return; }
+  trkJSpeichern(d,typ,fr,ans); showToast('Tages-Journal gespeichert ✓','ok'); trkRender();
+});
+// Monatsrückblick: alle Fragen/Antworten anzeigen
+var _mrLogbuchHTML_jf=mrLogbuchHTML;
+mrLogbuchHTML=function(ym){
+  var h=_mrLogbuchHTML_jf(ym); return h;
+};
+(function(){ var st=document.createElement('style'); st.textContent=''
+  +'.tal-h{font-size:11px;color:var(--lp-muted);margin:10px 0 2px;text-transform:uppercase;letter-spacing:.06em}'
+  +'.tal-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--lp-border) 60%,transparent);flex-wrap:wrap}'
+  +'.tal-l{font-size:13px;display:flex;flex-direction:column;min-width:90px}.tal-l small{font-size:10px;color:var(--lp-muted)}'
+  +'.tal-seg{display:inline-flex;border:1px solid var(--lp-border);border-radius:8px;overflow:hidden}'
+  +'.tal-seg button{min-width:34px;height:30px;padding:0 8px;background:transparent;border:0;border-left:1px solid var(--lp-border);color:var(--lp-muted);font-family:var(--mono,monospace);font-size:12px;cursor:pointer}'
+  +'.tal-seg button:first-child{border-left:0}.tal-seg button:hover{color:var(--lp-text);background:color-mix(in srgb,var(--c-accent) 8%,transparent)}'
+  +'.tal-seg button.on{background:var(--c-accent);color:#06121a;font-weight:700}';
+  document.head.appendChild(st); })();
 
 // ═══════════════════════════════════════════════════════════
 // INIT
