@@ -18917,24 +18917,31 @@ function trkJSpeichern(d,typ,fr,ans){
   D.journal[d]=Object.assign({},old,{typ:typ,fragen:fr.slice(),antworten:ans.slice(),qa:fr[0]||'',a:ans[0]||'',qb:fr[1]||'',b:ans[1]||'',ts:Date.now()}); saveD(); return true;
 }
 function trkJFelderHTML(pref,fr,ans){ return fr.map(function(q,i){ return '<div style="font-size:12px;margin:'+(i?'8px':'2px')+' 0 3px">'+lpEsc(q)+'</div><textarea class="lp-in" id="'+pref+i+'" data-jidx="'+i+'" rows="2" style="width:100%">'+lpEsc(ans[i]||'')+'</textarea>'; }).join(''); }
+var TRK_FDRAFT=null;
 function trkFragenEdit(typ){
+  if(!TRK_FDRAFT)TRK_FDRAFT={};
+  var cur=TRK_FDRAFT[typ]!=null?TRK_FDRAFT[typ]:trkFragen(typ).join('\n'); TRK_FDRAFT._typ=typ;
   syModal('trk-fragen','<div class="lp-cap" style="margin-bottom:6px">TAGEBUCH-FRAGEN</div>'
     +'<div class="lp-row" style="gap:5px;flex-wrap:wrap;margin-bottom:8px">'+TRK_TYPEN.map(function(t){ return '<button type="button" class="wp-pill'+(t[0]===typ?' on':'')+'" data-trkf="typ" data-v="'+t[0]+'">'+lpEsc(t[1])+'</button>'; }).join('')+'</div>'
     +'<div class="lp-mu" style="font-size:11px;margin-bottom:4px">Fragen für «'+lpEsc(trkTypLabel(typ))+'» — eine pro Zeile (1–6):</div>'
-    +'<textarea class="lp-in" id="trkf-txt" rows="6" style="width:100%">'+lpEsc(trkFragen(typ).join('\n'))+'</textarea>'
+    +'<textarea class="lp-in" id="trkf-txt" rows="6" style="width:100%">'+lpEsc(cur)+'</textarea>'
+    +(Object.keys(TRK_FDRAFT).filter(function(k){return k!=='_typ'&&k!==typ;}).length?'<div class="lp-mu" style="font-size:10px;margin-top:4px">Ungespeicherte Änderungen bei: '+Object.keys(TRK_FDRAFT).filter(function(k){return k!=='_typ'&&k!==typ;}).map(trkTypLabel).join(', ')+' — «Speichern» übernimmt alle.</div>':'')
     +'<div class="lp-row" style="justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap"><button type="button" class="lp-btn gray" data-trkf="std" data-v="'+typ+'">Standard</button><span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-trkf="close">Abbrechen</button><button type="button" class="lp-btn fill" data-trkf="save" data-v="'+typ+'">Speichern</button></span></div>');
 }
 function trkFragenRefresh(){ try{ if(document.getElementById('wp-ta')&&WP_TA&&WP_TA.date){ var x=document.getElementById('ta-logbuch'); if(x)x.remove(); wpTaRender(); } }catch(e){} try{ trkRender(); }catch(e){} }
 document.addEventListener('click',function(ev){
   var el=ev.target.closest&&ev.target.closest('[data-trkf]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
   var a=el.getAttribute('data-trkf'), v=el.getAttribute('data-v'), rm=function(){ var m=document.getElementById('trk-fragen'); if(m)m.remove(); };
-  if(a==='open')return trkFragenEdit(v);
-  if(a==='typ')return trkFragenEdit(v);
-  if(a==='close')return rm();
+  var keepDraft=function(){ var t=document.getElementById('trkf-txt'); if(t&&TRK_FDRAFT&&TRK_FDRAFT._typ)TRK_FDRAFT[TRK_FDRAFT._typ]=t.value; };
+  if(a==='open'){ TRK_FDRAFT=null; return trkFragenEdit(v); }
+  if(a==='typ'){ keepDraft(); return trkFragenEdit(v); }
+  if(a==='close'){ TRK_FDRAFT=null; return rm(); }
   var o=JSON.parse(JSON.stringify(cfg('trk.fragen')||{}));
-  if(a==='std'){ delete o[v]; setCfg('trk.fragen',o,'logbuch'); rm(); showToast('Standardfragen wiederhergestellt ✓','ok'); return trkFragenRefresh(); }
-  if(a==='save'){ var l=(document.getElementById('trkf-txt').value||'').split(/\n/).map(function(x){return x.trim();}).filter(Boolean).slice(0,6);
-    if(!l.length){ showToast('Mindestens eine Frage eintragen.'); return; } o[v]=l; setCfg('trk.fragen',o,'logbuch'); rm(); showToast('Fragen gespeichert ✓','ok'); return trkFragenRefresh(); }
+  if(a==='std'){ delete o[v]; if(TRK_FDRAFT)delete TRK_FDRAFT[v]; setCfg('trk.fragen',o,'logbuch'); var tx=document.getElementById('trkf-txt'); if(tx)tx.value=trkFragen(v).join('\n'); showToast('Standardfragen für «'+trkTypLabel(v)+'» wiederhergestellt ✓','ok'); return trkFragenRefresh(); }
+  if(a==='save'){ keepDraft(); var n=0, leer=[];
+    Object.keys(TRK_FDRAFT||{}).forEach(function(k){ if(k==='_typ')return; var l=String(TRK_FDRAFT[k]||'').split(/\n/).map(function(x){return x.trim();}).filter(Boolean).slice(0,6); if(!l.length){ leer.push(trkTypLabel(k)); return; } o[k]=l; n++; });
+    if(leer.length){ showToast('Mindestens eine Frage eintragen bei: '+leer.join(', ')); return; }
+    setCfg('trk.fragen',o,'logbuch'); TRK_FDRAFT=null; rm(); showToast('Fragen gespeichert ✓','ok'); return trkFragenRefresh(); }
 },true);
 
 // Tagesabschluss: Logbuch-Teil neu gestalten
@@ -18945,7 +18952,8 @@ taLogbuchHTML=function(d){
   return '<div class="lp-inner" id="ta-logbuch" style="margin-top:8px"><div class="lp-cap" style="margin-bottom:4px">LOGBUCH</div>'
     +'<div class="tal-h">Check-in</div>'+TRK_CHECK.map(function(c){ return row(c[1],c[2]+' → '+c[3],taLbSeg(c[0],[[1,'1'],[2,'2'],[3,'3'],[4,'4'],[5,'5']],dt[c[0]])); }).join('')
     +'<div class="tal-h">Konsum</div>'+TA_KONSUM.map(function(k){ return row(k[1],'',taLbSeg(k[0],k[2],dt[k[0]])); }).join('')
-    +'<div class="tal-h lp-row" style="justify-content:space-between;align-items:center"><span>Tagebuch · '+lpEsc(trkTypLabel(typ))+'</span><a href="#" data-trkf="open" data-v="'+typ+'" style="font-size:11px;color:var(--c-accent)">Fragen anpassen</a></div>'
+    +'<div class="tal-h lp-row" style="justify-content:space-between;align-items:center"><span>Tagebuch</span><a href="#" data-trkf="open" data-v="'+typ+'" style="font-size:11px;color:var(--c-accent)">Fragen anpassen</a></div>'
+    +'<div class="lp-row" style="gap:4px;flex-wrap:wrap;margin:2px 0 6px">'+TRK_TYPEN.map(function(t){ return '<button type="button" class="wp-pill'+(t[0]===typ?' on':'')+'" data-tajtyp="'+t[0]+'" style="padding:3px 9px;font-size:11px">'+lpEsc(t[1])+'</button>'; }).join('')+'</div>'
     +trkJFelderHTML('ta-jq',fr,ans)+'<div class="lp-mu" id="ta-j-st" style="font-size:10px;text-align:right;min-height:12px"></div></div>';
 };
 taJournalSave=function(){
@@ -18966,7 +18974,7 @@ trkRender=function(){
   _trkRender_jf.apply(this,arguments);
   try{
     var ja=document.getElementById('trk-ja'); if(!ja)return; var card=ja.closest('.trk-card'); if(!card)return;
-    var d=trkDate(), j=(D.journal&&D.journal[d])||{}, typ=(TRK_UI.typ&&TRK_UI.typDate===d)?TRK_UI.typ:trkDayTyp(d), fr=trkFragen(typ), ans=trkJAntworten(j.typ&&j.typ!==typ?null:j,fr);
+    var d=trkDate(), j=(D.journal&&D.journal[d])||{}, typ=(TRK_UI.typ&&TRK_UI.typDate===d)?TRK_UI.typ:trkDayTyp(d), fr=trkFragen(typ), ans=trkJAntworten(j,fr);
     var seg=card.querySelector('.trk-typ'), segHTML=seg?seg.outerHTML:'';
     card.innerHTML='<div class="lp-row" style="justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px"><span class="lp-cap"><i class="ti ti-notebook"></i> TAGES-JOURNAL</span>'+segHTML+'</div>'
       +trkJFelderHTML('trk-jq',fr,ans)
@@ -19021,6 +19029,32 @@ document.addEventListener('click',function(ev){
 (function(){ var st=document.createElement('style'); st.textContent='.ta-steps{display:flex;gap:0;margin:0 0 10px;border:1px solid var(--lp-border);border-radius:99px;overflow:hidden}'
   +'.ta-steps button{flex:1;height:30px;background:transparent;border:0;color:var(--lp-muted);font-size:12px;cursor:pointer}'
   +'.ta-steps button.on{background:color-mix(in srgb,var(--c-accent) 20%,transparent);color:var(--c-accent);font-weight:600}'; document.head.appendChild(st); })();
+
+// Tagestyp fürs Tagebuch wählen (Tagesabschluss + Logbuch): gilt sofort für den Tag, Antworten bleiben erhalten
+function trkJTypSetzen(d,typ,ansAlt,frAlt){
+  if(!D.journal)D.journal={}; var j=D.journal[d]||{}, fr=trkFragen(typ), map={};
+  (frAlt||[]).forEach(function(q,i){ map[q]=ansAlt[i]||''; });
+  var ans=fr.map(function(q,i){ return map[q]!=null?map[q]:(ansAlt&&ansAlt[i]&&!(frAlt||[])[i]?ansAlt[i]:''); });
+  // Antworten zu Fragen, die es im neuen Typ nicht gibt, gehen nicht verloren: der Reihe nach übernehmen
+  (frAlt||[]).forEach(function(q,i){ if(ansAlt[i]&&fr.indexOf(q)<0){ var k=ans.indexOf(''); if(k>=0)ans[k]=ansAlt[i]; } });
+  D.journal[d]=Object.assign({},j,{typ:typ,fragen:fr.slice(),antworten:ans.slice(),qa:fr[0]||'',a:ans[0]||'',qb:fr[1]||'',b:ans[1]||'',ts:Date.now()}); saveD();
+}
+document.addEventListener('click',function(ev){
+  var b=ev.target.closest&&ev.target.closest('[data-tajtyp]'); if(!b)return; ev.preventDefault(); ev.stopPropagation();
+  var d=WP_TA&&WP_TA.date; if(!d)return; var j=(D.journal&&D.journal[d])||{}, typAlt=j.typ||trkDayTyp(d), frAlt=trkFragen(typAlt);
+  var ansAlt=frAlt.map(function(q,i){ var t=document.getElementById('ta-jq'+i); return t?t.value.trim():''; });
+  trkJTypSetzen(d,b.getAttribute('data-tajtyp'),ansAlt,frAlt);
+  var x=document.getElementById('ta-logbuch'); if(x)x.remove(); wpTaRender();
+},true);
+// Logbuch-Seite: Typ-Umschaltung ohne den alten (zwei-Felder-)Code
+document.addEventListener('click',function(ev){
+  var b=ev.target.closest&&ev.target.closest('[data-trk="typ"]'); if(!b||!document.getElementById('trk-jq0'))return; ev.preventDefault(); ev.stopImmediatePropagation();
+  var d=trkDate(), j=(D.journal&&D.journal[d])||{}, typAlt=(TRK_UI.typ&&TRK_UI.typDate===d)?TRK_UI.typ:trkDayTyp(d), frAlt=trkFragen(typAlt);
+  var ansAlt=frAlt.map(function(q,i){ var t=document.getElementById('trk-jq'+i); return t?t.value.trim():''; });
+  var typ=b.getAttribute('data-v'); TRK_UI.typ=typ; TRK_UI.typDate=d;
+  if(ansAlt.some(function(x){return x;})||j.typ)trkJTypSetzen(d,typ,ansAlt,frAlt);
+  trkRender();
+},true);
 
 // ═══════════════════════════════════════════════════════════
 // INIT
