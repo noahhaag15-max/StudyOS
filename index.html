@@ -18994,6 +18994,34 @@ mrLogbuchHTML=function(ym){
   +'.tal-seg button.on{background:var(--c-accent);color:#06121a;font-weight:700}';
   document.head.appendChild(st); })();
 
+// ═══ TAGESABSCHLUSS IN ZWEI SCHRITTEN — ① Tag (Blöcke, Vorsätze, Kalorien) · ② Logbuch (Check-in, Konsum, Tagebuch, Bilanz, Abschliessen) ═══
+function taStepApply(){
+  var host=document.getElementById('wp-ta'), card=host&&host.querySelector('.lp-cd'); if(!card||!WP_TA)return;
+  var step=WP_TA.step||1, kids=[].slice.call(card.children);
+  if(!card.querySelector('.ta-steps')&&kids[1])kids[1].insertAdjacentHTML('afterend','<div class="ta-steps"><button type="button" data-tastep="1">① Tag</button><button type="button" data-tastep="2">② Logbuch</button></div>');
+  card.querySelectorAll('[data-tastep]').forEach(function(b){ b.classList.toggle('on',+b.getAttribute('data-tastep')===step); });
+  kids=[].slice.call(card.children);
+  var fuss=kids.filter(function(k){ return k.querySelector&&k.querySelector('[data-wp="ta-fin"]'); })[0];
+  kids.forEach(function(k,i){
+    if(i<2||k.classList.contains('ta-steps')||k.classList.contains('ta-weiter'))return;
+    var lb=k.id==='ta-logbuch', isFuss=k===fuss;
+    k.style.display=step===1?((lb||isFuss)?'none':''):((lb||isFuss)?'':'none');
+  });
+  var w=card.querySelector('.ta-weiter');
+  if(step===1&&!w)card.insertAdjacentHTML('beforeend','<div class="lp-row ta-weiter" style="margin-top:12px;gap:8px"><button type="button" class="lp-btn gray" data-wp="ta-close">Später</button><button type="button" class="lp-btn fill" style="flex:1;border-radius:99px" data-tastep="2">Weiter: Logbuch →</button></div>');
+  if(step===2&&w)w.remove();
+}
+var _wpTaRender_st=wpTaRender;
+wpTaRender=function(){ _wpTaRender_st.apply(this,arguments); try{ taStepApply(); }catch(e){} };
+document.addEventListener('click',function(ev){
+  var b=ev.target.closest&&ev.target.closest('[data-tastep]'); if(!b||!WP_TA)return; ev.preventDefault();
+  WP_TA.step=+b.getAttribute('data-tastep'); taStepApply();
+  var host=document.getElementById('wp-ta'), c=host&&host.querySelector('.lp-cd'); if(c)c.scrollIntoView({block:'start'}); if(host)host.scrollTop=0;
+});
+(function(){ var st=document.createElement('style'); st.textContent='.ta-steps{display:flex;gap:0;margin:0 0 10px;border:1px solid var(--lp-border);border-radius:99px;overflow:hidden}'
+  +'.ta-steps button{flex:1;height:30px;background:transparent;border:0;color:var(--lp-muted);font-size:12px;cursor:pointer}'
+  +'.ta-steps button.on{background:color-mix(in srgb,var(--c-accent) 20%,transparent);color:var(--c-accent);font-weight:600}'; document.head.appendChild(st); })();
+
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
