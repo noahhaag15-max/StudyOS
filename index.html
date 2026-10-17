@@ -10873,8 +10873,8 @@ ckHeaderHTML=function(){
   var h=_ckHeaderHTML_tk.apply(this,arguments);
   try{
     var re=/<span class="lp-mono" style="font-size:11px;color:var\(--c-ok\)">\+\d+ XP<\/span>/; if(!h||!re.test(h))return h;
-    var td=today(), bil=spielTagesbilanz(td), S=spielEnsure(), closed=!!(S.tage[td]&&S.tage[td].ts), ab=bil.abschluss||0, xp=Math.max(0,bil.xp)+(closed?ab:0), mi=bil.meilen+(closed?ab:0);
-    var cap=closed?'Tag abgeschlossen ✓':'gutgeschrieben · der Tagesabschluss gibt am Ende +'+ab+' obendrauf';
+    var td=today(), bil=spielTagesbilanz(td), S=spielEnsure(), closed=!!(S.tage[td]&&S.tage[td].ts), ab=bil.abschluss||0, ex=spielExtraHeute(td), xp=Math.max(0,bil.xp)+(closed?ab:0)+ex.xp, mi=bil.meilen+(closed?ab:0)+ex.mi;
+    var cap=(closed?'Tag abgeschlossen ✓':'gutgeschrieben · der Tagesabschluss gibt am Ende +'+ab+' obendrauf')+(ex.l.length?' · inkl. '+ex.l.map(function(x){return lpEsc(x.t)+' +'+x.xp;}).join(', '):'');
     return h.replace(re,'<span style="display:block;text-align:right"><span class="lp-mono" style="font-size:11px"><span style="color:var(--c-ok)">+'+xp+' XP</span> <span class="lp-mu">·</span> <span style="color:'+(mi>0?'var(--c-ok)':'var(--lp-muted)')+'">'+(mi>0?'+':'')+mi+' Meilen</span></span>'
       +'<span class="lp-mu" style="display:block;font-size:10px;margin-top:2px">'+cap+'</span></span>');
   }catch(e){ return h; }
@@ -19012,7 +19012,7 @@ function taStepApply(){
   var fuss=kids.filter(function(k){ return k.querySelector&&k.querySelector('[data-wp="ta-fin"]'); })[0];
   kids.forEach(function(k,i){
     if(i<2||k.classList.contains('ta-steps')||k.classList.contains('ta-weiter'))return;
-    var lb=k.id==='ta-logbuch', isFuss=k===fuss;
+    var lb=k.id==='ta-logbuch'||k.getAttribute('data-tafuss')==='1', isFuss=k===fuss;
     k.style.display=step===1?((lb||isFuss)?'none':''):((lb||isFuss)?'':'none');
   });
   var w=card.querySelector('.ta-weiter');
@@ -19055,6 +19055,31 @@ document.addEventListener('click',function(ev){
   if(ansAlt.some(function(x){return x;})||j.typ)trkJTypSetzen(d,typ,ansAlt,frAlt);
   trkRender();
 },true);
+
+// ═══ WEITERE GUTSCHRIFTEN DES TAGES (Tippspiel, Backlog, Bucket-List …) — nicht Teil der Tagesbilanz, aber sichtbar ═══
+function spielExtraHeute(d){
+  var r={xp:0,mi:0,l:[]}, grp={};
+  (D.buchungen||[]).forEach(function(b){
+    if(b.datum!==d||String(b.id).indexOf('tag:')===0||!((b.xp||0)>0))return;
+    r.xp+=b.xp; r.mi+=(b.meilen||0);
+    var k=String(b.text||'').split(':')[0]||'Weitere'; grp[k]=(grp[k]||0)+b.xp;
+  });
+  r.l=Object.keys(grp).map(function(k){return {t:k,xp:grp[k]};});
+  return r;
+}
+var _wpTaRender_ex=wpTaRender;
+wpTaRender=function(){
+  _wpTaRender_ex.apply(this,arguments);
+  try{
+    var host=document.getElementById('wp-ta'), d=WP_TA&&WP_TA.date; if(!host||!d||host.querySelector('#ta-extra'))return;
+    var ex=spielExtraHeute(d); if(!ex.l.length)return;
+    var fin=host.querySelector('[data-wp="ta-fin"]'), card=host.querySelector('.lp-cd'); if(!fin||!card)return;
+    var box=[].slice.call(card.children).filter(function(k){ return k.contains(fin); })[0]; if(!box)return;
+    var row=null; var html='<div id="ta-extra" class="lp-mu" style="font-size:11px;margin-top:6px">Ausserdem heute gutgeschrieben: '+ex.l.map(function(x){return lpEsc(x.t)+' <span class="lp-mono" style="color:var(--c-ok)">+'+x.xp+'</span>';}).join(' · ')+' <span style="opacity:.7">(XP und Meilen, schon im Gesamtstand)</span></div>';
+    if(box===fin.closest('.lp-row'))box.insertAdjacentHTML('beforebegin',html.replace('id="ta-extra"','id="ta-extra" data-tafuss="1"')); else box.insertAdjacentHTML('afterbegin',html);
+    try{ taStepApply(); }catch(x){}
+  }catch(e){}
+};
 
 // ═══════════════════════════════════════════════════════════
 // INIT
