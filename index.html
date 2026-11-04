@@ -16451,7 +16451,7 @@ function lbLoadSvg(){
   var host=document.getElementById('lb-map'); if(!host||host.getAttribute('data-loaded'))return;
   host.setAttribute('data-loaded','1');
   fetch('world.svg').then(function(r){ if(!r.ok)throw 0; return r.text(); }).then(function(txt){
-    host.innerHTML=txt;
+    host.innerHTML=txt; try{ lbMicroAdd(host); }catch(e){}
     host.querySelectorAll('.c').forEach(function(p){ p.addEventListener('click',function(){ lbOpenLand(p.getAttribute('data-iso')||p.id); }); });
     lbPaintMap();
   }).catch(function(){ host.removeAttribute('data-loaded'); host.innerHTML='<div class="lp-mu" style="padding:24px;text-align:center">Karte konnte nicht geladen werden — liegt <code>world.svg</code> neben index.html?</div>'; });
@@ -17349,7 +17349,7 @@ var LB_BUND_VORLAGEN=[
    m:{'1949-04-04':['BEL','CAN','DNK','FRA','ISL','ITA','LUX','NLD','NOR','PRT','GBR','USA'],'1952-02-18':['GRC','TUR'],'1955-05-09':['DEU'],'1982-05-30':['ESP'],'1999-03-12':['CZE','HUN','POL'],'2004-03-29':['BGR','EST','LVA','LTU','ROU','SVK','SVN'],'2009-04-01':['ALB','HRV'],'2017-06-05':['MNE'],'2020-03-27':['MKD'],'2023-04-04':['FIN'],'2024-03-07':['SWE']},
    p:{'1994-02-08':['UKR'],'1994-03-16':['MDA'],'1994-03-23':['GEO'],'1994-05-04':['AZE'],'1994-05-27':['KAZ'],'1994-10-05':['ARM'],'1995-02-10':['AUT'],'1996-12-11':['CHE'],'1999-12-01':['IRL'],'2006-12-14':['SRB','BIH']}},
   {key:'eu',name:'Europäische Union',kurz:'EU',art:'politisch',gegruendet:'1958-01-01',notiz:'Vorlage — ab 1958 als EWG, seit 1993 EU. Daten bitte prüfen.',
-   m:{'1958-01-01':['BEL','FRA','DEU','ITA','LUX','NLD'],'1973-01-01':['DNK','IRL'],'1981-01-01':['GRC'],'1986-01-01':['ESP','PRT'],'1995-01-01':['AUT','FIN','SWE'],'2004-05-01':['CYP','CZE','EST','HUN','LVA','LTU','POL','SVK','SVN'],'2007-01-01':['BGR','ROU'],'2013-07-01':['HRV']},
+   m:{'1958-01-01':['BEL','FRA','DEU','ITA','LUX','NLD'],'1973-01-01':['DNK','IRL'],'1981-01-01':['GRC'],'1986-01-01':['ESP','PRT'],'1995-01-01':['AUT','FIN','SWE'],'2004-05-01':['CYP','CZE','EST','HUN','LVA','LTU','MLT','POL','SVK','SVN'],'2007-01-01':['BGR','ROU'],'2013-07-01':['HRV']},
    ex:[['GBR','1973-01-01','2020-01-31']]},
   {key:'ovks',name:'Organisation des Vertrags über kollektive Sicherheit',kurz:'OVKS / CSTO',art:'militaer',gegruendet:'1992-05-15',notiz:'Vorlage — Armenien hat seine Teilnahme 2024 eingefroren. Daten bitte prüfen.',
    m:{'1992-05-15':['RUS','KAZ','KGZ','TJK','ARM'],'1993-12-31':['BLR']}},
@@ -17558,7 +17558,7 @@ function lbKiExtrasHTML(){
     +'<div class="lp-row" style="justify-content:flex-end;margin-top:4px"><button type="button" class="lp-btn gray" data-lb="ki-chat-apply">Antwort übernehmen</button></div>'
     +lbKiKeyHTML()+'</div></details>';
 }
-var LB_ADJ={'französisch':'FRA','franzosen':'FRA','finnisch':'FIN','deutsch':'DEU','bundeswehr':'DEU','russisch':'RUS','kreml':'RUS','moskau':'RUS','ukrainisch':'UKR','kiew':'UKR','kyjiw':'UKR','amerikanisch':'USA','us-':'USA','pentagon':'USA','washington':'USA','chinesisch':'CHN','peking':'CHN','britisch':'GBR','london':'GBR','israelisch':'ISR','jerusalem':'ISR','iranisch':'IRN','teheran':'IRN','japanisch':'JPN','tokio':'JPN','nordkoreanisch':'PRK','pjöngjang':'PRK','südkoreanisch':'KOR','seoul':'KOR','schweizer':'CHE','schweizerisch':'CHE','österreichisch':'AUT','italienisch':'ITA','spanisch':'ESP','polnisch':'POL','schwedisch':'SWE','norwegisch':'NOR','dänisch':'DNK','niederländisch':'NLD','belgisch':'BEL','türkisch':'TUR','indisch':'IND','pakistanisch':'PAK','australisch':'AUS','kanadisch':'CAN','taiwanesisch':'TWN','taipeh':'TWN','saudisch':'SAU','ägyptisch':'EGY','griechisch':'GRC','tschechisch':'CZE','ungarisch':'HUN','rumänisch':'ROU','bulgarisch':'BGR','serbisch':'SRB','kroatisch':'HRV','estnisch':'EST','lettisch':'LVA','litauisch':'LTU','portugiesisch':'PRT','brasilianisch':'BRA','argentinisch':'ARG','mexikanisch':'MEX','syrisch':'SYR','irakisch':'IRQ','libanesisch':'LBN','jemenitisch':'YEM','emiratisch':'ARE','katarisch':'QAT','belarussisch':'BLR','weissrussisch':'BLR','georgisch':'GEO','armenisch':'ARM','aserbaidschanisch':'AZE','kasachisch':'KAZ','vietnamesisch':'VNM','philippinisch':'PHL','indonesisch':'IDN','thailändisch':'THA','malaysisch':'MYS','neuseeländisch':'NZL','südafrikanisch':'ZAF','nigerianisch':'NGA','äthiopisch':'ETH','algerisch':'DZA','marokkanisch':'MAR','libysch':'LBY','sudanesisch':'SDN','slowakisch':'SVK','slowenisch':'SVN','irisch':'IRL','isländisch':'ISL','luxemburgisch':'LUX','montenegrinisch':'MNE','albanisch':'ALB','moldauisch':'MDA','venezolanisch':'VEN','kolumbianisch':'COL','chilenisch':'CHL','afghanisch':'AFG','myanmarisch':'MMR',
+var LB_ADJ={'liechtensteinisch':'LIE','monegassisch':'MCO','maltesisch':'MLT','singapurisch':'SGP','kosovarisch':'XKX','andorranisch':'AND','bahrainisch':'BHR','vatikan':'VAT','französisch':'FRA','franzosen':'FRA','finnisch':'FIN','deutsch':'DEU','bundeswehr':'DEU','russisch':'RUS','kreml':'RUS','moskau':'RUS','ukrainisch':'UKR','kiew':'UKR','kyjiw':'UKR','amerikanisch':'USA','us-':'USA','pentagon':'USA','washington':'USA','chinesisch':'CHN','peking':'CHN','britisch':'GBR','london':'GBR','israelisch':'ISR','jerusalem':'ISR','iranisch':'IRN','teheran':'IRN','japanisch':'JPN','tokio':'JPN','nordkoreanisch':'PRK','pjöngjang':'PRK','südkoreanisch':'KOR','seoul':'KOR','schweizer':'CHE','schweizerisch':'CHE','österreichisch':'AUT','italienisch':'ITA','spanisch':'ESP','polnisch':'POL','schwedisch':'SWE','norwegisch':'NOR','dänisch':'DNK','niederländisch':'NLD','belgisch':'BEL','türkisch':'TUR','indisch':'IND','pakistanisch':'PAK','australisch':'AUS','kanadisch':'CAN','taiwanesisch':'TWN','taipeh':'TWN','saudisch':'SAU','ägyptisch':'EGY','griechisch':'GRC','tschechisch':'CZE','ungarisch':'HUN','rumänisch':'ROU','bulgarisch':'BGR','serbisch':'SRB','kroatisch':'HRV','estnisch':'EST','lettisch':'LVA','litauisch':'LTU','portugiesisch':'PRT','brasilianisch':'BRA','argentinisch':'ARG','mexikanisch':'MEX','syrisch':'SYR','irakisch':'IRQ','libanesisch':'LBN','jemenitisch':'YEM','emiratisch':'ARE','katarisch':'QAT','belarussisch':'BLR','weissrussisch':'BLR','georgisch':'GEO','armenisch':'ARM','aserbaidschanisch':'AZE','kasachisch':'KAZ','vietnamesisch':'VNM','philippinisch':'PHL','indonesisch':'IDN','thailändisch':'THA','malaysisch':'MYS','neuseeländisch':'NZL','südafrikanisch':'ZAF','nigerianisch':'NGA','äthiopisch':'ETH','algerisch':'DZA','marokkanisch':'MAR','libysch':'LBY','sudanesisch':'SDN','slowakisch':'SVK','slowenisch':'SVN','irisch':'IRL','isländisch':'ISL','luxemburgisch':'LUX','montenegrinisch':'MNE','albanisch':'ALB','moldauisch':'MDA','venezolanisch':'VEN','kolumbianisch':'COL','chilenisch':'CHL','afghanisch':'AFG','myanmarisch':'MMR',
   'united states':'USA','u.s.':'USA','russia':'RUS','ukraine':'UKR','china':'CHN','france':'FRA','germany':'DEU','united kingdom':'GBR','u.k.':'GBR','israel':'ISR','iran':'IRN','taiwan':'TWN','japan':'JPN','india':'IND','poland':'POL','finland':'FIN','sweden':'SWE','switzerland':'CHE','north korea':'PRK','south korea':'KOR','turkey':'TUR','türkiye':'TUR'};
 var LB_KAT_WORT={
   entwicklung:['erstflug','jungfernflug','rollout','roll-out','prototyp','testflug','erprob','vorgestellt','enthüllt','entwickl','technologiedemonstrator','first flight','unveil'],
@@ -19080,6 +19080,40 @@ wpTaRender=function(){
     try{ taStepApply(); }catch(x){}
   }catch(e){}
 };
+
+// ═══ LAGEBERICHT: KLEINSTAATEN & INSELN — Namen ergänzt, auf der Karte als Punkt (Natural-Earth-Projektion wie world.svg) ═══
+var LB_MICRO={
+  LIE:['Liechtenstein',9.55,47.16],MCO:['Monaco',7.42,43.74],AND:['Andorra',1.52,42.51],SMR:['San Marino',12.46,43.94],VAT:['Vatikanstadt',12.45,41.90],
+  MLT:['Malta',14.40,35.92],XKX:['Kosovo',20.90,42.60],SGP:['Singapur',103.82,1.35],BHR:['Bahrain',50.56,26.07],MDV:['Malediven',73.50,3.20],
+  MUS:['Mauritius',57.55,-20.35],SYC:['Seychellen',55.45,-4.68],COM:['Komoren',43.87,-11.88],CPV:['Kap Verde',-23.60,15.10],STP:['São Tomé und Príncipe',6.61,0.19],
+  ATG:['Antigua und Barbuda',-61.80,17.08],BRB:['Barbados',-59.54,13.19],DMA:['Dominica',-61.37,15.41],GRD:['Grenada',-61.68,12.12],KNA:['St. Kitts und Nevis',-62.75,17.34],
+  LCA:['St. Lucia',-60.98,13.91],VCT:['St. Vincent und die Grenadinen',-61.20,13.25],FSM:['Mikronesien',158.20,6.90],KIR:['Kiribati',173.00,1.42],MHL:['Marshallinseln',171.20,7.10],
+  NRU:['Nauru',166.93,-0.52],PLW:['Palau',134.58,7.51],TON:['Tonga',-175.20,-21.18],TUV:['Tuvalu',179.20,-8.52],WSM:['Samoa',-172.10,-13.76],
+  HKG:['Hongkong',114.17,22.32],MAC:['Macau',113.54,22.20],GIB:['Gibraltar',-5.35,36.14],BMU:['Bermuda',-64.75,32.31],CYM:['Kaimaninseln',-81.25,19.31],
+  FRO:['Färöer',-6.90,62.00],IMN:['Isle of Man',-4.50,54.23],JEY:['Jersey',-2.13,49.21],GGY:['Guernsey',-2.58,49.45],ABW:['Aruba',-69.97,12.52],CUW:['Curaçao',-68.99,12.17],
+  REU:['Réunion',55.53,-21.13],PYF:['Französisch-Polynesien',-149.40,-17.65],GUM:['Guam',144.79,13.44],GLP:['Guadeloupe',-61.55,16.25],MTQ:['Martinique',-61.02,14.64],
+  MYT:['Mayotte',45.17,-12.80],ASM:['Amerikanisch-Samoa',-170.70,-14.27]
+};
+Object.keys(LB_MICRO).forEach(function(iso){ if(!LB_NAMEN[iso])LB_NAMEN[iso]=LB_MICRO[iso][0]; });
+// d3.geoNaturalEarth1, an world.svg angepasst (viewBox 1000×520, Kugelrand x 0…1000, y −4…516)
+function lbProj(lon,lat){
+  var l=lon*Math.PI/180, f=lat*Math.PI/180, f2=f*f, f4=f2*f2, S=500/2.73540, tx=500, ty=256;
+  var x=l*(0.8707-0.131979*f2+f4*(-0.013791+f4*(0.003971*f2-0.001529*f4)));
+  var y=f*(1.007226+f2*(0.015085+f4*(-0.044475+0.028874*f2-0.005916*f4)));
+  return {x:tx+x*S,y:ty-y*S};
+}
+function lbMicroAdd(host){
+  var svg=host.querySelector('svg'); if(!svg||svg.querySelector('#lb-micro'))return;
+  var NS='http://www.w3.org/2000/svg', g=document.createElementNS(NS,'g'); g.id='lb-micro';
+  Object.keys(LB_MICRO).forEach(function(iso){
+    if(svg.querySelector('[data-iso="'+iso+'"]'))return;
+    var m=LB_MICRO[iso], pt=lbProj(m[1],m[2]), c=document.createElementNS(NS,'circle');
+    c.setAttribute('class','c'); c.setAttribute('data-iso',iso); c.setAttribute('cx',pt.x.toFixed(2)); c.setAttribute('cy',pt.y.toFixed(2)); c.setAttribute('r','2.1');
+    var t=document.createElementNS(NS,'title'); t.textContent=m[0]; c.appendChild(t); g.appendChild(c);
+  });
+  var mk=svg.querySelector('#lb-marks'); if(mk)svg.insertBefore(g,mk); else svg.appendChild(g);
+}
+(function(){ var st=document.createElement('style'); st.textContent='#lb-map #lb-micro .c{stroke:#9fc3d4;stroke-width:.7;vector-effect:non-scaling-stroke}#lb-map #lb-micro .c:hover{stroke:#fff}'; document.head.appendChild(st); })();
 
 // ═══════════════════════════════════════════════════════════
 // INIT
