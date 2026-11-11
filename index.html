@@ -20844,7 +20844,7 @@ function wbHistErfassen(){
   lpAktiveFaecher().forEach(function(name){
     var f=lpFach(name,false); if(!f)return;
     wbEtappenFach(f).forEach(function(x){
-      var e=x.e, gp=e.geplantAm||'', dl=e.deadline||'';
+      if(x.pool)return; var e=x.e, gp=e.geplantAm||'', dl=e.deadline||'';
       if(e.wbGp===undefined){ e.wbGp=gp; e.wbDl=dl; ch=true; return; }
       if(e.wbGp!==gp){ if(!x.done)D.wbVerschiebungen.push({id:'wbv:'+uid(),ts:Date.now(),datum:today(),fach:name,etappeId:e.id,titel:e.titel,art:'geplant',von:e.wbGp,nach:gp}); e.wbGp=gp; ch=true; }
       if(e.wbDl!==dl){ if(!x.done)D.wbVerschiebungen.push({id:'wbv:'+uid(),ts:Date.now(),datum:today(),fach:name,etappeId:e.id,titel:e.titel,art:'deadline',von:e.wbDl,nach:dl}); e.wbDl=dl; ch=true; }
@@ -21881,22 +21881,7 @@ function wbfLage(mon){
   ue.slice(0,6).forEach(function(x){ h+='<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(x.e.titel)+' <span class="lp-mu" style="font-size:11px">· '+lpEsc(x.fach)+'</span></span><span class="lp-mono" style="font-size:11px;color:var(--c-work)">war '+lpEsc(lpFmtShort(x.e.geplantAm||x.e.deadline))+'</span></div>'; });
   if(ue.length)h+='<div class="lp-mu" style="font-size:10px;margin:2px 0 6px">überfällige Lernplan-Etappen'+(ue.length>6?' (die ersten 6 von '+ue.length+')':'')+'</div>';
 
-  // Lernplan: pro Fach nur, was zu berechnen ist, mit der Rechnung daneben
-  var lpz='';
-  lpAktiveFaecher().forEach(function(name){
-    var f=lpFach(name,false); if(!f)return; var s=lpFachStats(name); if(!s.total)return;
-    var v=wbVerzug(name), text;
-    if(!s.open)text=s.total+' von '+s.total+' Etappen erledigt';
-    else {
-      text=(s.total-s.open)+' von '+s.total+' Etappen erledigt';
-      if(f.pruefung){ var ende=lpAdd(f.pruefung,-(f.pufferTage==null?8:f.pufferTage)), w=Math.max(0.5,lpDayDiff(td,ende)/7); text+=' · bis zum Puffer ('+lpFmtShort(ende)+') '+wbFmt1(w)+' Wochen → '+wbFmt1(s.open/w)+' Etappen pro Woche nötig'; }
-      if(v)text+=' · Verzug '+(v.oldest?v.oldest+' Tage, kumuliert '+v.kum+' Etappen-Tage':'keiner')+' (Baseline vom '+lpFmtShort(f.baseline.gesetzt)+')';
-    }
-    lpz+='<div class="hg-ln" style="align-items:flex-start"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(name)+'<span class="lp-mu" style="display:block;font-size:11px">'+lpEsc(text)+'</span></span></div>';
-  });
-  if(lpz)h+='<div class="lp-cap" style="margin:14px 0 6px">LERNPLAN</div>'+lpz+'<div class="lp-mu" style="font-size:10px;margin:2px 0 4px">Gerechnet wird nur mit den Etappen, die du im Lernplan eingetragen hast. Fehlt Stoff im Lernplan, fehlt er auch hier.</div>';
-  var ohne=lpAktiveFaecher().filter(function(n){ var f=lpFach(n,false); return f&&f.pruefung&&!f.baseline&&lpFachStats(n).open; });
-  if(ohne.length)h+='<div class="lp-row" style="justify-content:space-between;align-items:center;margin-top:6px"><span class="lp-mu" style="font-size:12px">'+ohne.length+' Fach'+(ohne.length===1?'':'er')+' ohne Baseline</span><button type="button" class="lp-btn gray" data-wb6="alle">Baselines setzen …</button></div>';
+  h+=wbfLernplanHTML(td);
 
   // Kurs-Prüfung: nur Ziele mit echter Grundlage
   var kz=wbKurs().filter(function(z){ return z.s!=='offen'&&z.id.indexOf('lp:')!==0; });
@@ -21905,6 +21890,59 @@ function wbfLage(mon){
   var T=wbTermineVor(td>mon?td:mon,14);
   h+='<div class="lp-cap" style="margin:14px 0 6px">TERMINE IN DEN NÄCHSTEN 14 TAGEN</div>'+(T.length?T.map(function(b){ return '<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(b.titel)+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(wbFmtT(b.tag)+' '+b.start)+'</span></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Keine Fixtermine eingetragen.</div>');
   return h;
+}
+
+// ═══════════════════════════════════════════════════════════
+// LERNPLAN VOLLSTÄNDIG ZÄHLEN: auch Themen im Pool-Modus (Aufgaben/Serien) zählen mit, nicht nur Etappen.
+// Vorher sah ein Fach mit 5 Etappen und ~80 Pool-Aufgaben «im Plan» aus. Jetzt gilt: Etappe oder Pool-Aufgabe = ein Posten.
+// Die «Lage» im Wochenbefehl nimmt dazu den Am-Arsch-O-Meter (inkl. Teilaufgaben, Labs, Aufgaben) und listet, was offen ist.
+// ═══════════════════════════════════════════════════════════
+function wbPoolErledigt(a){ return a.status==='sitzt'||a.status==='pruefungsfest'; }
+function wbEtappenFach(f){
+  var out=[];
+  lpThemenOf(f.id).forEach(function(t){
+    var m=lpModus(t);
+    if(m==='pool'){ lpAufgabenOf(t.id).forEach(function(a){ out.push({e:{id:a.id,titel:a.titel||('Aufgabe '+(a.nummer||'')),deadline:'',geplantAm:'',ts:a.ts},t:t,m:'pool',pool:true,done:wbPoolErledigt(a)}); }); return; }
+    lpEtappenOf(t.id).forEach(function(e){ out.push({e:e,t:t,m:m,done:lpEtappeDone(e,m)}); });
+  });
+  return out;
+}
+var _lpFachStats_wb18=lpFachStats;
+lpFachStats=function(name){
+  var res=_lpFachStats_wb18(name), f=lpFach(name,false); if(!f)return res;
+  var n=0, d=0; lpThemenOf(f.id).forEach(function(t){ if(lpModus(t)!=='pool')return; lpAufgabenOf(t.id).forEach(function(a){ n++; if(wbPoolErledigt(a))d++; }); });
+  if(!n)return res;
+  res.total+=n; res.done+=d; res.open=res.total-res.done; res.pct=res.total?Math.round(res.done/res.total*100):0;
+  if(f.pruefung&&res.total){
+    var td=today(), free=+cfg('zeiten.freierTag'), start=f.planStart||td; if(start>td)start=td;
+    res.tempo=res.open>0?(res.avail>0?res.open/res.avail:res.open):0;
+    var span=lpLerntage(start,res.pufferStart,free), elapsed=lpLerntage(start,td<res.pufferStart?td:res.pufferStart,free), soll=span>0?res.total*Math.min(1,elapsed/span):res.total;
+    res.rueck=Math.max(0,Math.ceil(soll-res.done-1e-9)); res.ampel=res.rueck<=0?'ok':(res.rueck<=3?'review':'danger');
+  }
+  return res;
+};
+function wbfLernplanHTML(td){
+  var fmt=function(x){ return String(Math.round(x*10)/10).replace('.',','); }, h='', any=false;
+  lpAktiveFaecher().forEach(function(name){
+    var f=lpFach(name,false); if(!f)return; var fs=lpFachStats(name); if(!fs.total)return; any=true;
+    var s=aomStats(name), pct=s.soll>0?Math.round(s.ist/s.soll*100):null, v=wbVerzug(name);
+    var col=pct==null||pct>=90?'var(--c-ok)':pct>=70?'var(--c-accent)':pct>=50?'var(--c-work)':'var(--c-fun)';
+    h+='<div class="lp-cd" style="margin-bottom:8px;padding:10px"><div class="lp-row" style="justify-content:space-between;align-items:flex-start;gap:8px"><div style="min-width:0"><div style="font-size:13px"><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+col+';margin-right:7px"></i>'+lpEsc(name)+'</div>'
+      +'<div class="lp-mu" style="font-size:11px;margin-left:16px">'+(pct==null?'Per heute ist nichts fällig.':'Per heute fällig: '+fmt(s.ist)+' von '+s.soll+' erledigt ('+pct+' %)')+'</div>'
+      +'<div class="lp-mu" style="font-size:11px;margin-left:16px">Gesamt: '+fs.done+' von '+fs.total+' Etappen/Aufgaben erledigt, '+fs.open+' offen'+(f.pruefung?' · Prüfung '+lpFmt(f.pruefung)+' (in '+lpDayDiff(td,f.pruefung)+' Tagen)':'')+'</div>'
+      +(v?'<div style="font-size:11px;margin-left:16px;color:'+wbVerzugFarbe(v.ampel)+'">Baseline: '+(v.oldest?'ältester Verzug '+v.oldest+' Tage, kumuliert '+v.kum+' Posten-Tage':'kein Verzug')+'</div>':'')+'</div></div>';
+    if(s.woche.length){
+      h+='<div class="lp-mu" style="font-size:10px;margin:8px 0 2px">OFFEN BIS SONNTAG</div>'+s.woche.slice(0,6).map(function(n){ return '<div class="hg-ln"><span style="font-size:12px;min-width:0;flex:1">'+lpEsc(n.t)+(n.v>0?' <span class="lp-mu">· angefangen</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+(!n.d?'offen':n.d<td?'überfällig':lpFmtShort(n.d))+'</span></div>'; }).join('')+(s.woche.length>6?'<div class="lp-mu" style="font-size:11px">… und '+(s.woche.length-6)+' weitere</div>':'');
+    } else h+='<div class="lp-mu" style="font-size:12px;margin-top:6px">Bis Sonntag ist laut Lernplan nichts fällig.</div>';
+    if(s.next.length)h+='<div class="lp-mu" style="font-size:11px;margin-top:4px">Danach: '+lpEsc(s.next[0].t)+' ('+lpFmtShort(s.next[0].d)+')</div>';
+    var th=lpThemenOf(f.id).map(function(t){ var p=lpThemaProg(t); return {t:t,p:p}; }).filter(function(x){ return x.p.total&&x.p.done<x.p.total; });
+    if(th.length)h+='<details style="margin-top:6px"><summary class="lp-mu" style="cursor:pointer;font-size:11px">'+th.length+' Themen noch nicht abgeschlossen</summary>'+th.map(function(x){ return '<div class="hg-ln"><span style="font-size:12px;min-width:0;flex:1">'+lpEsc(x.t.name)+(x.t.meilenstein?' <span class="lp-mu">· bis '+lpEsc(lpFmtShort(x.t.meilenstein))+'</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+x.p.done+'/'+x.p.total+'</span></div>'; }).join('')+'</details>';
+    h+='</div>';
+  });
+  if(!any)return '';
+  var ohne=lpAktiveFaecher().filter(function(n){ var f=lpFach(n,false); return f&&f.pruefung&&!f.baseline&&lpFachStats(n).open; });
+  return '<div class="lp-cap" style="margin:14px 0 6px">LERNPLAN</div>'+h+'<div class="lp-mu" style="font-size:10px;margin:2px 0 4px">Gerechnet wird mit dem, was im Lernplan steht: Etappen, Teilaufgaben, Pool-Aufgaben, Labs und Backlog-Aufgaben des Fachs. Fehlt etwas im Lernplan, fehlt es auch hier.</div>'
+    +(ohne.length?'<div class="lp-row" style="justify-content:space-between;align-items:center;margin-top:6px"><span class="lp-mu" style="font-size:12px">'+ohne.length+' Fach'+(ohne.length===1?'':'er')+' ohne Baseline</span><button type="button" class="lp-btn gray" data-wb6="alle">Baselines setzen …</button></div>':'');
 }
 
 // ═══════════════════════════════════════════════════════════
