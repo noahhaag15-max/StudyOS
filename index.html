@@ -20713,7 +20713,7 @@ function wbRapportHTML(d){
   var h='<div id="wbr-box" style="margin-bottom:6px"><div class="lp-cap" style="margin-bottom:6px">TAGESRAPPORT</div>';
   if(nein)h+='<div class="lp-mu" style="font-size:12px;margin:6px 0 4px">1 · Was hat heute den Plan gestört?</div><div class="lp-row" style="gap:6px;flex-wrap:wrap">'+WB_STOER.map(function(s){ return chip('st',s[0],s[1],r.stoerung===s[0]); }).join('')+'</div>';
   h+='<div class="lp-mu" style="font-size:12px;margin:10px 0 4px">'+(nein?'2':'1')+' · Energie heute</div><div class="lp-row" style="gap:6px">'+[1,2,3,4,5].map(function(n){ return chip('en',n,n,r.energie===n); }).join('')+'<span class="lp-mu" style="font-size:11px;align-self:center">1 leer · 5 voll</span></div>';
-  var tm=wpBlocksOn(lpAdd(d,1)).filter(function(b){ return (b.typ==='aufgabe'||b.typ==='fix')&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0&&b.status!=='verschoben'; }).sort(function(a,b){ return (+(b.prio||0))-(+(a.prio||0))||a.start.localeCompare(b.start); }).slice(0,3);
+  var tm=wpBlocksOn(lpAdd(d,1)).filter(function(b){ return (b.typ==='aufgabe'||b.typ==='fix')&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0&&b.status!=='verschoben'; }).sort(function(a,b){ return (pzRank(b.prio)-pzRank(a.prio))||a.start.localeCompare(b.start); }).slice(0,3);
   h+='<div class="lp-mu" style="font-size:12px;margin:10px 0 4px">'+(nein?'3':'2')+' · Morgen zuerst: was kommt als Erstes dran?</div><input class="lp-in" id="wbr-morgen" value="'+lpEsc(r.morgen||'')+'" placeholder="z. B. Lernblock Analysis" style="width:100%">'
     +(tm.length?'<div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-top:6px">'+tm.map(function(b){ return chip('mo',lpEsc(b.titel),lpEsc(b.titel)+' · '+b.start,false); }).join('')+'</div>':'');
   var L=wbBilanz(d).concat((D.wbAntraege||[]).filter(function(a){return a.datum===d&&a.kosten>0;}).map(function(a){ return {label:'Änderungsantrag: '+a.titel,betrag:-a.kosten,einheit:'XP'}; }));
@@ -21015,7 +21015,7 @@ var WB7={alles:false};
 function wbHeuteZuerstHTML(){
   var td=today(), h='<div class="lp-cap" style="margin-bottom:6px">HEUTE ZUERST</div>', note=wbMorgenZuerst(td), n=0;
   if(note){ h+='<div class="lp-mu" style="font-size:11px">Von gestern</div><div style="font-size:14px;font-weight:500;margin-bottom:8px">'+lpEsc(note)+'</div>'; n++; }
-  var bl=ckBlocksToday().filter(function(b){ return b.status==='offen'&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0&&!wpIsRoutine(b); }).sort(function(a,b){ return a.start.localeCompare(b.start); }).slice(0,3);
+  var bl=ckBlocksToday().filter(function(b){ return b.status==='offen'&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0&&!wpIsRoutine(b); }).sort(function(a,b){ return (pzRank(b.prio)-pzRank(a.prio))||a.start.localeCompare(b.start); }).slice(0,3);
   bl.forEach(function(b){ h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px"><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(b.start)+'</span> '+lpEsc(b.titel)+'</span><button type="button" class="wp-pill" data-ck="blk-done" data-id="'+lpEsc(b.id)+'">✓</button></div>'; n++; });
   if(!n)h+='<div class="lp-mu" style="font-size:12px">Heute ist nichts Wichtiges offen.</div>';
   var rh=wbRegelTreffer(lpMonday(td)).filter(function(x){return x.tag===td;});
@@ -21887,8 +21887,7 @@ function wbfLage(mon){
   var kz=wbKurs().filter(function(z){ return z.s!=='offen'&&z.id.indexOf('lp:')!==0; });
   if(kz.length){ h+='<div class="lp-cap" style="margin:14px 0 6px">ZIELE</div>'+kz.map(function(z){ var cc=WB_KS[z.s]; return '<div class="hg-ln" style="align-items:flex-start;gap:8px"><span style="flex:1;min-width:0"><span style="font-size:13px"><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+cc[1]+';margin-right:7px"></i>'+lpEsc(z.label)+'</span><span class="lp-mu" style="display:block;font-size:11px;margin-left:16px">'+lpEsc(z.sub)+'</span></span><span style="font-size:12px;color:'+cc[1]+'">'+cc[0]+'</span></div>'; }).join(''); }
 
-  var T=wbTermineVor(td>mon?td:mon,14);
-  h+='<div class="lp-cap" style="margin:14px 0 6px">TERMINE IN DEN NÄCHSTEN 14 TAGEN</div>'+(T.length?T.map(function(b){ return '<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(b.titel)+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(wbFmtT(b.tag)+' '+b.start)+'</span></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Keine Fixtermine eingetragen.</div>');
+  h+=wbfTermineHTML(td>mon?td:mon);
   return h;
 }
 
@@ -22006,6 +22005,96 @@ document.addEventListener('click',function(ev){
   else if(a==='save')wbBleSave();
   else if(a==='grpset'){ var gi=el.getAttribute('data-g'), v=(document.querySelector('#wb-ble [data-ble="grp"][data-g="'+gi+'"]')||{}).value; if(!v){ showToast('Bitte ein Datum wählen.'); return; } document.querySelectorAll('#wb-ble [data-gi="'+gi+'"] [data-ble="d"]').forEach(function(i){ i.value=v; }); }
 });
+
+// ═══════════════════════════════════════════════════════════
+// 1) PRIORITÄTSSTUFEN: Must do · Sehr hoch · Hoch · Mittel · Tief · Wenn möglich · Optional
+//    Gespeichert: 'must' · 'sehr' · 'hoch' · '' (= Mittel) · 'niedrig' (= Tief) · 'moeglich' · 'optional'. Bisherige Werte bleiben gültig.
+// 2) TERMINE IN DER «LAGE»: automatisch aus dem Wochenplan (Kategorie Termin, auch als Teil einer Mischung), dazu Prüfungen,
+//    Flugstunden, Arbeits- und Militärblöcke und Zeitspannen; sortiert nach Priorität.
+// 3) HABITS → VORSÄTZE: ein System, das im Tagesabschluss abgehakt wird (Habits bleiben als Daten erhalten).
+// ═══════════════════════════════════════════════════════════
+PZ_PRIO.length=0;
+[['must','Must do'],['sehr','Sehr hoch'],['hoch','Hoch'],['','Mittel'],['niedrig','Tief'],['moeglich','Wenn möglich'],['optional','Optional']].forEach(function(p){ PZ_PRIO.push(p); });
+var PZ_RANK={must:7,sehr:6,hoch:5,'':4,niedrig:3,moeglich:2,optional:1};
+function pzRank(p){ var r=PZ_RANK[p||'']; return r==null?4:r; }
+pzPrioLbl=function(p){ if(!p)return ''; var x=PZ_PRIO.find(function(r){return r[0]===p;}); return x?x[1]:String(p); };
+(function(){ var st=document.createElement('style'); st.textContent='#wpm-prio{flex-wrap:wrap;height:auto;border-radius:12px}#wpm-prio button{flex:1 1 auto;white-space:nowrap}.px-p.must{color:var(--c-fun)}';
+  document.head.appendChild(st); })();
+var _wpBlockHTML_wb20=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_wb20(b,z,now); if(!h||!b.prio||b.typ==='belohnung')return h;
+  var mk={must:'<b class="px-p must">‼</b> ',sehr:'<b class="px-p">!!</b> ',moeglich:'<b class="px-p lo">↓↓</b> ',optional:'<b class="px-p lo">○</b> '}[b.prio];
+  return mk?h.replace('<span class="wp-bt">','<span class="wp-bt">'+mk):h;
+};
+var _pdPrio_wb20=pdPrio;
+pdPrio=function(b){ var alt=(b.prio==='hoch'?-1000000:b.prio==='niedrig'?1000000:0); return _pdPrio_wb20(b)-alt+(4-pzRank(b.prio))*500000; };
+
+// ── Termine ──
+function wbIstTermin(b){
+  if(b.status==='verschoben'||b.typ==='belohnung'||['mahlzeit','schlaf','routine'].indexOf(b.kategorie)>=0)return false;
+  var mix=pxMix(b);
+  if(b.kategorie==='termin'||mix.indexOf('termin')>=0||b.termin||b.pruefDatum)return true;
+  if(b.kategorie==='pruefung'||mix.indexOf('pruefung')>=0)return true;
+  var ber=wbBereich(b); if(ber==='arbeit'||ber==='militaer')return true;
+  if(ber==='ppl'&&wbUnter(b)==='flugstunde')return true;
+  return false;
+}
+function wbTermineVor(from,tage){
+  var out=[], seen={}; for(var i=0;i<=tage;i++){ var d=lpAdd(from,i); wpBlocksOn(d).forEach(function(b){ if(!wbIstTermin(b))return; var k=b.tag+'|'+b.titel+'|'+b.start; if(seen[k])return; seen[k]=1; out.push(b); }); }
+  out.sort(function(a,b){ return a.tag===b.tag?(pzRank(b.prio)-pzRank(a.prio))||a.start.localeCompare(b.start):(a.tag<b.tag?-1:1); });
+  return out;
+}
+function wbfTermineHTML(from){
+  var bl=wbTermineVor(from,14), bis=lpAdd(from,14), sp=spList().filter(function(s){ return s.von&&s.bis&&s.von<=bis&&s.bis>=from; }).sort(function(a,b){ return a.von<b.von?-1:1; });
+  var byPrio=bl.slice().sort(function(a,b){ return (pzRank(b.prio)-pzRank(a.prio))||(a.tag<b.tag?-1:a.tag>b.tag?1:a.start.localeCompare(b.start)); }), max=14;
+  var h='<div class="lp-cap" style="margin:14px 0 6px">TERMINE IN DEN NÄCHSTEN 14 TAGEN</div>';
+  if(!bl.length&&!sp.length)return h+'<div class="lp-mu" style="font-size:12px">Im Wochenplan stehen keine Termine, Prüfungen, Flugstunden, Arbeits- oder Militärblöcke.</div>';
+  sp.forEach(function(s){ h+='<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1"><i class="ti ti-calendar-event lp-mu"></i> '+lpEsc(s.titel||spTyp(s.typ)[1])+(wbSpModus(s)?' <span class="lp-mu" style="font-size:11px">· Modus '+lpEsc(wbModusName(wbSpModus(s)))+'</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmtShort(s.von)+(s.bis!==s.von?'–'+lpFmtShort(s.bis):''))+'</span></div>'; });
+  byPrio.slice(0,max).forEach(function(b){
+    var p=pzPrioLbl(b.prio), hi=pzRank(b.prio)>=6, ber=wbBereich(b), art=b.pruefDatum||b.kategorie==='pruefung'?'Prüfung':(ber==='ppl'&&wbUnter(b)==='flugstunde')?'Flugstunde':ber==='arbeit'?'Arbeit':ber==='militaer'?'Militär':'Termin';
+    h+='<div class="hg-ln" style="gap:6px"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(b.titel)+' <span class="lp-mu" style="font-size:10px">· '+art+'</span>'+(p?' <span style="font-size:10px;color:'+(hi?'var(--c-fun)':'var(--tx3)')+'">· '+lpEsc(p)+'</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px;white-space:nowrap">'+lpEsc(wbFmtT(b.tag)+' '+b.start)+'</span></div>';
+  });
+  if(byPrio.length>max)h+='<div class="lp-mu" style="font-size:11px">… und '+(byPrio.length-max)+' weitere im Wochenplan.</div>';
+  return h+'<div class="lp-mu" style="font-size:10px;margin-top:4px">Aus dem Wochenplan: Kategorie «Termin» (auch als Teil einer Mischung), Prüfungen, Flugstunden, Arbeits- und Militärblöcke, dazu die Zeitspannen. Sortiert nach Priorität, dann Datum.</div>';
+}
+
+// ── Habits → Vorsätze ──
+function wbHabitsOffen(){ var namen={}; vsEnsure().forEach(function(v){ namen[String(v.name||'').toLowerCase()]=1; }); return (D.habits||[]).filter(function(h){ return h&&!h.migriert&&String(h.name||'').trim()&&!namen[String(h.name).toLowerCase()]; }); }
+function wbHabitsAlleWeg(){ return !(D.habits||[]).some(function(h){ return h&&!h.migriert&&!(vsEnsure().some(function(v){ return String(v.name||'').toLowerCase()===String(h.name||'').toLowerCase(); })); }); }
+function wbHabitsKonvertieren(){
+  var off=wbHabitsOffen(), n=0;
+  try{ sosDownloadJson('study-os-backup-vor-habits'); }catch(e){}
+  off.forEach(function(h){
+    var td7=h.targetDays>0&&h.targetDays<7, v={id:uid(),name:String(h.name).slice(0,120),typ:'janein',zeitraum:td7?'woche':'taeglich',ziel:td7?h.targetDays:0,meilenProMal:0,zielBonus:0,imTagesabschluss:true,gepinnt:false,eintraege:[],erstellt:today(),fromHabit:h.id||'',ts:Date.now()};
+    vsEnsure().push(v); h.migriert=true; n++;
+  });
+  (D.habits||[]).forEach(function(h){ if(h&&!h.migriert&&vsEnsure().some(function(v){ return String(v.name||'').toLowerCase()===String(h.name||'').toLowerCase(); }))h.migriert=true; });
+  saveD(); try{ vsRefresh(); }catch(e){} try{ renderHabFull(); renderDashHab(); }catch(e){} try{ ckRender(); }catch(e){}
+  showToast(n+' Habit'+(n===1?'':'s')+' als Vorsätze übernommen ✓ (Meilen pro Mal: 0, im Vorsatz änderbar)','ok');
+}
+var _renderHabFull_wb20=renderHabFull;
+renderHabFull=function(){
+  var el=document.getElementById('hab-full'); if(!el)return _renderHabFull_wb20();
+  var off=wbHabitsOffen();
+  if(!(D.habits||[]).length||wbHabitsAlleWeg()){ el.innerHTML='<div class="lp-mu" style="font-size:12px;line-height:1.5">Habits laufen jetzt als <b style="font-weight:500">Vorsätze</b> (oben). Sie erscheinen im Tagesabschluss zum Abhaken.</div>'; var c=document.getElementById('hab-cnt'); if(c)c.textContent=''; return; }
+  _renderHabFull_wb20();
+  el.insertAdjacentHTML('beforeend','<div class="lp-row" style="gap:8px;margin-top:10px;flex-wrap:wrap"><span class="lp-mu" style="font-size:12px;flex:1;min-width:160px">Habits und Vorsätze sind dasselbe. Als Vorsätze erscheinen sie im Tagesabschluss zum Abhaken.</span><button type="button" class="lp-btn fill" data-wb20="habits">'+off.length+' Habit'+(off.length===1?'':'s')+' in Vorsätze überführen</button></div>');
+};
+var _renderDashHab_wb20=renderDashHab;
+renderDashHab=function(){ if(wbHabitsAlleWeg()&&(D.habits||[]).length){ var el=document.getElementById('dash-hab'); if(el)el.innerHTML='<div class="lp-mu" style="font-size:12px">Habits laufen jetzt als Vorsätze.</div>'; return; } return _renderDashHab_wb20(); };
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb20]'); if(!el)return; ev.preventDefault();
+  var a=el.getAttribute('data-wb20'); if(a==='habits'){ var m=document.getElementById('wb-hab'); if(m)m.remove(); wbHabitsKonvertieren(); } else if(a==='later'){ var m2=document.getElementById('wb-hab'); if(m2)m2.remove(); try{ sessionStorage.setItem('sos_hab_asked','1'); }catch(e){} }
+});
+function wbHabitsFrage(){
+  var off=wbHabitsOffen(); if(!off.length||document.getElementById('wb-hab')||document.querySelector('[id$="-mig"]'))return;
+  try{ if(sessionStorage.getItem('sos_hab_asked'))return; sessionStorage.setItem('sos_hab_asked','1'); }catch(e){}
+  syModal('wb-hab','<div style="width:100%;max-width:480px"><div class="lp-cap" style="margin-bottom:6px">HABITS UND VORSÄTZE ZUSAMMENFÜHREN</div><div style="font-size:13px;line-height:1.55;margin-bottom:8px">Habits und Vorsätze sind dasselbe. Als Vorsätze stehen deine '+off.length+' Habits im Tagesabschluss und werden dort abgehakt:</div>'
+    +off.slice(0,8).map(function(h){ return '<div class="hg-ln"><span style="font-size:13px">'+lpEsc(h.name)+'</span><span class="lp-mu" style="font-size:11px">'+(h.targetDays>0&&h.targetDays<7?h.targetDays+'× pro Woche':'täglich')+'</span></div>'; }).join('')
+    +'<div class="lp-mu" style="font-size:11px;margin:8px 0">Meilen pro Mal: 0 (im Vorsatz änderbar). Die alten Habits bleiben als Daten erhalten, ein Backup wird heruntergeladen.</div><div class="lp-row" style="justify-content:flex-end;gap:8px"><button type="button" class="lp-btn gray" data-wb20="later">Später</button><button type="button" class="lp-btn fill" data-wb20="habits">Überführen</button></div></div>');
+}
+var _waInit_wb20=waInit;
+waInit=function(){ _waInit_wb20(); setTimeout(function(){ try{ wbHabitsFrage(); }catch(e){} },14000); };
 
 // ═══════════════════════════════════════════════════════════
 // INIT
