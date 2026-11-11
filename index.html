@@ -22030,11 +22030,12 @@ var _pdPrio_wb20=pdPrio;
 pdPrio=function(b){ var alt=(b.prio==='hoch'?-1000000:b.prio==='niedrig'?1000000:0); return _pdPrio_wb20(b)-alt+(4-pzRank(b.prio))*500000; };
 
 // ── Termine ──
+function wbKatIds(re){ return wpKats().filter(function(k){ return re.test(k.name)||re.test(k.id); }).map(function(k){ return k.id; }).concat(re.test('termin')?['termin']:[]).concat(re.test('prüfung')?['pruefung']:[]); }
 function wbIstTermin(b){
   if(b.status==='verschoben'||b.typ==='belohnung'||['mahlzeit','schlaf','routine'].indexOf(b.kategorie)>=0)return false;
-  var mix=pxMix(b);
-  if(b.kategorie==='termin'||mix.indexOf('termin')>=0||b.termin||b.pruefDatum)return true;
-  if(b.kategorie==='pruefung'||mix.indexOf('pruefung')>=0)return true;
+  var mix=pxMix(b), alle=[b.kategorie].concat(mix), tk=wbKatIds(/termin/i), pk=wbKatIds(/pr[uü]fung|deadline/i);
+  if(b.termin||b.pruefDatum)return true;
+  if(alle.some(function(k){ return tk.indexOf(k)>=0; })||alle.some(function(k){ return pk.indexOf(k)>=0; }))return true;
   var ber=wbBereich(b); if(ber==='arbeit'||ber==='militaer')return true;
   if(ber==='ppl'&&wbUnter(b)==='flugstunde')return true;
   return false;
@@ -22095,6 +22096,22 @@ function wbHabitsFrage(){
 }
 var _waInit_wb20=waInit;
 waInit=function(){ _waInit_wb20(); setTimeout(function(){ try{ wbHabitsFrage(); }catch(e){} },14000); };
+
+// ═══════════════════════════════════════════════════════════
+// Kategorien werden nach ihrem NAMEN erkannt, nicht nach der internen Id (eine Kategorie kann umbenannt worden sein,
+// z. B. die Id «familie» heisst bei dir «Termin»). Ohne eigene Zuordnung im Hangar gilt: «Termin» → Planen, «Prüfung/Deadline» → Studium.
+// ═══════════════════════════════════════════════════════════
+var _wbBereich_wb21=wbBereich;
+wbBereich=function(b){
+  if(b.bereich)return b.bereich;
+  var m=cfg('wb.map')||{};
+  if(!m[b.kategorie]&&!wbHeur(b)){
+    var k=wpKats().find(function(x){ return x.id===b.kategorie; });
+    if(k&&/termin/i.test(k.name))return 'planen';
+    if(k&&/pr[uü]fung|deadline/i.test(k.name))return 'studium';
+  }
+  return _wbBereich_wb21(b);
+};
 
 // ═══════════════════════════════════════════════════════════
 // INIT
