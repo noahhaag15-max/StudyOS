@@ -2104,6 +2104,10 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 /* WOCHENPLAN-EDITOR: Zusatzfelder */
 .po-f { background: color-mix(in srgb, var(--c-accent) 6%, transparent); border-radius: 12px; padding: 8px 10px; }
 .wp-b .po-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* WIRTSCHAFT */
+.oe-gefahr { font-size: 12px; line-height: 1.5; color: var(--c-fun); margin-top: 8px; }
+.oe-gefahr i { vertical-align: -2px; }
 </style>
 </head>
 <body>
@@ -4250,6 +4254,8 @@ function sosInit(){
 var PUNKTE_DEF=[
   ['block_ok','Wochenplan-Block ✓ erledigt','XP',20,'Wochenplan'],
   ['block_teil','Block ◐ teilweise','XP',10,'Wochenplan'],
+  ['block_ok_alltag','Alltags-Block ✓ (Mahlzeit, Routine, Schlaf, Wägen, Pushups)','XP',3,'Wochenplan'],
+  ['kern_minus','Zwei Kernblöcke am selben Tag nicht gemacht (Recovery: halber Betrag zurück)','XP',-10,'Wochenplan'],
   ['block_verschoben','Block ↻ verschoben (nach Beginn voll · am selben Tag vorher halb · bis Vortag 0)','Meilen',-10,'Wochenplan'],
   ['block_nein','Block ✗ nicht gemacht','Meilen',-10,'Wochenplan'],
   ['etappe','Lern-Etappe abgeschlossen','XP',40,'Lernen'],
@@ -4282,7 +4288,7 @@ var PUNKTE_DEF=[
   ['bossfight','Prüfung bestanden (Bossfight)','XP',500,'Werdegang']
 ];
 var PUNKTE_WERTE_DEFAULT=(function(){
-  var w={maxAbzug:30,mult:[{ab:7,f:1.2},{ab:14,f:1.5}],custom:[]};
+  var w={maxAbzug:30,xpMinusCap:150,mult:[{ab:7,f:1.1},{ab:14,f:1.25}],custom:[]};
   PUNKTE_DEF.forEach(function(d){ w[d[0]]=d[3]; });
   return w;
 })();
@@ -4294,7 +4300,7 @@ var ABZ_DEFAULT=[
   {id:'streak14',name:'Dauerflug',icon:'flame',beschr:'14 Tage Streak',bed:{typ:'streak',wert:14}},
   {id:'xp1000',name:'Erste Tausend',icon:'medal',beschr:'1\'000 XP gesammelt',bed:{typ:'xp',wert:1000}}
 ];
-CFG_DEFAULTS['punkte']=[{ab:'0000-00-00',werte:PUNKTE_WERTE_DEFAULT}];
+CFG_DEFAULTS['punkte']=[{ab:'0000-00-00',werte:Object.assign({},PUNKTE_WERTE_DEFAULT,{block_ok_alltag:PUNKTE_WERTE_DEFAULT.block_ok,kern_minus:0,mult:[{ab:7,f:1.2},{ab:14,f:1.5}]})},{ab:'2026-11-12',werte:PUNKTE_WERTE_DEFAULT}];
 CFG_DEFAULTS['raenge']=[{ab:'0000-00-00',liste:RANG_DEFAULT}];
 CFG_DEFAULTS['abzeichen']=ABZ_DEFAULT;
 CFG_META['punkte']={gruppe:'Punkteregeln',label:'Punkteregeln (gelten ab dem nächsten Tag)'};
@@ -4305,7 +4311,7 @@ function spielMorgen(){ return lpAdd(today(),1); }
 function satzAt(sets,date){
   var pick=sets[0]; sets.forEach(function(s){ if(s.ab<=date&&s.ab>=pick.ab)pick=s; }); return pick;
 }
-function punkteAt(date,sets){ var s=satzAt(sets||cfg('punkte'),date||today()); return Object.assign({},PUNKTE_WERTE_DEFAULT,s.werte); }
+function punkteAt(date,sets){ var s=satzAt(sets||cfg('punkte'),date||today()), w=Object.assign({},PUNKTE_WERTE_DEFAULT,s.werte), sw=s.werte||{}; if(sw.block_ok_alltag===undefined)w.block_ok_alltag=w.block_ok; if(sw.kern_minus===undefined)w.kern_minus=0; if(sw.mult===undefined)w.mult=[{ab:7,f:1.2},{ab:14,f:1.5}]; return w; }
 function raengeAt(date,sets){ var s=satzAt(sets||cfg('raenge'),date||today()); return (s.liste||RANG_DEFAULT).slice(); }
 CFG_VALIDATE['punkte']=function(sets){
   if(!Array.isArray(sets)||!sets.length)return 'Ungültige Punkteregeln.';
@@ -4358,7 +4364,13 @@ function buche(o){
   var _st=spielStart(); if(_st&&datum<_st){ if(o.quelle&&o.quelle!=='auto')showToast('Zählt erst ab Spielstart ('+lpFmt(_st)+').'); return null; }
   if(o.einheit==='Meilen'){ mi=betrag; }
   else if(betrag>=0){ xp=betrag; mi=betrag; }
-  else { mi=betrag; }                                   // XP sinken nie: negative XP-Beträge treffen nur Meilen
+  else if(o.xpMinus||o.quelle==='debriefing'){ xp=betrag; mi=0; }   // Minus-XP (Saldo bleibt ≥ 0, siehe spielTotals)
+  else { mi=betrag; }                                   // sonst treffen negative Beträge nur Meilen
+  if(xp<0&&(o.quelle||'auto')==='auto'){                // Wochendeckel für automatische XP-Abzüge
+    var wk=lpMonday(datum), capW=punkteAt(datum).xpMinusCap, usedW=0; if(capW==null)capW=150;
+    D.buchungen.forEach(function(b){ if(b.xp<0&&b.quelle==='auto'&&b.id!==o.id&&lpMonday(b.datum)===wk)usedW+=-b.xp; });
+    xp=-Math.max(0,Math.min(-xp,capW-usedW));
+  }
   // Tageslimit für automatische Abzüge
   if(mi<0&&(o.quelle||'auto')==='auto'){
     var lim=punkteAt(datum).maxAbzug, used=0;
@@ -4376,7 +4388,7 @@ function buche(o){
 function spielTotals(){
   spielEnsure();
   var xp=0, mi=0;
-  D.buchungen.slice().sort(function(a,b){ return (a.datum>b.datum?1:a.datum<b.datum?-1:0)||(a.ts-b.ts); }).forEach(function(b){ xp+=b.xp||0; mi=Math.max(0,mi+(b.meilen||0)); });
+  D.buchungen.slice().sort(function(a,b){ return (a.datum>b.datum?1:a.datum<b.datum?-1:0)||(a.ts-b.ts); }).forEach(function(b){ xp=Math.max(0,xp+(b.xp||0)); mi=Math.max(0,mi+(b.meilen||0)); });
   return {xp:xp,meilen:mi};
 }
 function spielWoche(mon){
@@ -4401,7 +4413,7 @@ function spielCheckRang(){
   var achievedIdx=hist.length?liste.findIndex(function(r){return r.name===hist[hist.length-1].rang;}):-1;
   if(!hist.length&&cand===0){ return; }                 // Startrang wird erst bei der ersten Beförderung festgehalten
   if(cand>achievedIdx){
-    S.rangHistorie.push({id:'rang:'+liste[cand].name,rang:liste[cand].name,xp:t.xp,datum:today(),ts:Date.now()});
+    S.rangHistorie.push({id:'rang:'+liste[cand].name+(S.rangHistorie.some(function(x){return x.id==='rang:'+liste[cand].name;})?':'+today():''),rang:liste[cand].name,xp:t.xp,datum:today(),ts:Date.now()});
     saveD();
     if(hist.length||cand>0)spielAufstiegAnim(liste[cand].name);
   }
@@ -4453,14 +4465,17 @@ function spielFaktor(streakTage,date){
 // ── Tagesbilanz: eine Quelle für Anzeige UND Buchung ──
 function spielTagesbilanz(date){
   var P=punkteAt(date), L=[], blocks=wpBlocksOn(date).filter(function(b){return b.typ==='aufgabe'||b.typ==='fix';});
-  var c={ok:0,teil:0,nein:0,verschoben:0,offen:0}, rShare=0, rN=0;
-  blocks.forEach(function(b){ if(wpIsRoutine(b)&&(b.checkliste||[]).length&&b.status!=='nein'&&b.status!=='verschoben'){ rShare+=wpShare(b); rN++; return; } var stx=loStatus(b,date); c[stx]=(c[stx]||0)+1; });
+  var c={ok:0,teil:0,nein:0,verschoben:0,offen:0}, cA={ok:0,teil:0}, rShare=0, rN=0;
+  blocks.forEach(function(b){ if(wpIsRoutine(b)&&(b.checkliste||[]).length&&b.status!=='nein'&&b.status!=='verschoben'){ rShare+=wpShare(b); rN++; return; } var stx=loStatus(b,date); c[stx]=(c[stx]||0)+1; if(oeAlltag(b)){ if(stx==='ok')cA.ok++; else if(stx==='teil')cA.teil++; } });
   var add=function(k,label,betrag,einheit,gruppe){ if(betrag!==0)L.push({k:k,label:label,betrag:betrag,einheit:einheit||'XP',gruppe:gruppe}); };
-  add('bloecke','Blöcke ('+c.ok+'× ✓'+(c.teil?', '+c.teil+'× ◐':'')+')',c.ok*P.block_ok+c.teil*P.block_teil,'XP','Wochenplan');
+  add('bloecke','Blöcke ('+c.ok+'× ✓'+(c.teil?', '+c.teil+'× ◐':'')+((cA.ok||cA.teil)?' · davon '+(cA.ok+cA.teil)+' Alltag':'')+')',(c.ok-cA.ok)*P.block_ok+(c.teil-cA.teil)*P.block_teil+cA.ok*P.block_ok_alltag+cA.teil*Math.round(P.block_ok_alltag/2),'XP','Wochenplan');
   var _vsum=0; blocks.forEach(function(b){ if(loStatus(b,date)==='verschoben')_vsum+=Math.round(P.block_verschoben*(b.vfaktor==null?1:b.vfaktor)); });
   add('verschoben','Verschoben ('+c.verschoben+'×)',_vsum,'Meilen','Wochenplan');
-  if(rN&&rShare>0)add('routinen','Routinen ('+rN+'×, '+Math.round(rShare/rN*100)+' %)',Math.round(rShare*P.block_ok),'XP','Wochenplan');
+  if(rN&&rShare>0)add('routinen','Routinen ('+rN+'×, '+Math.round(rShare/rN*100)+' %)',Math.round(rShare*((cfg('punkte.alltag')||[]).indexOf('routine')>=0?P.block_ok_alltag:P.block_ok)),'XP','Wochenplan');
   add('nein','Nicht gemacht ('+c.nein+'×)',c.nein*P.block_nein,'Meilen','Wochenplan');
+  var kN=oeKernNein(date);
+  if(kN>=2&&P.kern_minus)add('kern_minus','Zwei Kernblöcke nicht gemacht ('+kN+'×)',P.kern_minus,'XP','Wochenplan');
+  else if(P.kern_minus&&kN===0){ var vt=lpAdd(date,-1); if(oeKernNein(vt)>=2&&oeKernOk(date)>0&&(!spielStart()||vt>=spielStart()))add('recovery','Recovery: wieder dabei',Math.round(-P.kern_minus/2),'XP','Wochenplan'); }
   var wa=blocks.filter(function(b){return b.status==='ok'&&String(b.quelle||'').indexOf('wochenaufgabe:')===0;}).length+(D.woechentlich||[]).filter(function(x){ return x.erledigtAm===date&&!blocks.some(function(b){return String(b.quelle)==='wochenaufgabe:'+x.id;}); }).length;
   add('wochenaufgabe','Wochenaufgaben ('+wa+'×)',wa*P.wochenaufgabe,'XP','Wochenplan');
   var sess=lpSessionsOn(date), nEt=0, nAlleine=0;
@@ -4490,14 +4505,14 @@ function spielTagesbilanz(date){
   var _vs=!!spielStart()&&date<spielStart(); if(_vs)L=[];
   var closed=!!(D.spiel&&D.spiel.tage&&D.spiel.tage[date]);
   var ab=_vs?0:(closed||true?P.tagesabschluss:0);
-  var xp=0, mi=0; L.forEach(function(l){ if(l.einheit==='XP'){ xp+=l.betrag; mi+=l.betrag; } else mi+=l.betrag; });
+  var xp=0, mi=0; L.forEach(function(l){ if(l.einheit==='XP'){ xp+=l.betrag; mi+=(l.betrag>0?l.betrag:0); } else mi+=l.betrag; });
   return {zeilen:L,xp:xp,meilen:mi,abschluss:ab,counts:c,faktor:f,geschlossen:closed};
 }
 // XP und Meilen werden laufend über den Tag gebucht; der Tagesabschluss gibt am Ende den Abschluss-Bonus obendrauf.
 function spielBucheTag(date,abschluss){
   var S=spielEnsure(), b=spielTagesbilanz(date), old=S.tage[date], keys=(old&&old.keys)||[], neu=[];
   b.zeilen.forEach(function(l){
-    buche({id:'tag:'+date+':'+l.k,betrag:l.betrag,einheit:l.einheit,text:l.label,datum:date,quelle:'auto',gruppe:l.gruppe,still:true}); neu.push(l.k);
+    buche({id:'tag:'+date+':'+l.k,betrag:l.betrag,einheit:l.einheit,text:l.label,datum:date,quelle:'auto',gruppe:l.gruppe,still:true,xpMinus:(l.einheit==='XP'&&l.betrag<0)}); neu.push(l.k);
   });
   keys.forEach(function(k){ if(neu.indexOf(k)<0&&k!=='abschluss')buche({id:'tag:'+date+':'+k,betrag:0,einheit:'XP',text:'(entfallen)',datum:date,quelle:'auto',still:true}); });
   if(abschluss||(old&&old.ts)){ buche({id:'tag:'+date+':abschluss',betrag:b.abschluss,einheit:'XP',text:'Tagesabschluss',datum:date,quelle:'auto',gruppe:'Rhythmus',still:true}); neu.push('abschluss'); }
@@ -4538,7 +4553,7 @@ function spielParseBuchungen(text){
     var m=/^([+-]\d+)\s*(XP|Meilen)\s*\|\s*(.+)$/.exec(z);
     if(!m){ out.push({z:z,fehler:'Format: ±N XP|Meilen | Grund'}); return; }
     var n=parseInt(m[1],10);
-    if(m[2]==='XP'&&n<0){ out.push({z:z,fehler:'XP sinken nie — negative Beträge bitte als Meilen buchen'}); return; }
+    
     out.push({z:z,betrag:n,einheit:m[2],text:m[3].trim()});
   });
   return out;
@@ -4550,7 +4565,7 @@ function renderLounge(){
   var h='<div class="lp-two" style="margin-bottom:12px"><div class="lp-cd"><div class="lp-cap" style="margin-bottom:6px">RANG</div>'
     +'<div class="lp-row" style="gap:14px">'+ringGaugeSVG(Math.round(r.pct*100),'var(--c-accent)',64,6)
     +'<div><div style="font-size:18px;font-weight:500">'+lpEsc(r.name)+'</div><div class="lp-mu lp-mono">'+fmtCH(r.xp)+(r.next?' / '+fmtCH(r.next.xp)+' XP · nächster: '+lpEsc(r.next.name):' XP · höchster Rang')+'</div></div></div>'
-    +'<div class="lp-mu" style="margin-top:8px">Ein Rang sinkt nie. XP steigen nur, Abzüge treffen nur Meilen.</div></div>'
+    +'<div class="lp-mu" style="margin-top:8px">Der XP-Stand fällt nie unter 0. Ein Rang sinkt erst nach Vorwarnung und '+OE_RANG_TAGE+' Tagen unter seiner Schwelle.</div></div>'
     +'<div class="lp-cd"><div class="lp-cap" style="margin-bottom:6px">MEILEN</div><div class="lp-mono" style="font-size:26px;color:var(--c-ok)">'+fmtCH(t.meilen)+'</div>'
     +'<div class="lp-mu lp-mono">diese Woche <span style="color:var(--c-ok)">+'+fmtCH(w.plus)+'</span> · Abzüge <span>'+fmtCH(w.minus)+'</span></div>'
     +'</div></div>';
@@ -5145,7 +5160,7 @@ function hgRaengeEdit(fn){
 function hgRaengeHTML(){
   var sets=hgGet('raenge'), morgen=spielMorgen(), L=raengeAt(morgen,sets), R=spielRang();
   var h='<div class="lp-cd"><div class="lp-row" style="justify-content:space-between;margin-bottom:4px"><span class="lp-cap">RÄNGE</span><span class="lp-row"><button type="button" class="lp-btn" data-sos="hg-rang-add"><i class="ti ti-plus"></i> Rang</button><button type="button" class="lp-btn gray" data-sos="hg-default" data-id="raenge">Standard</button></span></div>'
-    +'<div class="hg-hinweis"><i class="ti ti-info-circle"></i> Änderungen gelten <b style="font-weight:500">ab '+lpFmt(morgen)+' 00:00</b>. Ein erreichter Rang sinkt nie — werden Schwellen erhöht, bleibt dein Rang <b style="font-weight:500">'+lpEsc(R.name)+'</b>, nur der nächste Aufstieg richtet sich nach den neuen Schwellen.</div>';
+    +'<div class="hg-hinweis"><i class="ti ti-info-circle"></i> Änderungen gelten <b style="font-weight:500">ab '+lpFmt(morgen)+' 00:00</b>. Ein erreichter Rang bleibt bei erhöhten Schwellen bestehen (er sinkt nur nach Vorwarnung durch Minus-XP) — dein Rang bleibt <b style="font-weight:500">'+lpEsc(R.name)+'</b>, nur der nächste Aufstieg richtet sich nach den neuen Schwellen.</div>';
   L.forEach(function(r,i){
     h+='<div class="hg-row"><span class="lp-mu lp-mono" style="width:16px">'+(i+1)+'</span><input class="lp-in" style="flex:1" data-hgr="'+i+'" data-f="name" value="'+lpEsc(r.name)+'"/><input class="hg-v lp-mono" type="number" min="0" style="width:90px" data-hgr="'+i+'" data-f="xp" value="'+r.xp+'"'+(i===0?' disabled':'')+'/><span class="lp-mu">XP</span>'
       +(i>0?'<button type="button" class="lp-x" data-sos="hg-rang-del" data-id="'+i+'">✕</button>':'<i class="ti ti-lock lp-mu"></i>')+'</div>';
@@ -7024,7 +7039,7 @@ function renderLounge(){
   // Rang, Mission, Abzeichen, Verlauf
   h+='<div class="lp-two" style="margin:18px 0 12px"><div class="lp-cd"><div class="lp-cap" style="margin-bottom:6px">RANG</div><div class="lp-row" style="gap:14px">'+ringGaugeSVG(Math.round(r.pct*100),'var(--c-accent)',64,6)
     +'<div><div style="font-size:18px;font-weight:500">'+lpEsc(r.name)+' <span class="lp-mu lp-mono" style="font-size:11px">Stufe '+(r.idx+1)+'/'+r.liste.length+'</span></div><div class="lp-mu lp-mono">'+fmtCH(r.xp)+(r.next?' / '+fmtCH(r.next.xp)+' XP · nächster: '+lpEsc(r.next.name):' XP · höchster Rang')+'</div></div></div>'
-    +'<div class="lp-mu" style="margin-top:8px;font-size:12px">Ein Rang sinkt nie. XP steigen nur, Abzüge treffen nur Meilen.</div>'
+    +'<div class="lp-mu" style="margin-top:8px;font-size:12px">Der XP-Stand fällt nie unter 0. Ein Rang sinkt erst nach Vorwarnung und '+OE_RANG_TAGE+' Tagen unter seiner Schwelle.</div>'
     +(spielEnsure().rangHistorie.length?'<div class="lp-mu lp-mono" style="margin-top:6px;font-size:11px">'+spielEnsure().rangHistorie.slice().sort(function(a,b){return a.ts-b.ts;}).map(function(x){ return lpEsc(x.rang)+' '+lpFmtShort(x.datum); }).join(' · ')+'</div>':'')+'</div>'
     +'<div class="lp-cd"><div class="lp-cap" style="margin-bottom:8px">WOCHENMISSION · KW '+getKW(new Date(mon0+'T00:00:00Z'))+'</div>'+moCardHTML(mon0)+'<div class="lp-mu" style="font-size:11px;margin-top:8px">Montags drei Vorschläge, Belohnung +'+punkteAt(today()).mission+' XP bei Erreichen.</div></div></div>';
   h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:8px">ABZEICHEN</div>'+loBadgesHTML()+'</div>';
@@ -7946,7 +7961,7 @@ function p7Next(){
   var done=function(){ if(!el.parentNode||el.classList.contains('out'))return; el.classList.add('out'); setTimeout(function(){ if(el.parentNode)el.remove(); P7BUSY=false; p7Next(); },320); };
   el.addEventListener('click',done); setTimeout(done,2400);
 }
-spielAufstiegAnim=function(name){ p7Celebrate('BEFÖRDERUNG',name,'Neuer Rang erreicht — er bleibt dir für immer.','plane-inflight'); };
+spielAufstiegAnim=function(name){ p7Celebrate('BEFÖRDERUNG',name,'Neuer Rang erreicht — halte ihn, indem du im Plus bleibst.','plane-inflight'); };
 var _moCheck_p7=moCheck;
 moCheck=function(){ var M=moEnsure(), b={}; Object.keys(M).forEach(function(k){ b[k]=M[k].erreicht; }); _moCheck_p7(); Object.keys(M).forEach(function(k){ if(M[k].erreicht&&!b[k]){ var o=moOpt(M[k].w); p7Celebrate('WOCHENMISSION ERREICHT',o?o.name:'Mission','+'+punkteAt(today()).mission+' XP','flag-3'); } }); };
 var _cpFinish_p7=cpFinish;
@@ -19543,6 +19558,116 @@ pwBuildSchedule=function(){
 };
 
 // ═══════════════════════════════════════════════════════════
+// WIRTSCHAFT («K-Ö»): Alltags-Blöcke geben weniger XP, Streak-Bonus kleiner, Lounge teurer, Minus-XP,
+// Rang kann nach Vorwarnung fallen. Werte stehen im Hangar (Punkteregeln), gelten ab morgen.
+// ═══════════════════════════════════════════════════════════
+CFG_DEFAULTS['economy.v']=0;
+CFG_META['economy.v']={gruppe:'Wirtschaft',label:'Wirtschafts-Version (Migration)'};
+CFG_VALIDATE['economy.v']=function(v){ return (v>=0&&v<=99)?null:'0 bis 99.'; };
+CFG_DEFAULTS['punkte.alltag']=['mahlzeit','routine','schlaf','waegen','pushups'];
+CFG_META['punkte.alltag']={gruppe:'Wirtschaft',label:'Alltags-Kategorien (wenig XP pro Block)'};
+CFG_VALIDATE['punkte.alltag']=function(l){ return Array.isArray(l)?null:'Ungültige Liste.'; };
+var OE_RANG_TAGE=14, OE={later:false};
+function oeAlltag(b){ var l=cfg('punkte.alltag')||[]; return l.indexOf(b.kategorie)>=0; }
+function oeKernNein(date){ return wpBlocksOn(date).filter(function(b){ return (b.typ==='aufgabe'||b.typ==='fix')&&loStatus(b,date)==='nein'&&!oeAlltag(b); }).length; }
+function oeKernOk(date){ return wpBlocksOn(date).filter(function(b){ return (b.typ==='aufgabe'||b.typ==='fix')&&(b.status==='ok'||b.status==='teil')&&!oeAlltag(b); }).length; }
+
+// ── Rang: Vorwarnung und Abstieg (deterministisch aus den Buchungen, kein eigener Zustand → sync-sicher) ──
+function oeRangStand(){
+  var S=spielEnsure(), hist=S.rangHistorie.slice().sort(function(a,b){return a.ts-b.ts;}); if(!hist.length)return null;
+  var last=hist[hist.length-1], liste=raengeAt(last.datum||today()), idx=liste.findIndex(function(r){return r.name===last.rang;});
+  if(idx<=0)return null;
+  var need=liste[idx].xp, byDay={}, xp=0, td=today();
+  D.buchungen.slice().sort(function(a,b){ return (a.datum>b.datum?1:a.datum<b.datum?-1:0)||(a.ts-b.ts); }).forEach(function(b){ xp=Math.max(0,xp+(b.xp||0)); byDay[b.datum]=xp; });
+  var days=Object.keys(byDay).sort(), at=0, cur=0, d0=null, d=last.datum||td, g=0;
+  while(d<=td&&g++<800){ while(at<days.length&&days[at]<=d){ cur=byDay[days[at]]; at++; } if(cur<need){ if(d0===null)d0=d; } else d0=null; d=lpAdd(d,1); }
+  return {rang:last.rang,idx:idx,need:need,xp:cur,seit:d0,tage:d0?lpDayDiff(d0,td):0,last:last};
+}
+function oeRangGefahr(){ var s=oeRangStand(); return (s&&s.seit)?s:null; }
+function oeRangPruefen(){
+  var s=oeRangGefahr(); if(!s||s.tage<OE_RANG_TAGE||spielVorStart())return;
+  var S=spielEnsure(), liste=raengeAt(today()), tgt=0; liste.forEach(function(r,i){ if(s.xp>=r.xp)tgt=i; });
+  var cur=liste.findIndex(function(r){return r.name===s.rang;}); if(cur<0||tgt>=cur)tgt=Math.max(0,cur-1);
+  var id='rangab:'+s.rang+':'+s.seit; if(S.rangHistorie.some(function(x){return x.id===id;}))return;
+  S.rangHistorie.push({id:id,rang:liste[tgt].name,xp:s.xp,datum:today(),ts:Date.now(),ab:true}); saveD();
+  try{ p7Celebrate('RANG GEFALLEN',liste[tgt].name,'Du warst '+OE_RANG_TAGE+' Tage unter der Schwelle. Mit Plus-XP kommst du zurück.','plane-inflight'); }catch(e){ showToast('Rang gefallen auf '+liste[tgt].name+'.'); }
+}
+var _spielCheckRang_oe=spielCheckRang;
+spielCheckRang=function(){ var r=_spielCheckRang_oe.apply(this,arguments); try{ oeRangPruefen(); }catch(e){} return r; };
+function oeGefahrHTML(){
+  var s=oeRangGefahr(); if(!s)return '';
+  return '<div class="oe-gefahr"><i class="ti ti-alert-triangle"></i> <b style="font-weight:500">Rang «'+lpEsc(s.rang)+'» in Gefahr.</b> Dir fehlen '+fmtCH(s.need-s.xp)+' XP bis zur Schwelle. Seit '+s.tage+' '+(s.tage===1?'Tag':'Tagen')+' darunter, nach '+OE_RANG_TAGE+' Tagen sinkt der Rang um eine Stufe.</div>';
+}
+var _ckHeaderHTML_oe=ckHeaderHTML;
+ckHeaderHTML=function(){ var h=_ckHeaderHTML_oe(); return h?h+oeGefahrHTML():h; };
+var _renderLounge_oe=renderLounge;
+renderLounge=function(){ _renderLounge_oe(); try{ var root=document.getElementById('lounge-root'), g=oeGefahrHTML(); if(root&&g&&!root.querySelector('.oe-gefahr'))root.insertAdjacentHTML('afterbegin','<div class="lp-cd" style="margin-bottom:12px;border-color:var(--c-fun)">'+g+'</div>'); }catch(e){} };
+
+// ── Hangar: Alltags-Kategorien wählen und XP-Abzug-Deckel ──
+function oeAlltagHTML(){
+  var sel=cfg('punkte.alltag')||[];
+  return '<div class="lp-mu" style="margin:12px 0 2px;text-transform:uppercase;letter-spacing:.1em;font-size:9px">Alltags-Kategorien <span style="text-transform:none;letter-spacing:0">(Block ✓ gibt nur «Alltags-Block» XP; wirkt sofort)</span></div>'
+    +'<div class="lp-row" style="flex-wrap:wrap;gap:6px">'+wpKats().map(function(k){ return '<button type="button" class="wp-kat'+(sel.indexOf(k.id)>=0?' on':'')+'" data-oe="alt" data-id="'+lpEsc(k.id)+'" style="--bc:'+wpKatHex(k)+'"><i></i>'+lpEsc(k.name)+'</button>'; }).join('')+'</div>';
+}
+var _hgPunkteHTML_oe=hgPunkteHTML;
+hgPunkteHTML=function(){
+  var h=_hgPunkteHTML_oe(), W=punkteAt(spielMorgen(),hgGet('punkte'));
+  h=h.replace(/(data-hgp="maxAbzug"[^>]*\/><\/div>)/,'$1<div class="hg-ln"><span>Max. XP-Abzug pro Woche</span><input class="hg-v lp-mono" type="number" min="0" data-hgp="xpMinusCap" value="'+(W.xpMinusCap==null?150:W.xpMinusCap)+'"/></div>');
+  return h.replace(/<\/div>$/,oeAlltagHTML()+'</div>');
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-oe]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var a=el.getAttribute('data-oe'), id=el.getAttribute('data-id');
+  if(a==='alt'){ var l=(cfg('punkte.alltag')||[]).slice(), i=l.indexOf(id); if(i>=0)l.splice(i,1); else l.push(id); setCfg('punkte.alltag',l,'wirtschaft'); try{ renderHangar(); }catch(e){} try{ spielRebuche(today()); }catch(e){} }
+  else if(a==='backup'){ sosDownloadJson('study-os-backup-vor-wirtschaft'); el.textContent='Backup heruntergeladen ✓'; el.setAttribute('data-done','1'); }
+  else if(a==='go'){
+    var bk=document.querySelector('#oe-mig [data-oe="backup"]');
+    if(bk&&!bk.getAttribute('data-done')&&!confirm('Ohne heruntergeladenes Backup fortfahren?'))return;
+    oeMigrateRun();
+  }
+  else if(a==='later'){ OE.later=true; var m=document.getElementById('oe-mig'); if(m)m.remove(); }
+},true);
+
+// ── Migration: neue Werte ab morgen, Lounge-Preise ×2,5 (einmalig, mit Backup) ──
+function oePreis(p){ return Math.max(50,Math.round(p*2.5/50)*50); }
+var OE_ALT={r100:100,r200:200,r250:250,r300:300,r350:350,r400:400,r700:700,r1000:1000,g3000:3000,g5000:5000,g12000:12000};
+function oeNeuPreis(r){ var alt=OE_ALT[r.id]; if(alt!=null){ if(r.preis===oePreis(alt))return r.preis; if(r.preis===alt)return oePreis(alt); } return oePreis(r.preis); }
+LO_DEFAULT.forEach(function(r){ if(r&&r.preis>0&&OE_ALT[r.id]===r.preis)r.preis=oePreis(r.preis); });   // neue Standardpreise (Fremdinstallationen, «Standard zurücksetzen»)
+function oeMigNeeded(){ return (+cfg('economy.v')||0)<2&&!SY.migPending&&!SOS_MIGRATION_PENDING; }
+function oeMigrateAsk(){
+  if(document.getElementById('oe-mig')||!oeMigNeeded())return;
+  var rew=(cfg('lounge.belohnungen')||[]), morgen=spielMorgen();
+  syModal('oe-mig','<div class="lp-mono" style="color:var(--c-accent);font-size:10px;letter-spacing:.12em">STUDY_OS · WIRTSCHAFT</div>'
+    +'<div style="font-size:16px;font-weight:500;margin:4px 0 8px">Weniger XP, teurere Belohnungen, Minus-XP</div>'
+    +'<div class="lp-mu" style="line-height:1.6;margin-bottom:10px">Damit du nicht mehr zu viele XP bekommst, ändern sich diese Werte <b style="font-weight:500">ab '+lpEsc(lpFmt(morgen))+'</b> (nicht rückwirkend):</div>'
+    +'<div class="hg-ln"><span>Alltags-Block ✓ (Mahlzeit, Routine, Schlaf, Wägen, Pushups)</span><span class="lp-mono">20 → 3 XP</span></div>'
+    +'<div class="hg-ln"><span>Streak-Bonus</span><span class="lp-mono">×1,2 / ×1,5 → ×1,1 / ×1,25</span></div>'
+    +'<div class="hg-ln"><span>Zwei Kernblöcke am selben Tag ✗</span><span class="lp-mono">−10 XP (Recovery +5)</span></div>'
+    +'<div class="hg-ln"><span>XP-Abzug pro Woche höchstens</span><span class="lp-mono">150 XP</span></div>'
+    +'<div class="lp-mu" style="margin:10px 0 4px">Sofort: Lounge-Preise ×2,5 (z. B. '+rew.slice(0,3).map(function(r){ return lpEsc(r.name)+' '+fmtCH(OE_ALT[r.id]||r.preis)+' → '+fmtCH(oeNeuPreis(r)); }).join(', ')+' …). Der XP-Stand kann nicht unter 0 fallen. Ein Rang sinkt nur nach Vorwarnung und '+OE_RANG_TAGE+' Tagen unter seiner Schwelle. Bereits gesammelte XP, Ränge und Trophäen bleiben unverändert. Alles ist im Hangar einstellbar.</div>'
+    +'<div class="lp-row" style="flex-wrap:wrap;justify-content:flex-end;gap:8px"><button type="button" class="lp-btn gray" data-oe="later">Später</button><button type="button" class="lp-btn gray" data-oe="backup">Backup herunterladen</button><button type="button" class="lp-btn fill" data-oe="go">Anwenden</button></div>');
+}
+function oeMigrateRun(){
+  var go=function(){
+    var sets=JSON.parse(JSON.stringify(cfg('punkte'))), morgen=spielMorgen();
+    var neu=JSON.parse(JSON.stringify(punkteAt(morgen,sets)));
+    neu.block_ok_alltag=3; neu.kern_minus=-10; neu.xpMinusCap=150; neu.mult=[{ab:7,f:1.1},{ab:14,f:1.25}];
+    var basis=sets.filter(function(s){return s.ab!==morgen;}); basis.push({ab:morgen,werte:neu}); basis.sort(function(a,b){return a.ab>b.ab?1:-1;});
+    setCfg('punkte',basis,'wirtschaft');
+    var rew=JSON.parse(JSON.stringify(cfg('lounge.belohnungen')||[])); rew.forEach(function(r){ if(r&&r.preis>0)r.preis=oeNeuPreis(r); }); setCfg('lounge.belohnungen',rew,'wirtschaft');
+    setCfg('economy.v',2,'wirtschaft');
+    var m=document.getElementById('oe-mig'); if(m)m.remove(); try{ syLog('Migration','Wirtschaft angepasst (ab '+morgen+')'); }catch(e){}
+    try{ syRefresh(); }catch(e){} showToast('Wirtschaft angepasst ✓ — neue Punkte ab morgen','ok');
+  };
+  if(syToken()&&syGistId()){ syGistBackup('studyos_backup_'+syDateStamp()+'_vor-wirtschaft.json',JSON.stringify(D),'studyos_backup_2',10).then(go,go); } else go();
+}
+function oeInit(){
+  setInterval(function(){ try{ if(!OE.later&&!document.getElementById('sy-mig')&&!document.getElementById('cl-mig'))oeMigrateAsk(); }catch(e){} },6000);
+  setInterval(function(){ try{ oeRangPruefen(); }catch(e){} },3600000);
+  try{ oeRangPruefen(); }catch(e){}
+}
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
@@ -19561,6 +19686,7 @@ pwInit();
 exInit();
 ppInit();
 lbInit();
+oeInit();
 
 // Auto-refresh Scores und LivCounter
 setInterval(function(){renderLivCounter();renderDayTimer();renderFocus();},60000);
