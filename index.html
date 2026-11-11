@@ -21838,6 +21838,76 @@ wbfPruef=function(mon){
 };
 
 // ═══════════════════════════════════════════════════════════
+// WOCHENBEFEHL · «Lage» nur noch mit nachvollziehbaren Angaben
+// Jede Zeile stammt aus etwas, das du erfasst hast (Wochenplan-Status, Lernplan, Backlog, Monatsziele) und sagt, woher sie kommt.
+// Was nicht erfasst ist, erscheint nicht (keine Soll-Werte aus der Luft, keine «noch offen»-Zeilen).
+// ═══════════════════════════════════════════════════════════
+function wbfBlockStatus(mon){
+  var c={ok:0,teil:0,nein:0,verschoben:0,offen:0,total:0};
+  for(var i=0;i<7;i++){ wpBlocksOn(lpAdd(mon,i)).forEach(function(b){
+    if((b.typ!=='aufgabe'&&b.typ!=='fix')||['mahlzeit','schlaf','routine'].indexOf(b.kategorie)>=0)return;
+    c.total++; c[b.status]=(c[b.status]||0)+1; }); }
+  return c;
+}
+function wbfLage(mon){
+  var prev=lpAdd(mon,-7), td=today(), c=wbfBlockStatus(prev), sw=spielWoche(prev), an=wbAntraegeWoche(prev), ret=pdRescueWeek(prev), st=wbStabil(prev);
+  var line=function(l,v,q){ return '<div class="hg-ln" style="align-items:flex-start;gap:8px"><span style="font-size:12px;flex:1;min-width:0"><span class="lp-mu">'+l+'</span>'+(q?'<span class="lp-mu" style="display:block;font-size:10px;opacity:.75">'+q+'</span>':'')+'</span><span style="font-size:13px;text-align:right">'+v+'</span></div>'; };
+  var h='<div class="lp-cap" style="margin-bottom:6px">RÜCKBLICK KW '+wbKW(prev)+'</div>';
+  if(!c.total)h+='<div class="lp-mu" style="font-size:12px">Für diese Woche sind keine Blöcke im Wochenplan.</div>';
+  else {
+    h+=line('Blöcke im Plan',c.total,'aus dem Wochenplan, ohne Mahlzeiten, Schlaf und Routinen')
+      +line('erledigt (✓ oder ◐)',(c.ok+c.teil)+' von '+c.total)
+      +(c.nein?line('nicht gemacht (✗)',c.nein):'')+(c.verschoben?line('verschoben (↻)',c.verschoben):'')
+      +(c.offen?line('nicht bewertet',c.offen,'Status wurde im Tagesabschluss nicht gesetzt'):'');
+  }
+  var ses=0, et={}; for(var i=0;i<7;i++){ lpSessionsOn(lpAdd(prev,i)).forEach(function(s){ ses++; if(s.etappeId)et[s.etappeId]=1; }); }
+  if(ses)h+=line('Lern-Sessions',ses+' (an '+Object.keys(et).length+' Etappen)','aus den abgeschlossenen Lernmodus-Sessions');
+  if(st!=null)h+=line('Plan-Stabilität',st+' %','Anteil der freigegebenen Blöcke, die unverändert blieben');
+  if(an.length)h+=line('Änderungsanträge',an.length,'aus den gestellten Anträgen');
+  if(ret)h+=line('Rettungsmodus',ret+'×');
+  if(sw.netto)h+=line('Meilen netto',(sw.netto>0?'+':'')+sw.netto,'aus den Buchungen der Woche');
+
+  // Pendenzen
+  var tasksAll=clTasks().filter(function(t){ return !ckTaskDone(t)&&clDate(t)&&clDate(t)<=lpAdd(td,14); }).sort(function(a,b){ return clDate(a)<clDate(b)?-1:1; });
+  var spaet=tasksAll.filter(function(t){ return clDate(t)<lpAdd(td,-21); }), tasks=tasksAll.filter(function(t){ return clDate(t)>=lpAdd(td,-21); });
+  var mz=(D.monatsziele||[]).filter(function(z){ return !z.erledigt&&(!z.monat||z.monat===td.slice(0,7)); });
+  var ue=[]; lpAktiveFaecher().forEach(function(name){ var f=lpFach(name,false); if(!f)return; wbEtappenFach(f).forEach(function(x){ if(!x.done&&((x.e.geplantAm&&x.e.geplantAm<td)||(x.e.deadline&&x.e.deadline<td)))ue.push({fach:name,e:x.e}); }); });
+  h+='<div class="lp-cap" style="margin:14px 0 6px">PENDENZEN</div>';
+  if(!tasks.length&&!spaet.length&&!mz.length&&!ue.length)h+='<div class="lp-mu" style="font-size:12px">Keine offenen Aufgaben in den nächsten 14 Tagen, keine offenen Monatsziele, keine überfälligen Etappen.</div>';
+  tasks.slice(0,8).forEach(function(t){ var d=clDate(t); h+='<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(t.name)+(d<td?' <span style="color:var(--c-work);font-size:11px">überfällig</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px">fällig '+lpEsc(lpFmtShort(d))+'</span></div>'; });
+  if(tasks.length||spaet.length)h+='<div class="lp-mu" style="font-size:10px;margin:2px 0 6px">aus dem Backlog (offen, fällig in den nächsten 14 Tagen oder in den letzten 3 Wochen überfällig)'+(spaet.length?' · '+spaet.length+' ältere überfällige Aufgaben nicht aufgeführt':'')+'</div>';
+  mz.slice(0,6).forEach(function(z){ h+='<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(z.name)+'</span><span class="lp-mono" style="font-size:12px">'+(z.ziel>0?(z.stand||0)+'/'+z.ziel:'offen')+'</span></div>'; });
+  if(mz.length)h+='<div class="lp-mu" style="font-size:10px;margin:2px 0 6px">Monatsziele dieses Monats</div>';
+  ue.slice(0,6).forEach(function(x){ h+='<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(x.e.titel)+' <span class="lp-mu" style="font-size:11px">· '+lpEsc(x.fach)+'</span></span><span class="lp-mono" style="font-size:11px;color:var(--c-work)">war '+lpEsc(lpFmtShort(x.e.geplantAm||x.e.deadline))+'</span></div>'; });
+  if(ue.length)h+='<div class="lp-mu" style="font-size:10px;margin:2px 0 6px">überfällige Lernplan-Etappen'+(ue.length>6?' (die ersten 6 von '+ue.length+')':'')+'</div>';
+
+  // Lernplan: pro Fach nur, was zu berechnen ist, mit der Rechnung daneben
+  var lpz='';
+  lpAktiveFaecher().forEach(function(name){
+    var f=lpFach(name,false); if(!f)return; var s=lpFachStats(name); if(!s.total)return;
+    var v=wbVerzug(name), text;
+    if(!s.open)text=s.total+' von '+s.total+' Etappen erledigt';
+    else {
+      text=(s.total-s.open)+' von '+s.total+' Etappen erledigt';
+      if(f.pruefung){ var ende=lpAdd(f.pruefung,-(f.pufferTage==null?8:f.pufferTage)), w=Math.max(0.5,lpDayDiff(td,ende)/7); text+=' · bis zum Puffer ('+lpFmtShort(ende)+') '+wbFmt1(w)+' Wochen → '+wbFmt1(s.open/w)+' Etappen pro Woche nötig'; }
+      if(v)text+=' · Verzug '+(v.oldest?v.oldest+' Tage, kumuliert '+v.kum+' Etappen-Tage':'keiner')+' (Baseline vom '+lpFmtShort(f.baseline.gesetzt)+')';
+    }
+    lpz+='<div class="hg-ln" style="align-items:flex-start"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(name)+'<span class="lp-mu" style="display:block;font-size:11px">'+lpEsc(text)+'</span></span></div>';
+  });
+  if(lpz)h+='<div class="lp-cap" style="margin:14px 0 6px">LERNPLAN</div>'+lpz+'<div class="lp-mu" style="font-size:10px;margin:2px 0 4px">Gerechnet wird nur mit den Etappen, die du im Lernplan eingetragen hast. Fehlt Stoff im Lernplan, fehlt er auch hier.</div>';
+  var ohne=lpAktiveFaecher().filter(function(n){ var f=lpFach(n,false); return f&&f.pruefung&&!f.baseline&&lpFachStats(n).open; });
+  if(ohne.length)h+='<div class="lp-row" style="justify-content:space-between;align-items:center;margin-top:6px"><span class="lp-mu" style="font-size:12px">'+ohne.length+' Fach'+(ohne.length===1?'':'er')+' ohne Baseline</span><button type="button" class="lp-btn gray" data-wb6="alle">Baselines setzen …</button></div>';
+
+  // Kurs-Prüfung: nur Ziele mit echter Grundlage
+  var kz=wbKurs().filter(function(z){ return z.s!=='offen'&&z.id.indexOf('lp:')!==0; });
+  if(kz.length){ h+='<div class="lp-cap" style="margin:14px 0 6px">ZIELE</div>'+kz.map(function(z){ var cc=WB_KS[z.s]; return '<div class="hg-ln" style="align-items:flex-start;gap:8px"><span style="flex:1;min-width:0"><span style="font-size:13px"><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+cc[1]+';margin-right:7px"></i>'+lpEsc(z.label)+'</span><span class="lp-mu" style="display:block;font-size:11px;margin-left:16px">'+lpEsc(z.sub)+'</span></span><span style="font-size:12px;color:'+cc[1]+'">'+cc[0]+'</span></div>'; }).join(''); }
+
+  var T=wbTermineVor(td>mon?td:mon,14);
+  h+='<div class="lp-cap" style="margin:14px 0 6px">TERMINE IN DEN NÄCHSTEN 14 TAGEN</div>'+(T.length?T.map(function(b){ return '<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(b.titel)+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(wbFmtT(b.tag)+' '+b.start)+'</span></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Keine Fixtermine eingetragen.</div>');
+  return h;
+}
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
