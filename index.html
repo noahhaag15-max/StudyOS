@@ -2100,6 +2100,10 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 .wp-b.ol.now { outline-color: var(--c-accent); }
 .px-ck { flex-shrink: 0; font-size: 9px; line-height: 12px; opacity: .9; white-space: nowrap; margin-right: 2px; cursor: pointer; border-radius: 6px; padding: 0 3px; background: rgba(7,18,26,.35); }
 .px-ck i { font-size: 10px; margin-right: 1px; vertical-align: -1px; } .px-ck.all { background: rgba(255,255,255,.28); }
+
+/* WOCHENPLAN-EDITOR: Zusatzfelder */
+.po-f { background: color-mix(in srgb, var(--c-accent) 6%, transparent); border-radius: 12px; padding: 8px 10px; }
+.wp-b .po-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -19277,25 +19281,10 @@ function pxInfo(b){
   return bits.length?' ['+bits.join(', ')+']':'';
 }
 
-// ── Editor: Priorität wählen ──
-var _wpEditor_pz=wpEditor;
-wpEditor=function(id,pre){
-  var r=_wpEditor_pz(id,pre);
-  try{
-    var host=document.getElementById('wp-modal'), g=document.getElementById('wpm-kat'); if(!host||!g||document.getElementById('wpm-prio'))return r;
-    var b=id?wpFind(id):null; if(b&&(b.typ==='fix'||b.typ==='belohnung'))return r;
-    var cur=b?(b.prio||''):((pre&&pre.prio)||'');
-    var row=document.createElement('div'); row.className='lp-fld';
-    row.innerHTML='<label title="Damit Study OS (und Claude im Wochenbericht) weiss, was wie wichtig ist">Priorität</label><div class="lp-seg" id="wpm-prio" data-val="'+lpEsc(cur)+'">'
-      +PZ_PRIO.map(function(p){ return '<button type="button" class="'+((p[0]===cur)?'on':'')+'" data-pz="prio" data-val="'+p[0]+'">'+p[1]+'</button>'; }).join('')+'</div>';
-    var anchor=document.getElementById('wpm-mixhint')||g.closest('.lp-fld'); anchor.parentNode.insertBefore(row,anchor.nextSibling);
-  }catch(e){}
-  return r;
-};
 var _wpEditorSave_pz=wpEditorSave;
 wpEditorSave=function(){
   var host=document.getElementById('wp-modal'), id=host&&host.getAttribute('data-id'), g=document.getElementById('wpm-prio');
-  PZ.prio=g?(g.getAttribute('data-val')||''):null; PZ.inSave=true;
+  PZ.prio=g?(g.getAttribute('data-val')||''):(document.getElementById('wpm-opts')?'':null); PZ.inSave=true;
   try{ _wpEditorSave_pz(); }finally{ PZ.inSave=false; }
   if(id&&PZ.prio!==null){ var b=wpFind(id); if(b&&b.typ!=='fix'&&(b.prio||'')!==PZ.prio){ if(PZ.prio)b.prio=PZ.prio; else delete b.prio; lpTouch(b); saveD(); try{ wpRender(); }catch(e){} } }
   PZ.prio=null;
@@ -19395,32 +19384,10 @@ document.addEventListener('click',function(ev){
 },true);
 document.addEventListener('keydown',function(ev){ if(ev.key==='Enter'&&ev.target&&ev.target.id==='pk-new'){ ev.preventDefault(); var bt=document.querySelector('#pk-dlg [data-pk="add"]'); if(bt)bt.click(); } });
 
-// ── Editor: Checkliste für alle Blöcke ausser Routinen (die haben ihr eigenes Feld) ──
-function pkSync(){
-  var row=document.getElementById('wpm-ckrow'), g=document.getElementById('wpm-kat'), ty=document.getElementById('wpm-typ'); if(!row||!g||!ty)return;
-  var rout=(g.getAttribute('data-val')==='routine'||(g.getAttribute('data-sel')||'').split(',')[0]==='routine')&&ty.getAttribute('data-val')==='aufgabe';
-  row.style.display=(rout||ty.getAttribute('data-val')==='belohnung')?'none':'';
-}
-document.addEventListener('click',function(ev){ if(ev.target.closest&&ev.target.closest('#wp-modal'))setTimeout(pkSync,0); });
-var _wpEditor_pk=wpEditor;
-wpEditor=function(id,pre){
-  var r=_wpEditor_pk(id,pre);
-  try{
-    var host=document.getElementById('wp-modal'), g=document.getElementById('wpm-kat'); if(!host||!g||document.getElementById('wpm-ckrow'))return r;
-    var b=id?wpFind(id):null; if(b&&(b.typ==='fix'||b.typ==='belohnung'))return r;
-    var row=document.createElement('div'); row.id='wpm-ckrow'; row.className='lp-fld'; row.style.alignItems='flex-start';
-    row.innerHTML='<label title="Packliste, Lern-Checkliste …">Checkliste</label><div style="flex:1;min-width:0"><div class="lp-row" style="flex-wrap:wrap;gap:6px;margin-bottom:6px">'
-      +wpRoutinen().map(function(t){ return '<button type="button" class="wp-rew" data-pk="tpl" data-id="'+lpEsc(t.id)+'"><i class="ti ti-repeat"></i> '+lpEsc(t.name)+' <b class="lp-mono" style="font-weight:400">'+t.items.length+'</b></button>'; }).join('')+'</div>'
-      +'<textarea class="lp-in" id="wpm-ck" rows="3" style="width:100%" placeholder="Optional, ein Punkt pro Zeile (z. B. Packliste: Ausweis, Uniform, Ladegerät)">'+lpEsc(b?pkText(b):((pre&&pre.checkliste)?pre.checkliste.map(function(c){return c.text;}).join('\n'):''))+'</textarea></div>';
-    var anchor=document.getElementById('wpm-prio'); anchor=anchor?anchor.closest('.lp-fld'):g.closest('.lp-fld'); anchor.parentNode.insertBefore(row,anchor.nextSibling);
-    pkSync();
-  }catch(e){}
-  return r;
-};
 var _wpEditorSave_pk=wpEditorSave;
 wpEditorSave=function(){
   var host=document.getElementById('wp-modal'), id=host&&host.getAttribute('data-id'), ta=document.getElementById('wpm-ck'), row=document.getElementById('wpm-ckrow');
-  var items=(ta&&row&&row.style.display!=='none')?wpItemsFromText(ta.value):null, tt=((document.getElementById('wpm-titel')||{}).value||'').trim();
+  var items=(ta&&row&&row.style.display!=='none')?wpItemsFromText(ta.value):((document.getElementById('wpm-opts')&&!ta)?[]:null), tt=((document.getElementById('wpm-titel')||{}).value||'').trim();
   PK.items=items; PK.inSave=true;
   try{ _wpEditorSave_pk(); }finally{ PK.inSave=false; }
   if(id&&items!==null){ var b=wpFind(id); if(b&&b.typ!=='fix'&&!wpIsRoutine(b)&&pkText(b)!==items.join('\n')){ if(items.length)wpRoutineSetItems(b,items); else delete b.checkliste; lpTouch(b); saveD(); try{ wpRender(); }catch(e){} } }
@@ -19435,6 +19402,144 @@ wpMoveBlock=function(b,tag,s,e,ghost){
   var r=_wpMoveBlock_pk(b,tag,s,e,ghost);
   if(r&&r!==b&&pkIsPlain(b)&&!pkItems(r).length){ r.checkliste=pkItems(b).map(function(c){ return {id:uid(),text:c.text,done:c.done}; }); lpTouch(r); saveD(); }
   return r;
+};
+
+// ═══════════════════════════════════════════════════════════
+// WOCHENPLAN-EDITOR: Zusatzfelder zum Auswählen (erst anwählen, dann eingeben)
+// Priorität · Checkliste · Ort · Ziel · Notiz · Link · Mit wem · Erinnerung vor Beginn
+// Daten am Block: prio, checkliste, ort, ziel, notiz, link, mit, erinn (Minuten)
+// ═══════════════════════════════════════════════════════════
+var PO={inSave:false,vals:null};
+var PO_OPT=[['prio','Priorität','flag'],['ck','Checkliste','checklist'],['ort','Ort','map-pin'],['ziel','Ziel','target-arrow'],['notiz','Notiz','note'],['link','Link','link'],['mit','Mit wem','users'],['erinn','Erinnerung','bell']];
+var PO_ERINN=[5,10,15,30,60,120,240];
+function poHas(b,k){ return k==='prio'?!!b.prio:k==='ck'?(Array.isArray(b.checkliste)&&b.checkliste.length>0):k==='erinn'?(b.erinn>0):!!b[k]; }
+function poLink(u){ u=String(u||'').trim(); if(!u)return ''; if(!/^[a-z][a-z0-9+.-]*:/i.test(u))u='https://'+u; return /^https?:\/\/[^\s"<>]+$/i.test(u)?u:null; }
+
+// ── Felder je Option ──
+function poFieldHTML(k,b){
+  var v=function(x){ return lpEsc(b&&b[x]!=null?b[x]:''); };
+  switch(k){
+    case 'prio': return '<div class="lp-seg" id="wpm-prio" data-val="'+lpEsc((b&&b.prio)||'')+'">'+PZ_PRIO.map(function(p){ return '<button type="button" class="'+((p[0]===((b&&b.prio)||''))?'on':'')+'" data-pz="prio" data-val="'+p[0]+'">'+p[1]+'</button>'; }).join('')+'</div>';
+    case 'ck': return '<div id="wpm-ckrow"><div class="lp-row" style="flex-wrap:wrap;gap:6px;margin-bottom:6px">'+wpRoutinen().map(function(t){ return '<button type="button" class="wp-rew" data-pk="tpl" data-id="'+lpEsc(t.id)+'"><i class="ti ti-repeat"></i> '+lpEsc(t.name)+' <b class="lp-mono" style="font-weight:400">'+t.items.length+'</b></button>'; }).join('')+'</div>'
+      +'<textarea class="lp-in" id="wpm-ck" rows="3" style="width:100%" placeholder="Ein Punkt pro Zeile (z. B. Packliste: Ausweis, Uniform, Ladegerät)">'+lpEsc(b?pkText(b):'')+'</textarea></div>';
+    case 'ort': return '<input class="lp-in" id="wpm-ort" style="width:100%" placeholder="z. B. Kaserne Bière, Raum E 2.01, Birrfeld" value="'+v('ort')+'"/>';
+    case 'ziel': return '<input class="lp-in" id="wpm-ziel" style="width:100%" placeholder="Was soll am Ende erreicht sein?" value="'+v('ziel')+'"/>';
+    case 'notiz': return '<textarea class="lp-in" id="wpm-notiz" rows="2" style="width:100%" placeholder="Notiz zum Block">'+v('notiz')+'</textarea>';
+    case 'link': return '<input class="lp-in" id="wpm-link" style="width:100%" placeholder="https://… (Zoom, Moodle, Karte)" value="'+v('link')+'"/>';
+    case 'mit': return '<input class="lp-in" id="wpm-mit" style="width:100%" placeholder="z. B. Liv, Familie, Lerngruppe" value="'+v('mit')+'"/>';
+    case 'erinn': return '<div class="lp-row" style="gap:6px;flex-wrap:wrap;align-items:center"><select class="lp-in" id="wpm-erinn">'+PO_ERINN.map(function(m){ return '<option value="'+m+'"'+((b&&b.erinn===m)||(!(b&&b.erinn)&&m===15)?' selected':'')+'>'+(m>=60?(m/60)+' h':m+' Min')+'</option>'; }).join('')+'</select><span class="lp-mu" style="font-size:11px">vor Beginn als Push (Hangar › Erinnerungen muss aktiv sein)</span></div>';
+  }
+  return '';
+}
+function poSet(k,on,b){
+  var box=document.getElementById('wpm-optf-'+k), chip=document.querySelector('#wpm-opts [data-po="'+k+'"]');
+  if(chip)chip.classList.toggle('on',!!on);
+  if(on&&!box){
+    var host=document.getElementById('wpm-optfields'); if(!host)return;
+    var d=document.createElement('div'); d.id='wpm-optf-'+k; d.className='po-f'; var o=PO_OPT.find(function(x){return x[0]===k;});
+    d.innerHTML='<div class="lp-mu" style="font-size:11px;margin-bottom:3px"><i class="ti ti-'+o[2]+'"></i> '+o[1]+'</div>'+poFieldHTML(k,b); host.appendChild(d);
+  } else if(!on&&box)box.remove();
+}
+function poSync(){
+  var g=document.getElementById('wpm-kat'), ty=document.getElementById('wpm-typ'), wrap=document.getElementById('wpm-opts'); if(!g||!ty||!wrap)return;
+  var rout=((g.getAttribute('data-val')==='routine')||((g.getAttribute('data-sel')||'').split(',')[0]==='routine'))&&ty.getAttribute('data-val')==='aufgabe';
+  var rew=ty.getAttribute('data-val')==='belohnung';
+  var row=wrap.closest('.lp-fld'); if(row)row.style.display=rew?'none':'';
+  var ck=wrap.querySelector('[data-po="ck"]'); if(ck)ck.style.display=rout?'none':'';
+  if(rout)poSet('ck',false);
+}
+document.addEventListener('click',function(ev){ if(ev.target.closest&&ev.target.closest('#wp-modal')&&!ev.target.closest('[data-po]'))setTimeout(poSync,0); });
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-po]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var k=el.getAttribute('data-po');
+  if(k==='det'){ return poDetail(el.getAttribute('data-id')); }
+  if(k==='det-close'){ var m=document.getElementById('po-det'); if(m)m.remove(); return; }
+  if(k==='det-edit'){ var m2=document.getElementById('po-det'); if(m2)m2.remove(); return wpEditor(el.getAttribute('data-id')); }
+  var hid=document.getElementById('wp-modal'), id=hid&&hid.getAttribute('data-id'), b=id?wpFind(id):null;
+  poSet(k,!document.getElementById('wpm-optf-'+k),b);
+  var f=document.querySelector('#wpm-optf-'+k+' input,#wpm-optf-'+k+' textarea'); if(f)f.focus();
+},true);
+
+// ── Editor: Auswahlleiste ──
+var _wpEditor_po=wpEditor;
+wpEditor=function(id,pre){
+  var r=_wpEditor_po(id,pre);
+  try{
+    var host=document.getElementById('wp-modal'), g=document.getElementById('wpm-kat'); if(!host||!g||document.getElementById('wpm-opts'))return r;
+    var b=id?wpFind(id):null; if(b&&(b.typ==='fix'||b.typ==='belohnung'))return r;
+    var row=document.createElement('div'); row.className='lp-fld'; row.style.alignItems='flex-start';
+    row.innerHTML='<label>Zusätzlich</label><div style="flex:1;min-width:0"><div class="lp-row" id="wpm-opts" style="flex-wrap:wrap;gap:6px">'
+      +PO_OPT.map(function(o){ return '<button type="button" class="wp-pill" data-po="'+o[0]+'"><i class="ti ti-'+o[2]+'"></i> '+o[1]+'</button>'; }).join('')+'</div><div id="wpm-optfields" style="display:flex;flex-direction:column;gap:8px;margin-top:8px"></div></div>';
+    var anchor=document.getElementById('wpm-mixhint')||g.closest('.lp-fld'); anchor.parentNode.insertBefore(row,anchor.nextSibling);
+    PO_OPT.forEach(function(o){ if(b&&poHas(b,o[0]))poSet(o[0],true,b); });
+    poSync();
+  }catch(e){}
+  return r;
+};
+var _wpEditorSave_po=wpEditorSave;
+wpEditorSave=function(){
+  var host=document.getElementById('wp-modal'), id=host&&host.getAttribute('data-id'), has=!!document.getElementById('wpm-opts');
+  var vals=null;
+  if(has){
+    var f=function(i){ var e=document.getElementById(i); return e?String(e.value||'').trim():''; }, lk=f('wpm-link'), L=poLink(lk);
+    if(lk&&L===null){ showToast('Der Link muss mit http:// oder https:// beginnen.'); return; }
+    vals={ort:f('wpm-ort'),ziel:f('wpm-ziel'),notiz:f('wpm-notiz'),link:lk?L:'',mit:f('wpm-mit'),erinn:document.getElementById('wpm-erinn')?parseInt(f('wpm-erinn'),10)||0:0};
+  }
+  PO.vals=vals; PO.inSave=true;
+  try{ _wpEditorSave_po(); }finally{ PO.inSave=false; }
+  if(id&&vals){ var b=wpFind(id); if(b&&b.typ!=='fix'){ poApply(b,vals); lpTouch(b); saveD(); try{ wpRender(); }catch(e){} } }
+  PO.vals=null;
+};
+function poApply(b,v){ ['ort','ziel','notiz','link','mit'].forEach(function(k){ if(v[k])b[k]=v[k]; else delete b[k]; }); if(v.erinn>0)b.erinn=v.erinn; else delete b.erinn; }
+var _wpNew_po=wpNew;
+wpNew=function(o){ var b=_wpNew_po(o); if(PO.inSave&&PO.vals&&o.typ!=='belohnung')poApply(b,PO.vals); return b; };
+var _wpMoveBlock_po=wpMoveBlock;
+wpMoveBlock=function(b,tag,s,e,ghost){
+  var r=_wpMoveBlock_po(b,tag,s,e,ghost);
+  if(r&&r!==b){ var ch=false; ['ort','ziel','notiz','link','mit','erinn'].forEach(function(k){ if(b[k]&&!r[k]){ r[k]=b[k]; ch=true; } }); if(ch){ lpTouch(r); saveD(); } }
+  return r;
+};
+
+// ── Anzeige: Info-Symbol am Block, Ort in der Zeile, Details-Dialog ──
+function poInfo(b){ return b.typ!=='belohnung'&&(b.ort||b.ziel||b.notiz||b.link||b.mit||b.erinn>0); }
+var _wpBlockHTML_po=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_po(b,z,now); if(!h||!poInfo(b))return h;
+  var chip='<span class="px-ck" data-po="det" data-id="'+lpEsc(b.id)+'" title="Details"><i class="ti ti-info-circle"></i></span>';
+  h=h.replace('<span class="wp-bi">',chip+'<span class="wp-bi">');
+  var line=[b.ort?'📍 '+b.ort:'',b.ziel?'🎯 '+b.ziel:''].filter(Boolean).join(' · ');
+  if(line&&h.indexOf('class="wp-bh"')>=0)h=h.replace(/<\/div>$/,'<div class="wp-bh po-line">'+lpEsc(line)+'</div></div>');
+  var tip=[b.ort?'Ort: '+b.ort:'',b.ziel?'Ziel: '+b.ziel:'',b.mit?'Mit: '+b.mit:'',b.erinn>0?'Erinnerung '+b.erinn+' Min vorher':''].filter(Boolean).join(' · ');
+  if(tip)h=h.replace(/title="([^"]*)"/,function(m,t){ return 'title="'+t+' · '+lpEsc(tip)+'"'; });
+  return h;
+};
+function poDetail(id){
+  var b=wpFind(id); if(!b)return;
+  var row=function(ico,l,v){ return v?'<div class="hg-ln" style="align-items:flex-start"><span class="lp-mu" style="min-width:92px"><i class="ti ti-'+ico+'"></i> '+l+'</span><span style="flex:1;min-width:0;word-break:break-word;white-space:pre-wrap;text-align:right">'+v+'</span></div>':''; };
+  var kn=function(i){ var k=wpKats().find(function(x){return x.id===i;}); return k?k.name:i; };
+  var cats=[b.kategorie].concat(pxMix(b)).filter(Boolean).map(kn).join(' + ');
+  syModal('po-det','<div class="lp-cap">DETAILS</div><div style="font-size:15px;font-weight:500;margin:4px 0 2px">'+lpEsc(b.titel)+'</div><div class="lp-mu lp-mono" style="font-size:11px;margin-bottom:8px">'+lpEsc(lpDayLbl(b.tag)+' '+lpFmtShort(b.tag)+' · '+b.start+'–'+b.ende+' · '+cats)+'</div>'
+    +row('flag','Priorität',lpEsc(pzPrioLbl(b.prio)))+row('map-pin','Ort',lpEsc(b.ort||''))+row('target-arrow','Ziel',lpEsc(b.ziel||''))+row('users','Mit wem',lpEsc(b.mit||''))
+    +row('link','Link',(b.link&&poLink(b.link))?'<a href="'+lpEsc(b.link)+'" target="_blank" rel="noopener" style="color:var(--c-accent)">'+lpEsc(b.link)+'</a>':'')
+    +row('bell','Erinnerung',b.erinn>0?(b.erinn>=60?(b.erinn/60)+' h':b.erinn+' Min')+' vor Beginn':'')+row('note','Notiz',lpEsc(b.notiz||''))
+    +'<div class="lp-row" style="justify-content:space-between;margin-top:12px"><button type="button" class="lp-btn gray" data-po="det-edit" data-id="'+lpEsc(id)+'">Bearbeiten</button><button type="button" class="lp-btn fill" data-po="det-close">Schliessen</button></div>');
+}
+
+// ── Push: Erinnerung vor Beginn für Blöcke mit eigener Einstellung (ignoriert Ruhezeiten, weil bewusst gesetzt) ──
+var _pwBuildSchedule_po=pwBuildSchedule;
+pwBuildSchedule=function(){
+  var items=_pwBuildSchedule_po(), now=Date.now(), seen={}, td=today();
+  items.forEach(function(i){ seen[i.tag]=1; });
+  var at=function(d,hm){ var p=hm.split(':'), a=d.split('-'); return new Date(+a[0],+a[1]-1,+a[2],+p[0],+p[1]).getTime(); };
+  for(var i=0;i<10;i++){
+    var d=lpAdd(td,i);
+    wpBlocksOn(d).forEach(function(b){
+      if(!(b.erinn>0)||b.status!=='offen'||b.typ==='belohnung')return;
+      var t=at(d,b.start)-b.erinn*60000, tag='be-'+b.id; if(t<=now+30000||seen[tag])return; seen[tag]=1;
+      items.push({t:t,title:'In '+(b.erinn>=60?(b.erinn/60)+' h':b.erinn+' Min')+': '+b.titel,body:b.start+'–'+b.ende+(b.ort?' · '+b.ort:''),tag:tag,url:'./'});
+    });
+  }
+  return items.sort(function(a,b){return a.t-b.t;}).slice(0,300);
 };
 
 // ═══════════════════════════════════════════════════════════
