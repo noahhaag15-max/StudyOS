@@ -21550,6 +21550,85 @@ var _waInit_wb13=waInit;
 waInit=function(){ wb13Konsum(); _waInit_wb13(); };
 
 // ═══════════════════════════════════════════════════════════
+// KURS-PRÜFUNG, ÜBERARBEITET: nichts mehr bewerten, was nicht erfasst ist
+// • Lernplan: Prognose nur mit Baseline und mindestens 2 Wochen Verlauf (sonst nur Soll-Tempo).
+// • Bücher: erst sichtbar, wenn ein Ziel gesetzt ist; gezählt wird ab dem Tag, an dem das Ziel gesetzt wurde.
+// • Kraftwochen: ein/aus, Wochen, Einheiten, Anteil, «alle Körper-Blöcke» wählbar; zu wenig erfasste Wochen = «noch offen».
+// Einstellen: Hangar › Wochenbefehl › Karte «Kurs-Prüfung» (Bücher im Fenster «Kurs-Prüfung» selbst).
+// ═══════════════════════════════════════════════════════════
+CFG_DEFAULTS['wb.buecher']={ziel:0,bis:'',von:''};
+CFG_DEFAULTS['wb.kraft']={an:true,wochen:12,min:2,anteil:80,alle:false};
+function wbKraftZaehlt(b){ return cfg('wb.kraft').alle?wbIs(b,'koerper'):wbIs(b,'koerper',['kraft','conditioning']); }
+function wbBuecherBis(){ var c=cfg('wb.buecher'); return c.bis||(today().slice(0,4)+'-12-31'); }
+function wbKurs(){
+  var td=today(), out=[];
+  lpAktiveFaecher().forEach(function(name){
+    var f=lpFach(name,false); if(!f||!f.pruefung)return; var st=lpFachStats(name); if(!st.total)return;
+    var ende=lpAdd(f.pruefung,-(f.pufferTage==null?8:f.pufferTage)), tageBis=lpDayDiff(td,f.pruefung), wLeft=Math.max(0.5,lpDayDiff(td,ende)/7), soll=st.open/wLeft, label='Lernplan '+name;
+    if(!st.open){ out.push({id:'lp:'+name,label:label,s:'ok',sub:'Alle '+st.total+' Etappen erledigt · Prüfung in '+tageBis+' Tagen',det:''}); return; }
+    var base=st.open+' von '+st.total+' Etappen offen · Soll '+wbFmt1(soll)+' Etappen/Woche bis zum Puffer · Prüfung in '+tageBis+' Tagen';
+    if(!f.baseline){ out.push({id:'lp:'+name,label:label,s:'offen',sub:base,det:'Für eine Prognose zuerst im Lernplan die Baseline setzen.'}); return; }
+    var v=wbVerzug(name), wochen=lpDayDiff(f.baseline.gesetzt,td)/7;
+    if(wochen<2){ out.push({id:'lp:'+name,label:label,s:'offen',sub:base,det:'Baseline erst vor '+lpDayDiff(f.baseline.gesetzt,td)+' Tagen gesetzt, eine Prognose gibt es nach 2 Wochen.'}); return; }
+    var ist=v.done/wochen, prog=ist>0?lpAdd(td,Math.ceil(st.open/ist*7)):null, s, det;
+    if(!prog){ s='gefaehrdet'; det='Seit der Baseline noch keine Etappe erledigt.'; }
+    else { s=prog<=ende?'ok':(prog<=lpAdd(ende,7)?'knapp':'gefaehrdet'); det='Prognose fertig am '+lpFmt(prog)+' (Puffer ab '+lpFmt(ende)+')'; }
+    out.push({id:'lp:'+name,label:label,s:s,sub:base+' · Ist '+wbFmt1(ist)+'/Woche',det:det});
+  });
+  var bc=cfg('wb.buecher');
+  if(bc.ziel>0){
+    if(!bc.von){ bc=Object.assign({},bc,{von:td}); try{ setCfg('wb.buecher',bc,'wochenbefehl'); }catch(e){} }
+    var bl=wbBuecherEnsure(), bis=wbBuecherBis(), fertig=bl.filter(function(b){ return b.fertig&&b.fertig>=bc.von; }).length, total=Math.max(1,lpDayDiff(bc.von,bis)), gone=Math.max(0,Math.min(total,lpDayDiff(bc.von,td))), sollN=bc.ziel*gone/total;
+    var s2=fertig>=bc.ziel?'ok':(fertig>=sollN-0.5?'ok':(fertig>=sollN-1.5?'knapp':'gefaehrdet'));
+    out.push({id:'buecher',label:'Bücher',s:s2,sub:fertig+' von '+bc.ziel+' bis '+lpFmt(bis)+' · gezählt ab '+lpFmt(bc.von)+' · Soll heute '+wbFmt1(sollN),det:bl.filter(function(b){return !b.fertig;}).length+' in Arbeit'});
+  }
+  var k=cfg('wb.kraft');
+  if(k.an!==false){
+    var mon=lpMonday(td), weeks=[], first=-1;
+    for(var i=k.wochen;i>=1;i--){ var m=lpAdd(mon,-7*i), n=0; for(var d=0;d<7;d++){ wpBlocksOn(lpAdd(m,d)).forEach(function(b){ if((b.status==='ok'||b.status==='teil')&&wbKraftZaehlt(b))n++; }); } weeks.push(n); if(first<0&&n>0)first=weeks.length-1; }
+    var used=first<0?0:weeks.length-first, art=k.alle?'Körper-Einheiten':'Kraft-Einheiten';
+    if(used<2){ out.push({id:'kraft',label:'Kraftwochen',s:'offen',sub:'Zu wenige erfasste Wochen ('+used+') für eine Auswertung · Ziel: mindestens '+k.min+'× '+art+' pro Woche',det:k.alle?'':'Gezählt werden Blöcke mit der Unterart Kraft oder Conditioning, die mit ✓ erledigt sind.'}); }
+    else {
+      var cnt=weeks.slice(first).filter(function(n){return n>=k.min;}).length, anteil=Math.round(cnt/used*100), s3=anteil>=k.anteil?'ok':(anteil>=k.anteil-20?'knapp':'gefaehrdet');
+      out.push({id:'kraft',label:'Kraftwochen',s:s3,sub:cnt+' von '+used+' Wochen mit mindestens '+k.min+'× '+art+' ('+anteil+' %)',det:'Ziel: '+k.anteil+' %'});
+    }
+  }
+  var seen={}; for(var j=0;j<90;j++){ wpBlocksOn(lpAdd(td,j)).forEach(function(b){ if(!b.pruefDatum||seen[b.id])return; seen[b.id]=1;
+      var n=0, v0=lpAdd(b.pruefDatum,-14); for(var x=v0<td?td:v0;x<b.pruefDatum;x=lpAdd(x,1)){ wpBlocksOn(x).forEach(function(y){ if((y.typ==='aufgabe'||y.typ==='fix')&&y.status!=='verschoben'&&y.status!=='nein'&&wbMatch(y,'studium',['lern*']))n++; }); }
+      var s4=n>=6?'ok':(lpDayDiff(td,b.pruefDatum)>10?'offen':(n>=4?'knapp':'gefaehrdet'));
+      out.push({id:'pr:'+b.id,label:b.titel,s:s4,sub:'in '+lpDayDiff(td,b.pruefDatum)+' Tagen · '+n+' Lernblöcke in den 14 Tagen davor (Regel: 6)',det:''}); }); }
+  return out;
+}
+
+// ── Einstellungen im Hangar ──
+var _waHgMehr_wb14=waHgMehr;
+waHgMehr=function(){
+  var k=cfg('wb.kraft'), bc=cfg('wb.buecher'), sw=function(on,a){ return '<button type="button" class="lp-sw'+(on?' on':'')+'" data-wb14="'+a+'" aria-label="'+a+'"><i></i></button>'; };
+  var num=function(key,val,min){ return '<input class="hg-v lp-mono" type="number" min="'+min+'" step="1" data-wb14="kraftval" data-k="'+key+'" value="'+val+'" style="width:70px">'; };
+  return _waHgMehr_wb14()+'<div class="lp-cd" style="margin-top:12px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:6px"><span class="lp-cap">KURS-PRÜFUNG EINSTELLEN</span><button type="button" class="lp-btn gray" data-wb7="kurs">Ansehen</button></div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Lernplan: Prognose gibt es nach dem Setzen der Baseline (Lernplan) und 2 Wochen Verlauf. Bücher: Ziel und Datum im Fenster «Kurs-Prüfung» (jetzt: '+(bc.ziel>0?bc.ziel+' Bücher':'kein Ziel, wird nicht angezeigt')+').</div>'
+    +'<div class="hg-ln"><span style="font-size:13px;flex:1">Kraftwochen anzeigen</span>'+sw(k.an!==false,'kraftan')+'</div>'
+    +'<div class="hg-ln"><span style="font-size:12px;flex:1">Einheiten pro Woche mindestens</span>'+num('min',k.min,1)+'</div>'
+    +'<div class="hg-ln"><span style="font-size:12px;flex:1">Anteil der Wochen in % (Ziel)</span>'+num('anteil',k.anteil,1)+'</div>'
+    +'<div class="hg-ln"><span style="font-size:12px;flex:1">Wie viele Wochen zurück schauen</span>'+num('wochen',k.wochen,2)+'</div>'
+    +'<div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:12px">Alle Körper-Blöcke zählen</div><div class="lp-mu" style="font-size:11px">Aus: nur Blöcke mit der Unterart Kraft oder Conditioning. Ein: jeder erledigte Körper-Block (Sport, Draussen …).</div></div>'+sw(!!k.alle,'kraftalle')+'</div></div>';
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb14]'); if(!el||el.tagName==='INPUT')return; var a=el.getAttribute('data-wb14'), k=JSON.parse(JSON.stringify(cfg('wb.kraft')));
+  if(a==='kraftan'){ ev.preventDefault(); k.an=!(k.an!==false); setCfg('wb.kraft',k,'hangar'); waHgRender(); }
+  else if(a==='kraftalle'){ ev.preventDefault(); k.alle=!k.alle; setCfg('wb.kraft',k,'hangar'); waHgRender(); }
+});
+document.addEventListener('change',function(ev){
+  var e=ev.target; if(!e||!e.getAttribute||e.getAttribute('data-wb14')!=='kraftval')return;
+  var k=JSON.parse(JSON.stringify(cfg('wb.kraft'))), key=e.getAttribute('data-k'), v=Math.max(+e.min||1,parseInt(e.value,10)||1); k[key]=v; setCfg('wb.kraft',k,'hangar');
+});
+// Bücher-Ziel setzen: Startdatum festhalten, damit nur ab dann gezählt wird
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb7="buch-ziel"]'); if(!el)return;
+  setTimeout(function(){ var o=cfg('wb.buecher'); if(o.ziel>0&&!o.von)setCfg('wb.buecher',Object.assign({},JSON.parse(JSON.stringify(o)),{von:today()}),'wochenbefehl'); if(typeof wbKursRefresh==='function')wbKursRefresh(); },0);
+});
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
