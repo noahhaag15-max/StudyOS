@@ -21401,7 +21401,7 @@ function uwShow(){
   var wd=+(document.getElementById('uw-wd')||{}).value||UW.wd, ab=(document.getElementById('uw-ab')||{}).value||today(); UW.wd=wd; UW.ab=ab;
   var L=uwListe(wd,ab), box=document.getElementById('uw-list'); UW.L=L; if(!box)return;
   if(!L.length){ box.innerHTML='<div class="lp-mu" style="font-size:12px">Keine Uni-Blöcke an diesem Wochentag ab diesem Datum.</div>'; return; }
-  box.innerHTML='<div class="lp-mu" style="font-size:12px;margin-bottom:6px">'+L.length+' Block'+(L.length===1?'':'e')+'. Prüfungen sind nicht angehakt. Entfernte Blöcke kommen beim Stundenplan-Import nicht zurück; «Rückgängig» holt sie sofort wieder.</div>'
+  box.innerHTML='<div class="lp-mu" style="font-size:12px;margin-bottom:6px">'+L.length+(L.length===1?' Block':' Blöcke')+'. Prüfungen sind nicht angehakt. Entfernte Blöcke kommen beim Stundenplan-Import nicht zurück; «Rückgängig» holt sie sofort wieder.</div>'
     +L.map(function(b,i){ var pr=!!b.pruefDatum; return '<label class="hg-ln" style="gap:8px;cursor:pointer"><input type="checkbox" data-uwi="'+i+'"'+(pr?'':' checked')+'><span style="flex:1;min-width:0;font-size:13px">'+lpEsc(b.titel)+(pr?' <span class="lp-mu">· Prüfung</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmtShort(b.tag)+' '+b.start+'–'+b.ende)+'</span></label>'; }).join('')
     +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="lp-btn gray" data-uw="backup">Backup herunterladen</button><button type="button" class="lp-btn fill" data-uw="go">Ausgewählte entfernen</button></div>';
 }
@@ -21413,11 +21413,11 @@ function uwRun(){
   wbBypass(function(){ sel.forEach(function(b){ days[b.tag]=1; wpRemove(b); }); });
   saveD(); try{ wpAfterChange(Object.keys(days)); }catch(e){ try{ wpRender(); }catch(x){} }
   var m=document.getElementById('uw-dlg'); if(m)m.remove();
-  pdUndoPush(snaps.length+' Uni-Block'+(snaps.length===1?'':'e')+' entfernt',function(){
+  pdUndoPush(snaps.length+(snaps.length===1?' Uni-Block':' Uni-Blöcke')+' entfernt',function(){
     snaps.forEach(function(s){ if(D.tombstones)delete D.tombstones[s.id]; if(!wpFind(s.id))wpAdd(s); });
     saveD(); try{ wpAfterChange(Object.keys(days)); }catch(e){}
   });
-  showToast(snaps.length+' Uni-Block'+(snaps.length===1?'':'e')+' entfernt ✓','ok');
+  showToast(snaps.length+(snaps.length===1?' Uni-Block':' Uni-Blöcke')+' entfernt ✓','ok');
 }
 document.addEventListener('click',function(ev){
   var el=ev.target.closest&&ev.target.closest('[data-uw]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-uw');
