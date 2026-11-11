@@ -2108,6 +2108,13 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 /* WIRTSCHAFT */
 .oe-gefahr { font-size: 12px; line-height: 1.5; color: var(--c-fun); margin-top: 8px; }
 .oe-gefahr i { vertical-align: -2px; }
+
+/* KOMPASS */
+.kp-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 4px; background: var(--lp-border, #2a3744); border: 1px solid transparent; }
+.kp-dot.ok { background: var(--c-ok); } .kp-dot.miss { background: var(--c-work); } .kp-dot.dbl { background: var(--c-fun); } .kp-dot.open { background: transparent; border-color: var(--c-muted); }
+.kp-chip { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--c-accent) 35%, transparent); } .kp-chip b { font-weight: 400; opacity: .7; margin-right: 4px; }
+.kp-chip.fix { border-color: color-mix(in srgb, var(--c-fun) 55%, transparent); }
+.kp-lock { opacity: .6; }
 </style>
 </head>
 <body>
@@ -3133,6 +3140,9 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
   <div id="auf-list"></div>
 </div>
 
+<!-- ══ KOMPASS ══ -->
+<div id="sec-kompass" style="display:none"><div id="kp-root" class="lp"></div></div>
+
 <!-- ══ TOOLS ══ -->
 <div id="sec-tools" style="display:none">
   <div class="pg-hdr"><h1>Einstellungen</h1></div>
@@ -3406,7 +3416,7 @@ var D = {
 // nichts, was nur lokal existiert, geht verloren. Einzige Ausnahme: bewusst lokal gelöschte
 // Einträge können durch einen älteren Snapshot wieder auftauchen — das ist der bewusste
 // Kompromiss (lieber ein Karteileichen-Eintrag zurück als echte Daten verloren).
-var MERGE_ARRAY_COLLECTIONS = ['hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','lbKonflikte','lbBuendnisse','lpAufgaben','lpLabs','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
+var MERGE_ARRAY_COLLECTIONS = ['kpLog','kpRegel','kpLeit','kpGeld','kpBuch','kpFlug','hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','lbKonflikte','lbBuendnisse','lpAufgaben','lpLabs','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
 // wplan & track sind hier bewusst NICHT drin — die brauchen einen ECHTEN Tiefen-Merge (siehe
 // mergeWplan/mergeTrack unten), weil ihre Werte pro Woche/Tag komplexe, häufig aktiv bearbeitete
 // Strukturen sind. Ein einfacher Object.assign auf oberster Ebene hätte (und hat!) eine ganze
@@ -3812,6 +3822,7 @@ var SOS_MIGRATION_PENDING=false;
 // ── Bereiche & Reiter ──
 var SOS_AREAS=[
   {id:'cockpit',label:'Cockpit',icon:'gauge',fixed:true,tabs:[{id:'dash',label:'Cockpit'}]},
+  {id:'kompass',label:'Kompass',icon:'compass',tabs:[{id:'kp-uebersicht',label:'Übersicht'},{id:'kp-start',label:'Startpaket'}]},
   {id:'wochenplan',label:'Wochenplan',icon:'calendar-week',tabs:[{id:'wplan',label:'Wochenplan'},{id:'planung',label:'Planung'},{id:'aufgaben',label:'Backlog'},{id:'countdown',label:'Countdowns'}]},
   {id:'lernen',label:'Lernen',icon:'school',tabs:[{id:'faecher',label:'Fächer'},{id:'noten',label:'Noten'},{id:'lernplan',label:'Lernplan'},{id:'lp-woche',label:'Woche & Statistik'},{id:'ppl',label:'PPL'}]},
   {id:'logbuch',label:'Logbuch',icon:'notebook',tabs:[{id:'tracking',label:'Tracking'},{id:'leben',label:'Vorsätze & Ziele'}]},
@@ -5827,7 +5838,7 @@ function ckEditBar(id,hidden){
 function ckRender(){
   var root=document.getElementById('ck-root'); if(!root)return;
   var sec=document.getElementById('sec-dash'); if(sec&&sec.style.display==='none')return;
-  var lay=ckLayout(), fn={header:ckHeaderHTML,jetzt:ckJetztHTML,woche:ckWocheHTML,rhythmus:ckRhythmusHTML,termine:ckTermineHTML,aufgaben:ckAufgabenHTML,vorsaetze:vsCockpitHTML,matches:ckMatchesHTML}, h='';
+  var lay=ckLayout(), fn={header:ckHeaderHTML,jetzt:ckJetztHTML,woche:ckWocheHTML,rhythmus:ckRhythmusHTML,termine:ckTermineHTML,aufgaben:ckAufgabenHTML,vorsaetze:vsCockpitHTML,matches:ckMatchesHTML,kompass:function(){ return (typeof kpCockpitHTML==='function')?kpCockpitHTML():''; }}, h='';
   if(ckGlobalNewer())h+='<div class="lp-inner lp-row" style="margin-bottom:12px;flex-wrap:wrap"><span class="lp-mu" style="flex:1">Ein anderes Gerät hat ein neues Cockpit-Layout übertragen.</span><button type="button" class="lp-btn" data-ck="adopt">Übernehmen</button><button type="button" class="lp-btn gray" data-ck="adopt-later">Später</button></div>';
   if(HG.open)h+='<div class="lp-row" style="justify-content:flex-end;margin-bottom:8px"><button type="button" class="wp-pill'+(CK_EDIT?' on':'')+'" data-ck="edit"><i class="ti ti-layout-dashboard"></i> Layout bearbeiten</button></div>';
   h+='<div class="ck-grid">';
@@ -19668,6 +19679,281 @@ function oeInit(){
 }
 
 // ═══════════════════════════════════════════════════════════
+// KOMPASS (Bereich) — Übersicht (Leitsatz, Werte, Zielbild) und Startpaket-Tracker
+// Persönliche Inhalte stehen NICHT im Code: sie kommen per Import (kompass-daten.json) bzw. Eingabe in D.kompass (Gist/localStorage).
+// Logik «Nie zweimal hintereinander»: ein Ausrutscher ist ein Datenpunkt (orange), zweimal in Folge wird violett markiert.
+// ═══════════════════════════════════════════════════════════
+var KP={view:'uebersicht'};
+var KP_HEBEL=[
+  {id:'h1',nr:'1',name:'Handy ausserhalb des Schlafzimmers, echter Wecker',rh:'tag',stufe:0,hinweis:'Abends abhaken'},
+  {id:'h2',nr:'2',name:'Krafteinheit (Conditioning) mit Trainingspartner',rh:'woche',stufe:0,wd:true},
+  {id:'h2b',nr:'2b',name:'Zweite Krafteinheit (z. B. Calisthenics)',rh:'woche',stufe:0,wd:true},
+  {id:'h3',nr:'3',name:'Fester Lerntermin mit verlässlicher Person oder Bibliothek',rh:'woche',stufe:0,felder:['mit']},
+  {id:'h4',nr:'4',name:'Mastery-Dosis: 15 Min. Abfragen',rh:'tag',stufe:1,felder:['fach','min']},
+  {id:'h5',nr:'5',name:'Flugstunden-Ritual: Briefing am Vortag',rh:'extern',stufe:2,ext:'fliegen'},
+  {id:'h6',nr:'6',name:'Regeln Freitag und 23:00',rh:'extern',stufe:3,ext:'regeln'},
+  {id:'h7',nr:'7',name:'Hausarzt-Check',rh:'einmal',stufe:4}
+];
+var KP_RH={tag:'täglich',woche:'1× pro Woche',einmal:'einmalig',extern:'pro Termin'};
+var KP_WD=[[1,'Montag'],[2,'Dienstag'],[3,'Mittwoch'],[4,'Donnerstag'],[5,'Freitag'],[6,'Samstag'],[0,'Sonntag']];
+SY_LIST_LABEL.kpLog='Startpaket'; SY_LIST_LABEL.kpRegel='Regeln'; SY_LIST_LABEL.kpLeit='Leitplanken'; SY_LIST_LABEL.kpGeld='Geld'; SY_LIST_LABEL.kpBuch='Lese- und Filmliste'; SY_LIST_LABEL.kpFlug='Flugstunden';
+
+function kpEnsure(){
+  var K=D.kompass; if(!K||typeof K!=='object')K=D.kompass={};
+  if(!K.profil||typeof K.profil!=='object')K.profil={};
+  var P=K.profil; ['werte','fix','zielbild'].forEach(function(k){ if(!Array.isArray(P[k]))P[k]=[]; }); if(typeof P.leitsatz!=='string')P.leitsatz=''; if(typeof P.link!=='string')P.link='';
+  if(typeof K.start!=='string')K.start='';
+  if(!K.freigabe||typeof K.freigabe!=='object')K.freigabe={};
+  if(!K.hebel||typeof K.hebel!=='object')K.hebel={};
+  if(!Array.isArray(D.kpLog))D.kpLog=[];
+  return K;
+}
+function kpHebel(){ var K=kpEnsure(); return KP_HEBEL.map(function(h){ var o=K.hebel[h.id]||{}; return Object.assign({},h,{name:o.name||h.name,wdSet:(o.wd===0||o.wd>0)?o.wd:null}); }); }
+function kpProfilLeer(){ var P=kpEnsure().profil; return !P.leitsatz&&!P.werte.length&&!P.fix.length&&!P.zielbild.length&&!P.link; }
+function kpWeekNo(){ var s=kpEnsure().start; if(!s||today()<s)return 0; return Math.floor(lpDayDiff(s,today())/7)+1; }
+function kpAktivAb(h){ var K=kpEnsure(); if(!K.start)return null; var st=lpAdd(K.start,7*h.stufe), fr=K.freigabe[h.id]; return (fr&&fr<st)?fr:st; }
+function kpAktiv(h){ var a=kpAktivAb(h); return !!a&&a<=today(); }
+function kpRec(hid,d){ var id='kp:'+hid+':'+d; return D.kpLog.find(function(r){return r.id===id;})||null; }
+function kpRecsInWeek(hid,mon){ var e=lpAdd(mon,6); return D.kpLog.filter(function(r){ return r.hebel===hid&&r.datum>=mon&&r.datum<=e; }); }
+
+// ── Termine (Occurrences) und «Nie zweimal»-Auswertung ──
+function kpOcc(h){
+  var a=kpAktivAb(h), td=today(), out=[]; if(!a||a>td||h.rh==='extern')return {closed:[],open:null,all:[]};
+  if(h.rh==='tag'){
+    for(var d=a;d<=td;d=lpAdd(d,1)){ var r=kpRec(h.id,d), st=r?(r.status==='ok'?'ok':'miss'):(d<td?'miss':'open'); out.push({key:d,ende:d,status:st,rec:r}); }
+  } else if(h.rh==='woche'){
+    var m0=lpMonday(a); if(7-((lpWd(a)+6)%7)<4)m0=lpAdd(m0,7);   // Teilwoche mit weniger als 4 Resttagen zählt nicht
+    for(var m=m0;m<=td;m=lpAdd(m,7)){
+      var rs=kpRecsInWeek(h.id,m), ok=rs.some(function(r){return r.status==='ok';}), nein=rs.some(function(r){return r.status==='nein';}), ende=lpAdd(m,6);
+      out.push({key:m,ende:ende,status:ok?'ok':(nein||ende<td)?'miss':'open',rec:rs.filter(function(r){return r.status==='ok';})[0]||null});
+    }
+  } else if(h.rh==='einmal'){
+    var rr=D.kpLog.filter(function(r){return r.hebel===h.id&&r.status==='ok';})[0]; out.push({key:'einmal',ende:td,status:rr?'ok':'open',rec:rr||null});
+  }
+  var closed=out.filter(function(o){return o.status!=='open';}), prev=null;
+  closed.forEach(function(o){ if(o.status==='miss'&&prev&&prev.status!=='ok')o.status='dbl'; prev=o; });
+  var open=out.filter(function(o){return o.status==='open';})[0]||null;
+  return {closed:closed,open:open,all:out};
+}
+function kpStats(h){
+  var o=kpOcc(h), lim=lpAdd(today(),-28), w=o.closed.filter(function(x){return x.ende>=lim;});
+  var ok=w.filter(function(x){return x.status==='ok';}).length, dbl=w.filter(function(x){return x.status==='dbl';}).length;
+  var tage=(h.rh==='tag')?o.closed.filter(function(x){return x.status==='ok';}).length+((o.open&&o.open.rec&&o.open.rec.status==='ok')?1:0):0;
+  var letzte=o.closed[o.closed.length-1]||null;
+  return {occ:o,quote:w.length?Math.round(ok/w.length*100):null,n4:w.length,dbl:dbl,tage:tage,letzte:letzte};
+}
+function kpAllDbl(){ var n=0; kpHebel().forEach(function(h){ if(kpAktiv(h)){ var s=kpStats(h); n+=s.dbl; } }); return n; }
+
+// ── Buchen ──
+function kpSetze(hid,d,status,daten){
+  kpEnsure(); var id='kp:'+hid+':'+d, i=D.kpLog.findIndex(function(r){return r.id===id;}), alt=i>=0?JSON.parse(JSON.stringify(D.kpLog[i])):null;
+  if(!status){ if(i>=0){ markDeleted(id); D.kpLog.splice(i,1); } }
+  else { var rec={id:id,hebel:hid,datum:d,status:status,daten:daten||{},ts:Date.now()}; if(i>=0)D.kpLog[i]=rec; else D.kpLog.push(rec); }
+  saveD();
+  try{ if(typeof pdUndoPush==='function')pdUndoPush((status==='ok'?'Erledigt':status==='nein'?'Nicht erledigt':'Zurückgenommen')+': '+((kpHebel().find(function(h){return h.id===hid;})||{}).name||'').slice(0,40),function(){ var j=D.kpLog.findIndex(function(r){return r.id===id;}); if(alt){ if(j>=0)D.kpLog[j]=alt; else D.kpLog.push(alt); } else if(j>=0){ markDeleted(id); D.kpLog.splice(j,1); } saveD(); }); }catch(e){}
+  kpRefresh();
+}
+function kpRefresh(){ try{ if(document.getElementById('sec-kompass')&&document.getElementById('sec-kompass').style.display!=='none')kpRender(); }catch(e){} try{ ckRender(); }catch(e){} }
+function kpFelder(h,hid,dat){
+  var g=function(f){ var e=document.getElementById('kp-f-'+hid+'-'+f+'-'+dat); return e?String(e.value||'').trim():''; }, d={};
+  if(h.felder&&h.felder.indexOf('mit')>=0)d.mit=g('mit');
+  if(h.felder&&h.felder.indexOf('fach')>=0){ d.fach=g('fach'); d.min=parseInt(g('min'),10)||15; }
+  return d;
+}
+
+// ── Darstellung ──
+function kpDots(o){ var l=o.all.slice(-10); return l.map(function(x){ return '<i class="kp-dot '+x.status+'" title="'+(x.status==='ok'?'erledigt':x.status==='miss'?'ausgelassen':x.status==='dbl'?'zweimal in Folge':'offen')+'"></i>'; }).join(''); }
+function kpStatusTxt(s){
+  var l=s.letzte; if(!l)return '';
+  if(l.status==='dbl')return 'Zweimal in Folge ausgelassen — heute zählt der Neustart.';
+  if(l.status==='miss')return 'Ausrutscher — ein Datenpunkt, kein Beweis.';
+  return 'Zuletzt erledigt ✓';
+}
+function kpActions(h,d,label){
+  var r=kpRec(h.id,d), st=r?r.status:'', fe=h.felder||[], f='';
+  if(fe.indexOf('mit')>=0)f+='<input class="lp-in" id="kp-f-'+h.id+'-mit-'+d+'" placeholder="mit wem / wo" value="'+lpEsc((r&&r.daten&&r.daten.mit)||'')+'" style="flex:1;min-width:120px">';
+  if(fe.indexOf('fach')>=0)f+='<input class="lp-in" id="kp-f-'+h.id+'-fach-'+d+'" list="kp-faecher" placeholder="Fach" value="'+lpEsc((r&&r.daten&&r.daten.fach)||'')+'" style="flex:1;min-width:110px"><input class="lp-in lp-mono" type="number" min="1" max="240" id="kp-f-'+h.id+'-min-'+d+'" value="'+((r&&r.daten&&r.daten.min)||15)+'" style="width:68px" title="Minuten"><span class="lp-mu" style="font-size:11px">Min</span>';
+  return '<div class="lp-row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">'+(label?'<span class="lp-mu" style="font-size:11px;min-width:64px">'+lpEsc(label)+'</span>':'')+f
+    +'<button type="button" class="wp-pill'+(st==='ok'?' on':'')+'" data-kp="set" data-h="'+h.id+'" data-d="'+d+'" data-s="ok">✓ erledigt</button>'
+    +'<button type="button" class="wp-pill'+(st==='nein'?' on':'')+'" data-kp="set" data-h="'+h.id+'" data-d="'+d+'" data-s="nein">nicht erledigt</button></div>';
+}
+function kpHebelCard(h){
+  var aktiv=kpAktiv(h), a=kpAktivAb(h), td=today(), K=kpEnsure();
+  var h0='<div class="lp-cd kp-h'+(aktiv?'':' kp-lock')+'" style="margin-bottom:10px"><div class="lp-row" style="justify-content:space-between;align-items:flex-start;gap:8px"><div style="min-width:0"><div class="lp-mono lp-mu" style="font-size:10px">HEBEL '+h.nr+' · '+(KP_RH[h.rh]||'')+(h.hinweis?' · '+h.hinweis:'')+'</div><div style="font-size:14px;font-weight:500;word-break:break-word">'+lpEsc(h.name)+'</div></div>';
+  if(!aktiv){
+    return h0+'</div><div class="lp-mu" style="font-size:12px;margin-top:6px">'+(a?'Freigeschaltet ab '+lpEsc(lpFmt(a)):'Wird mit dem Startdatum freigeschaltet')+'</div>'+(a?'<div class="lp-row" style="justify-content:flex-end;margin-top:6px"><button type="button" class="lp-btn gray" data-kp="frei" data-h="'+h.id+'">Jetzt freischalten</button></div>':'')+'</div>';
+  }
+  var s=kpStats(h), o=s.occ, wdTxt='';
+  h0+='</div>';
+  if(h.wd){ var ws=h.wdSet; h0+='<div class="lp-row" style="gap:6px;align-items:center;margin-top:6px"><span class="lp-mu" style="font-size:11px">Fester Wochentag</span><select class="lp-in" data-kp="wd" data-h="'+h.id+'" style="width:auto"><option value="">flexibel</option>'+KP_WD.map(function(w){ return '<option value="'+w[0]+'"'+(ws===w[0]?' selected':'')+'>'+w[1]+'</option>'; }).join('')+'</select></div>'; }
+  if(h.rh==='extern'){
+    return h0+'<div class="lp-mu" style="font-size:12px;margin-top:8px">'+(h.ext==='regeln'?'Wird im Reiter «Regeln» abgehakt.':'Wird bei der jeweiligen Flugstunde erfasst (PPL › Briefing).')+'</div></div>';
+  }
+  h0+='<div class="lp-row" style="gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap"><span class="kp-dots">'+kpDots(o)+'</span><span class="lp-mono lp-mu" style="font-size:11px">4 Wochen: '+(s.quote==null?'–':s.quote+' %')+' · Doppel-Ausfälle: '+s.dbl+'</span></div>';
+  var tx=kpStatusTxt(s); if(tx)h0+='<div class="lp-mu" style="font-size:11px;margin-top:4px">'+tx+'</div>';
+  if(h.rh==='tag'){ var pct=Math.min(100,Math.round(s.tage/66*100)); h0+='<div class="lp-row" style="gap:8px;align-items:center;margin-top:6px"><div class="ck-track" style="flex:1;height:6px;margin:0"><i style="width:'+pct+'%"></i></div><span class="lp-mono lp-mu" style="font-size:10px">'+s.tage+' / 66 Tage</span></div>'; }
+  // Eintragen
+  if(h.rh==='tag'){
+    h0+=kpActions(h,td,'Heute');
+    var y=lpAdd(td,-1); if(a<=y&&!kpRec(h.id,y))h0+=kpActions(h,y,'Gestern');
+  } else if(h.rh==='woche'){
+    var mon=lpMonday(td), rs=kpRecsInWeek(h.id,mon), ok=rs.filter(function(r){return r.status==='ok';})[0], due=(h.wdSet!=null&&lpWd(td)===h.wdSet);
+    h0+=(due&&!ok?'<div class="lp-mu" style="font-size:11px;margin-top:6px;color:var(--c-accent)">Heute ist dein fester Tag.</div>':'')+(ok?'<div class="lp-mu" style="font-size:11px;margin-top:6px;color:var(--c-ok)">Diese Woche erledigt am '+lpEsc(lpFmtShort(ok.datum))+'.</div>':'');
+    h0+=kpActions(h,td,'Heute');
+  } else if(h.rh==='einmal'){
+    var done=o.all[0]&&o.all[0].status==='ok'; h0+='<div class="lp-row" style="gap:6px;align-items:center;margin-top:6px"><input class="lp-in lp-mono" type="date" id="kp-f-'+h.id+'-datum" value="'+lpEsc(done?o.all[0].rec.datum:td)+'" style="width:auto"><button type="button" class="wp-pill'+(done?' on':'')+'" data-kp="einmal" data-h="'+h.id+'">'+(done?'✓ erledigt':'Als erledigt eintragen')+'</button></div>';
+  }
+  return h0+'</div>';
+}
+
+function kpStartView(){
+  var K=kpEnsure(), hs=kpHebel(), wn=kpWeekNo(), td=today();
+  var head='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:6px">STARTPAKET</div><div class="lp-row" style="gap:8px;flex-wrap:wrap;align-items:center"><span class="lp-mu">Startdatum</span><input class="lp-in lp-mono" type="date" id="kp-start" value="'+lpEsc(K.start)+'" data-kp="start" style="width:auto"></div>';
+  if(!K.start)head+='<div class="lp-mu" style="font-size:12px;margin-top:8px">Lege ein Startdatum fest. Woche 1 schaltet die Hebel 1–3 frei, danach kommt pro Woche ein weiterer dazu (oder du schaltest von Hand frei).</div>';
+  else if(td<K.start)head+='<div class="lp-mu" style="font-size:12px;margin-top:8px">Start in '+lpDayDiff(td,K.start)+' '+(lpDayDiff(td,K.start)===1?'Tag':'Tagen')+' ('+lpEsc(lpFmt(K.start))+').</div>';
+  else head+='<div class="lp-mu" style="font-size:12px;margin-top:8px">Woche '+wn+'. Ein Ausrutscher ist ein Datenpunkt; erst zweimal hintereinander wird er markiert.</div>';
+  head+='</div>';
+  var faecher=lpAktiveFaecher?lpAktiveFaecher():[]; head+='<datalist id="kp-faecher">'+faecher.map(function(f){return '<option value="'+lpEsc(f)+'">';}).join('')+'</datalist>';
+  var aktiv=hs.filter(kpAktiv), spaeter=hs.filter(function(h){return !kpAktiv(h);});
+  return head+aktiv.map(kpHebelCard).join('')+(spaeter.length?'<div class="lp-cap" style="margin:14px 2px 6px">NOCH GESPERRT</div>'+spaeter.map(kpHebelCard).join(''):'');
+}
+
+function kpProfilHTML(){
+  var P=kpEnsure().profil;
+  if(kpProfilLeer()){
+    return '<div class="lp-cd" style="margin-bottom:12px"><div class="lp-cap" style="margin-bottom:6px">DEIN KOMPASS</div><div class="lp-mu" style="font-size:12px;line-height:1.6;margin-bottom:10px">Leitsatz, Werte, Zielbild und Link zu deinem Lebensprofil. Diese persönlichen Inhalte liegen nur in deinem Speicher und im geheimen Gist, nie im Code.</div>'
+      +'<div class="lp-row" style="gap:8px;flex-wrap:wrap"><label class="lp-btn fill" style="cursor:pointer">Datei einlesen (.json)<input type="file" id="kp-file" accept=".json,application/json" style="display:none"></label><button type="button" class="lp-btn gray" data-kp="edit">Selbst eingeben</button></div></div>';
+  }
+  var h='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;align-items:flex-start"><span class="lp-cap">KOMPASS</span><button type="button" class="lp-x" data-kp="edit" aria-label="bearbeiten"><i class="ti ti-pencil"></i></button></div>';
+  if(P.leitsatz)h+='<div style="font-size:15px;line-height:1.5;margin:8px 0 12px;font-style:italic">«'+lpEsc(P.leitsatz)+'»</div>';
+  if(P.werte.length)h+='<div class="lp-mu" style="font-size:11px;margin-bottom:4px">WERTE IN RANGFOLGE</div><div class="lp-row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px">'+P.werte.map(function(w,i){ return '<span class="kp-chip"><b class="lp-mono">'+(i+1)+'</b> '+lpEsc(w)+'</span>'; }).join('')+'</div>';
+  if(P.fix.length)h+='<div class="lp-mu" style="font-size:11px;margin-bottom:4px">NICHT VERHANDELBAR</div><div class="lp-row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px">'+P.fix.map(function(w){ return '<span class="kp-chip fix">'+lpEsc(w)+'</span>'; }).join('')+'</div>';
+  if(P.zielbild.length)h+='<details class="kp-zb"><summary class="lp-mu" style="cursor:pointer;font-size:12px">Zielbild</summary><ul style="margin:6px 0 0 18px;padding:0;font-size:13px;line-height:1.5">'+P.zielbild.map(function(z){ return '<li>'+lpEsc(z)+'</li>'; }).join('')+'</ul></details>';
+  var L=kpLinkOk(P.link); if(L)h+='<div style="margin-top:10px"><a href="'+lpEsc(L)+'" target="_blank" rel="noopener" style="color:var(--c-accent);font-size:12px"><i class="ti ti-link"></i> Lebensprofil öffnen</a></div>';
+  return h+'</div>';
+}
+function kpLinkOk(u){ u=String(u||'').trim(); if(!u)return ''; if(!/^[a-z][a-z0-9+.-]*:/i.test(u))u='https://'+u; return /^https?:\/\/[^\s"<>]+$/i.test(u)?u:''; }
+function kpHeuteOffen(){
+  var td=today(), out=[];
+  kpHebel().forEach(function(h){
+    if(!kpAktiv(h)||h.rh==='extern')return; var o=kpOcc(h);
+    if(h.rh==='tag'){ var r=kpRec(h.id,td); if(!r)out.push(h); }
+    else if(h.rh==='woche'){ var ok=kpRecsInWeek(h.id,lpMonday(td)).some(function(r){return r.status==='ok';}); if(!ok&&(h.wdSet==null||lpWd(td)===h.wdSet))out.push(h); }
+    else if(h.rh==='einmal'){ if(o.open)out.push(h); }
+  });
+  return out;
+}
+function kpUebersichtView(){
+  var K=kpEnsure(), h=kpProfilHTML(), td=today();
+  var off=kpHeuteOffen();
+  h+='<div class="lp-cd" style="margin-bottom:12px"><div class="lp-row" style="justify-content:space-between;align-items:center"><span class="lp-cap">STARTPAKET</span><button type="button" class="lp-btn gray" data-kp="goto" data-v="start">Öffnen</button></div>';
+  if(!K.start)h+='<div class="lp-mu" style="font-size:12px;margin-top:8px">Noch kein Startdatum festgelegt.</div>';
+  else if(td<K.start)h+='<div class="lp-mu" style="font-size:12px;margin-top:8px">Start in '+lpDayDiff(td,K.start)+' '+(lpDayDiff(td,K.start)===1?'Tag':'Tagen')+' ('+lpEsc(lpFmt(K.start))+').</div>';
+  else {
+    h+='<div class="lp-mu" style="font-size:12px;margin:8px 0">Woche '+kpWeekNo()+' · heute offen: '+off.length+'</div>';
+    off.forEach(function(x){ h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px">'+lpEsc(x.name)+'</span>'+((x.felder&&x.felder.length)?'<button type="button" class="lp-btn gray" data-kp="goto" data-v="start">eintragen</button>':'<button type="button" class="wp-pill" data-kp="set" data-h="'+x.id+'" data-d="'+td+'" data-s="ok">✓</button>')+'</div>'; });
+    var dbl=kpAllDbl(); if(dbl)h+='<div class="lp-mu" style="font-size:11px;margin-top:6px;color:var(--c-fun)">'+dbl+' Doppel-Ausfall'+(dbl===1?'':'e')+' in den letzten 4 Wochen.</div>';
+  }
+  return h+'</div>';
+}
+function kpRender(){
+  var root=document.getElementById('kp-root'); if(!root)return; kpEnsure();
+  root.innerHTML=(KP.view==='start')?kpStartView():kpUebersichtView();
+}
+
+// ── Cockpit-Karte ──
+function kpCockpitHTML(){
+  var K=kpEnsure(), td=today(); if(!K.start)return '';
+  if(td<K.start){ var n=lpDayDiff(td,K.start); return n<=14?'<div class="lp-cap" style="margin-bottom:6px">STARTPAKET</div><div class="lp-mu" style="font-size:12px">Start in '+n+' '+(n===1?'Tag':'Tagen')+' ('+lpEsc(lpFmt(K.start))+').</div>':''; }
+  var off=kpHeuteOffen(); if(!off.length)return '';
+  var h='<div class="lp-row" style="justify-content:space-between;margin-bottom:8px"><span class="lp-cap">STARTPAKET</span><span class="lp-mu" style="cursor:pointer;font-size:11px" data-kp="goto" data-v="start">alle</span></div>';
+  off.slice(0,4).forEach(function(x){ h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px">'+lpEsc(x.name)+'</span>'+((x.felder&&x.felder.length)?'<button type="button" class="lp-btn gray" data-kp="goto" data-v="start">eintragen</button>':'<button type="button" class="wp-pill" data-kp="set" data-h="'+x.id+'" data-d="'+td+'" data-s="ok">✓</button>')+'</div>'; });
+  return h;
+}
+CK_CARDS.push({id:'kompass',label:'Startpaket'});
+
+// ── Import / Bearbeiten ──
+function kpImport(obj){
+  if(!obj||typeof obj!=='object'||obj.kompass!==1){ showToast('Das ist keine Kompass-Datei.'); return false; }
+  var K=kpEnsure(), P=K.profil, p=obj.profil||{}, s=function(v,n){ return String(v==null?'':v).slice(0,n||600); }, arr=function(a,n){ return Array.isArray(a)?a.map(function(x){return s(x,300);}).filter(Boolean).slice(0,n||20):null; };
+  if(typeof p.leitsatz==='string')P.leitsatz=s(p.leitsatz,500);
+  ['werte','fix','zielbild'].forEach(function(k){ var a=arr(p[k]); if(a)P[k]=a; });
+  if(typeof p.link==='string')P.link=kpLinkOk(p.link)||'';
+  if(obj.hebel&&typeof obj.hebel==='object')Object.keys(obj.hebel).forEach(function(id){ if(!KP_HEBEL.some(function(h){return h.id===id;}))return; var o=obj.hebel[id]||{}; K.hebel[id]=Object.assign(K.hebel[id]||{},{name:s(o.name,240)||(K.hebel[id]||{}).name}); });
+  if(/^\d{4}-\d\d-\d\d$/.test(obj.start||'')&&!K.start)K.start=obj.start;
+  if(typeof kpImportMehr==='function')kpImportMehr(obj);
+  saveD(); kpRender(); showToast('Kompass eingelesen ✓','ok'); return true;
+}
+function kpEdit(){
+  var P=kpEnsure().profil, ta=function(id,v,rows,ph){ return '<textarea class="lp-in" id="'+id+'" rows="'+rows+'" style="width:100%" placeholder="'+lpEsc(ph||'')+'">'+lpEsc(v)+'</textarea>'; };
+  syModal('kp-edit','<div class="lp-cap" style="margin-bottom:8px">KOMPASS BEARBEITEN</div><div style="display:flex;flex-direction:column;gap:8px">'
+    +'<div class="lp-mu" style="font-size:11px">Leitsatz</div>'+ta('kpe-leit',P.leitsatz,2)
+    +'<div class="lp-mu" style="font-size:11px">Werte in Rangfolge (eine pro Zeile)</div>'+ta('kpe-werte',P.werte.join('\n'),5)
+    +'<div class="lp-mu" style="font-size:11px">Nicht verhandelbar (eine pro Zeile)</div>'+ta('kpe-fix',P.fix.join('\n'),3)
+    +'<div class="lp-mu" style="font-size:11px">Zielbild (eine Zeile pro Punkt)</div>'+ta('kpe-ziel',P.zielbild.join('\n'),5)
+    +'<div class="lp-mu" style="font-size:11px">Link zum Lebensprofil</div><input class="lp-in" id="kpe-link" value="'+lpEsc(P.link)+'" placeholder="https://…">'
+    +'</div><div class="lp-row" style="justify-content:flex-end;margin-top:12px"><button type="button" class="lp-btn gray" data-kp="edit-close">Abbrechen</button><button type="button" class="lp-btn fill" data-kp="edit-save">Speichern</button></div>');
+}
+function kpEditSave(){
+  var P=kpEnsure().profil, g=function(i){ return (document.getElementById(i)||{}).value||''; }, lines=function(v,n){ return v.split(/\r?\n/).map(function(x){return x.trim();}).filter(Boolean).slice(0,n); };
+  var lk=g('kpe-link').trim(); if(lk&&!kpLinkOk(lk)){ showToast('Der Link muss mit http:// oder https:// beginnen.'); return; }
+  P.leitsatz=g('kpe-leit').trim().slice(0,500); P.werte=lines(g('kpe-werte'),20); P.fix=lines(g('kpe-fix'),20); P.zielbild=lines(g('kpe-ziel'),20); P.link=kpLinkOk(lk)||'';
+  saveD(); var m=document.getElementById('kp-edit'); if(m)m.remove(); kpRender(); showToast('Gespeichert ✓','ok');
+}
+
+// ── Klicks ──
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-kp]'); if(!el||el.tagName==='SELECT'||el.tagName==='INPUT')return; ev.preventDefault();
+  var a=el.getAttribute('data-kp'), hid=el.getAttribute('data-h');
+  switch(a){
+    case 'set': { var h=kpHebel().find(function(x){return x.id===hid;}), d=el.getAttribute('data-d'), s=el.getAttribute('data-s'), r=kpRec(hid,d);
+      if(r&&r.status===s)return kpSetze(hid,d,'');                       // erneutes Tippen nimmt zurück
+      return kpSetze(hid,d,s,s==='ok'?kpFelder(h,hid,d):{}); }
+    case 'frei': { var K=kpEnsure(); K.freigabe[hid]=today(); saveD(); return kpRender(); }
+    case 'einmal': { var dv=(document.getElementById('kp-f-'+hid+'-datum')||{}).value||today(); var r2=D.kpLog.find(function(x){return x.hebel===hid&&x.status==='ok';}); if(r2)return kpSetze(hid,r2.datum,''); return kpSetze(hid,dv,'ok',{}); }
+    case 'goto': return goSec('kp-'+el.getAttribute('data-v'));
+    case 'edit': return kpEdit();
+    case 'edit-close': { var m=document.getElementById('kp-edit'); if(m)m.remove(); return; }
+    case 'edit-save': return kpEditSave();
+  }
+});
+document.addEventListener('change',function(ev){
+  var e=ev.target; if(!e||!e.getAttribute)return; var a=e.getAttribute('data-kp');
+  if(a==='start'){ var v=e.value; if(v&&!/^\d{4}-\d\d-\d\d$/.test(v))return; kpEnsure().start=v||''; saveD(); kpRefresh(); }
+  else if(a==='wd'){ var K=kpEnsure(), hid=e.getAttribute('data-h'); K.hebel[hid]=K.hebel[hid]||{}; if(e.value==='')delete K.hebel[hid].wd; else K.hebel[hid].wd=+e.value; saveD(); kpRender(); }
+  else if(e.id==='kp-file'&&e.files&&e.files[0]){ var rd=new FileReader(); rd.onload=function(){ try{ kpImport(JSON.parse(rd.result)); }catch(x){ showToast('Die Datei konnte nicht gelesen werden.'); } }; rd.readAsText(e.files[0]); e.value=''; }
+});
+
+// ── Navigation: Bereich «Kompass» ──
+var _sosPreGo_kp=sosPreGo;
+sosPreGo=function(s){
+  if(s==='kompass'||(typeof s==='string'&&s.indexOf('kp-')===0)){ KP.view=(s==='kompass')?'uebersicht':s.slice(3); SOS_CUR={sec:'kompass',tab:(s==='kompass'?'kp-uebersicht':s)}; return 'kompass'; }
+  return _sosPreGo_kp(s);
+};
+var _sosAfterGo_kp=sosAfterGo;
+sosAfterGo=function(s){ _sosAfterGo_kp(s); if(s==='kompass')kpRender(); };
+SOS_SEC_AREA.kompass='kompass';
+
+// ── Erster Start: Backup anbieten (die Daten werden nur ergänzt, nichts verändert) ──
+function kpInit(){
+  kpEnsure();
+  if(localStorage.getItem('sos_kp_intro')==='1')return;
+  setTimeout(function(){
+    if(document.getElementById('sy-mig')||document.getElementById('cl-mig')||document.getElementById('oe-mig'))return;
+    localStorage.setItem('sos_kp_intro','1');
+    syModal('kp-intro','<div class="lp-mono" style="color:var(--c-accent);font-size:10px;letter-spacing:.12em">STUDY_OS · KOMPASS</div><div style="font-size:16px;font-weight:500;margin:4px 0 8px">Neuer Bereich «Kompass»</div>'
+      +'<div class="lp-mu" style="line-height:1.6;margin-bottom:12px">Der Kompass fasst deinen Leitsatz, deine Werte und das Startpaket zusammen. Deine bisherigen Daten bleiben unverändert, es kommen nur neue Felder dazu. Wenn du magst, lade vorher ein Backup herunter. Wiederherstellen: Einstellungen → Daten importieren (oder Backup aus dem Gist).</div>'
+      +'<div class="lp-row" style="justify-content:flex-end;gap:8px;flex-wrap:wrap"><button type="button" class="lp-btn gray" data-kpi="backup">Backup herunterladen</button><button type="button" class="lp-btn fill" data-kpi="ok">Weiter</button></div>');
+    if(syToken()&&syGistId()){ try{ syGistBackup('studyos_backup_'+syDateStamp()+'_vor-kompass.json',JSON.stringify(D),'studyos_backup_2',10); }catch(e){} }
+  },9000);
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-kpi]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  if(el.getAttribute('data-kpi')==='backup'){ sosDownloadJson('study-os-backup-vor-kompass'); el.textContent='Backup heruntergeladen ✓'; }
+  else { var m=document.getElementById('kp-intro'); if(m)m.remove(); }
+},true);
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
@@ -19687,6 +19973,7 @@ exInit();
 ppInit();
 lbInit();
 oeInit();
+kpInit();
 
 // Auto-refresh Scores und LivCounter
 setInterval(function(){renderLivCounter();renderDayTimer();renderFocus();},60000);
