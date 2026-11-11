@@ -2091,8 +2091,9 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 .sp-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid; border-radius: 99px; padding: 2px 10px; font-size: 11px; color: var(--lp-text); } .sp-pill i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 
 /* WOCHENPLAN: Mischkategorie + Überlappen */
-.wp-b.mix { padding-left: 12px; }
-.wp-b.mix::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: var(--bcs); }
+.wp-b.mix { background-clip: padding-box; }
+.px-p { display: inline-block; font-size: 9px; line-height: 12px; min-width: 12px; text-align: center; border-radius: 6px; background: var(--c-accent); color: #06121a; margin-right: 2px; font-weight: 500; }
+.px-p.lo { background: transparent; color: inherit; opacity: .7; border: 1px solid currentColor; }
 .wp-kat.main { outline: 2px solid var(--c-accent); outline-offset: 1px; }
 .wp-b.ol:hover { z-index: 7 !important; }
 .wp-b.ol { box-shadow: 0 0 0 1.5px var(--lp-bg), 0 2px 6px rgba(0,0,0,.35); }
@@ -4900,7 +4901,7 @@ function wpEditorSave(){
 }
 function wpVorlageSpeichern(){
   var name=(document.getElementById('wp-vorl-name').value||'').trim()||'Standardwoche', mon=WP_UI.week, w=wpWeek(mon); if(!w||!w.bloecke.length){ showToast('Diese Woche ist leer — nichts zu speichern.'); return; }
-  var W=wpEnsure(), bl=w.bloecke.filter(function(b){return b.typ!=='fix'&&b.status!=='verschoben'&&b.typ!=='belohnung';}).map(function(b){ return {tagIdx:(lpWd(b.tag)+6)%7,start:b.start,ende:b.ende,titel:b.titel,kategorie:b.kategorie,mix:pxMix(b),typ:b.typ}; });
+  var W=wpEnsure(), bl=w.bloecke.filter(function(b){return b.typ!=='fix'&&b.status!=='verschoben'&&b.typ!=='belohnung';}).map(function(b){ return {tagIdx:(lpWd(b.tag)+6)%7,start:b.start,ende:b.ende,titel:b.titel,kategorie:b.kategorie,mix:pxMix(b),prio:b.prio||'',typ:b.typ}; });
   var ex=W.vorlagen.find(function(v){return v.name===name;});
   if(ex){ ex.bloecke=bl; ex.ts=Date.now(); } else W.vorlagen.push({id:uid(),name:name,bloecke:bl,ts:Date.now()});
   saveD(); showToast('Vorlage «'+name+'» gespeichert ('+bl.length+' Blöcke) ✓','ok'); wpRender();
@@ -4911,7 +4912,7 @@ function wpVorlageAnwenden(id){
   (v.bloecke||[]).forEach(function(t){
     var tag=lpAdd(mon,t.tagIdx);
     if(wpBlocksOn(tag).some(function(b){return b.titel===t.titel&&b.start===t.start;}))return;
-    var vb=wpNew({tag:tag,start:t.start,ende:t.ende,titel:t.titel,kategorie:t.kategorie,typ:t.typ,quelle:'vorlage'}); var tm=Array.isArray(t.mix)?t.mix:(t.kategorie2?[t.kategorie2]:[]); if(tm.length)vb.mix=tm.slice(); wpAdd(vb); n++;
+    var vb=wpNew({tag:tag,start:t.start,ende:t.ende,titel:t.titel,kategorie:t.kategorie,typ:t.typ,quelle:'vorlage'}); var tm=Array.isArray(t.mix)?t.mix:(t.kategorie2?[t.kategorie2]:[]); if(tm.length)vb.mix=tm.slice(); if(t.prio)vb.prio=t.prio; wpAdd(vb); n++;
   });
   WP_UI.vorlagen=false; saveD(); wpRender(); showToast('Vorlage angewendet: '+n+' Blöcke ✓','ok');
 }
@@ -7322,8 +7323,8 @@ function boBericht(mon){
   var _mc=mrCompact(mon); if(_mc)L.push(_mc,'');
   L.push('Rettungsmodus: '+pdRescueWeek(mon)+'× genutzt'+(pdRescueWeek(mon)?' ('+Object.keys(D.rettung||{}).filter(function(d){return d>=mon&&d<=end;}).map(function(d){ return lpFmtShort(d)+': '+D.rettung[d].eine; }).join('; ')+')':''),'');
   L.push('BUCHUNGEN'); book.sort(function(a,b){return a.datum<b.datum?-1:a.datum>b.datum?1:0;}).forEach(function(b){ L.push('- '+lpFmtShort(b.datum)+' · '+b.text+' · '+(b.xp?'+'+b.xp+' XP ':'')+(b.meilen?(b.meilen>0?'+':'')+b.meilen+' Meilen':'')+' ['+b.quelle+']'); });
-  L.push('','BLÖCKE PRO TAG (✓ erledigt, ◐ teilweise, ↻ verschoben, ✗ nicht gemacht, · offen)');
-  for(i=0;i<7;i++){ var d=lpAdd(mon,i), bl=wpBlocksOn(d).filter(function(b){return b.typ!=='fenster';}).sort(function(a,b){return a.start.localeCompare(b.start);}); L.push(HG_TAGE[lpWd(d)]+' '+lpFmtShort(d)+': '+(bl.length?bl.map(function(b){ return BO_SYM[b.status]+' '+b.start+' '+b.titel; }).join(' | '):'–')); }
+  L.push('','BLÖCKE PRO TAG (✓ erledigt, ◐ teilweise, ↻ verschoben, ✗ nicht gemacht, · offen; [..] = Mischkategorie bzw. Priorität hoch/niedrig)');
+  for(i=0;i<7;i++){ var d=lpAdd(mon,i), bl=wpBlocksOn(d).filter(function(b){return b.typ!=='fenster';}).sort(function(a,b){return a.start.localeCompare(b.start);}); L.push(HG_TAGE[lpWd(d)]+' '+lpFmtShort(d)+': '+(bl.length?bl.map(function(b){ return BO_SYM[b.status]+' '+b.start+' '+b.titel+pxInfo(b); }).join(' | '):'–')); }
   L.push('','SCHLAF'); for(i=0;i<7;i++){ var d2=lpAdd(mon,i), sl=D.track&&D.track[d2]&&D.track[d2].sleep; L.push('- '+lpDayLbl(d2)+' '+lpFmtShort(d2)+': '+(sl?(sl.h||0)+' h '+(sl.m||0)+' min, Qualität '+(sl.q||'–')+(sl.from?' ('+sl.from+'–'+sl.to+')':''):'nicht erfasst')); }
   L.push('','SPORT'); var sp=0; for(i=0;i<7;i++){ var d3=lpAdd(mon,i), tr=D.track&&D.track[d3]; ((tr&&tr.sports)||[]).forEach(function(x){ sp++; L.push('- '+lpFmtShort(d3)+': '+(x.name||x.ueb||x.typ||'Sport')+' '+(x.min||'?')+' Min'); }); }
   if(!sp)L.push('- keiner erfasst');
@@ -10629,21 +10630,21 @@ function spTyp(k){ return SP_TYPEN.find(function(t){return t[0]===k;})||SP_TYPEN
 function spOn(d){ return spList().filter(function(s){ return s&&s.von&&s.bis&&s.von<=d&&d<=s.bis; }); }
 function spEdit(id,pre){
   var s=id?spList().find(function(x){return x.id===id;}):null; if(id&&!s)return;
-  var o=s||Object.assign({typ:'militaer',titel:'',von:(WP_UI&&WP_UI.week)||today(),bis:(WP_UI&&WP_UI.week)?lpAdd(WP_UI.week,4):today(),farbe:'',notiz:''},pre||{});
+  var o=s||Object.assign({typ:'militaer',titel:'',von:(WP_UI&&WP_UI.week)||today(),bis:(WP_UI&&WP_UI.week)?lpAdd(WP_UI.week,4):today(),farbe:'',notiz:'',vonZeit:'',bisZeit:''},pre||{});
   var t=spTyp(o.typ), col=o.farbe||t[2], up=spList().filter(function(x){return x.bis>=today();}).sort(function(a,b){return a.von>b.von?1:-1;}).slice(0,6);
   syModal('sp-edit','<div class="lp-cap" style="margin-bottom:8px">'+(s?'ZEITSPANNE BEARBEITEN':'NEUE ZEITSPANNE')+'</div>'
     +(!s&&up.length?'<div class="lp-mu" style="font-size:11px;margin-bottom:6px">Bestehende: '+up.map(function(x){ return '<a href="#" data-sp="edit" data-id="'+lpEsc(x.id)+'" style="color:var(--c-accent)">'+lpEsc(x.titel||spTyp(x.typ)[1])+' ('+lpFmtShort(x.von)+'–'+lpFmtShort(x.bis)+')</a>'; }).join(' · ')+'</div>':'')
     +'<div style="display:flex;flex-direction:column;gap:8px"><div class="lp-row" style="gap:8px;flex-wrap:wrap"><select class="lp-in" id="sp-typ" data-sp="typ">'+SP_TYPEN.map(function(x){ return '<option value="'+x[0]+'"'+(x[0]===o.typ?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select>'
     +'<input class="lp-in" id="sp-titel" placeholder="Titel (z. B. WK, Ferien mit Liv)" value="'+lpEsc(o.titel||'')+'" style="flex:1;min-width:140px"><input type="color" id="sp-farbe" value="'+lpEsc(/^#[0-9a-f]{6}$/i.test(col)?col:t[2])+'" style="width:44px;height:36px;padding:2px;border-radius:10px;border:1px solid var(--border);background:none"></div>'
-    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap;align-items:center"><span class="lp-mu">von</span><input class="lp-in lp-mono" type="date" id="sp-von" value="'+lpEsc(o.von)+'"><span class="lp-mu">bis</span><input class="lp-in lp-mono" type="date" id="sp-bis" value="'+lpEsc(o.bis)+'"></div>'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap;align-items:center"><span class="lp-mu">von</span><input class="lp-in lp-mono" type="date" id="sp-von" value="'+lpEsc(o.von)+'"><input class="lp-in lp-mono" type="time" id="sp-vz" value="'+lpEsc(o.vonZeit||'')+'" style="width:96px" title="Uhrzeit (leer = ganztägig)"><span class="lp-mu">bis</span><input class="lp-in lp-mono" type="date" id="sp-bis" value="'+lpEsc(o.bis)+'"><input class="lp-in lp-mono" type="time" id="sp-bz" value="'+lpEsc(o.bisZeit||'')+'" style="width:96px" title="Uhrzeit (leer = ganztägig)"></div>'
     +'<input class="lp-in" id="sp-notiz" placeholder="Notiz (optional)" value="'+lpEsc(o.notiz||'')+'"></div>'
-    +'<div class="lp-mu" style="font-size:11px;margin-top:8px">Die Tage werden im Wochenplan eingefärbt. Deine Blöcke bleiben unverändert.</div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-top:8px">Die Tage bzw. Uhrzeiten werden im Wochenplan eingefärbt, Uhrzeit leer = ganztägig. Mehrere Zeitspannen dürfen sich überlagern. Deine Blöcke bleiben unverändert.</div>'
     +'<div class="lp-row" style="justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px">'+(s?'<button type="button" class="lp-btn danger" data-sp="del" data-id="'+lpEsc(s.id)+'">Löschen</button>':'<span></span>')+'<span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-sp="close">Abbrechen</button><button type="button" class="lp-btn fill" data-sp="save" data-id="'+lpEsc(id||'')+'">Speichern</button></span></div>');
 }
 function spSave(id){
   var g=function(i){ return (document.getElementById(i)||{}).value||''; }, von=g('sp-von'), bis=g('sp-bis');
-  if(!von||!bis){ showToast('Bitte «von» und «bis» ausfüllen.'); return; } if(bis<von){ showToast('«Bis» muss am selben Tag oder nach «von» liegen.'); return; }
-  var typ=g('sp-typ'), titel=g('sp-titel').trim()||spTyp(typ)[1], farbe=g('sp-farbe'), o={typ:typ,titel:titel,von:von,bis:bis,farbe:(farbe&&farbe.toLowerCase()!==spTyp(typ)[2].toLowerCase())?farbe:'',notiz:g('sp-notiz').trim()};
+  if(!von||!bis){ showToast('Bitte «von» und «bis» ausfüllen.'); return; } if(bis<von){ showToast('«Bis» muss am selben Tag oder nach «von» liegen.'); return; } var vz=g('sp-vz'), bz=g('sp-bz'); if(von===bis&&vz&&bz&&bz<=vz){ showToast('Am selben Tag muss die Endzeit nach der Startzeit liegen.'); return; }
+  var typ=g('sp-typ'), titel=g('sp-titel').trim()||spTyp(typ)[1], farbe=g('sp-farbe'), o={typ:typ,titel:titel,von:von,bis:bis,farbe:(farbe&&farbe.toLowerCase()!==spTyp(typ)[2].toLowerCase())?farbe:'',notiz:g('sp-notiz').trim(),vonZeit:vz,bisZeit:bz};
   if(id){ var s=spList().find(function(x){return x.id===id;}); if(s)Object.assign(s,o); } else spList().push(Object.assign({id:uid()},o));
   saveD(); var m=document.getElementById('sp-edit'); if(m)m.remove(); try{ wpRender(); ckRender(); }catch(e){} showToast('Zeitspanne gespeichert ✓','ok');
 }
@@ -10669,19 +10670,23 @@ document.addEventListener('change',function(ev){
 
 // Wochenplan: Tage einfärben (Tönung hinter den Blöcken) + Band im Tageskopf
 var _wpRender_sp=wpRender;
+function spRange(s,d){ var a=(d===s.von&&s.vonZeit)?lpT2M(s.vonZeit):0, e=(d===s.bis&&s.bisZeit)?lpT2M(s.bisZeit):1440; return [a,Math.max(a,e)]; }
+function spLbl(s,d){ var t=s.titel||spTyp(s.typ)[1]; if(d===s.von&&s.vonZeit)t+=' ab '+s.vonZeit; if(d===s.bis&&s.bisZeit)t+=((d===s.von&&s.vonZeit)?' – ':' bis ')+s.bisZeit; return t; }
 wpRender=function(){
   _wpRender_sp();
   try{
     var root=document.getElementById('wp-root'); if(!root)return; var mon=WP_UI.week||lpMonday(today());
-    var bar=root.querySelector('.lp-row [data-wp="new"]'); if(bar&&!root.querySelector('[data-sp="new"]')){ var b=document.createElement('button'); b.type='button'; b.className='wp-pill'; b.setAttribute('data-sp','new'); b.innerHTML='<i class="ti ti-calendar-event"></i> Zeitspanne'; bar.parentNode.insertBefore(b,bar); }
-    var heads=root.querySelectorAll('.wp-dh'), cols=root.querySelectorAll('.wp-col'), shown={};
+    var bar=root.querySelector('.lp-row [data-wp="new"]'); if(bar&&!root.querySelector('[data-sp="new"]')){ var bt=document.createElement('button'); bt.type='button'; bt.className='wp-pill'; bt.setAttribute('data-sp','new'); bt.innerHTML='<i class="ti ti-calendar-event"></i> Zeitspanne'; bar.parentNode.insertBefore(bt,bar); }
+    var heads=root.querySelectorAll('.wp-dh'), cols=root.querySelectorAll('.wp-col'), shown={}, z=wpZeitPlan();
     for(var i=0;i<7;i++){
       var d=lpAdd(mon,i), l=spOn(d); if(!l.length)continue;
-      var col0=l[0].farbe||spTyp(l[0].typ)[2];
-      if(cols[i]){ var tn=document.createElement('div'); tn.className='sp-tint'; tn.style.background='color-mix(in srgb,'+col0+' 17%,transparent)'; cols[i].insertBefore(tn,cols[i].firstChild); }
       l.forEach(function(s){
-        var col=s.farbe||spTyp(s.typ)[2], first=!shown[s.id]; shown[s.id]=1;
-        if(heads[i]){ var bd=document.createElement('div'); bd.className='sp-band'; bd.setAttribute('data-sp','edit'); bd.setAttribute('data-id',s.id); bd.title=(s.titel||spTyp(s.typ)[1])+' · '+lpFmtShort(s.von)+'–'+lpFmtShort(s.bis); bd.style.background=col; bd.textContent=(first||s.von===d)?(s.titel||spTyp(s.typ)[1]):' '; heads[i].appendChild(bd); }
+        var col=s.farbe||spTyp(s.typ)[2], first=!shown[s.id], r=spRange(s,d); shown[s.id]=1;
+        if(cols[i]){ var top=(Math.max(r[0],z.von*60)-z.von*60)/60*WP_HP, bot=(Math.min(r[1],z.bis*60)-z.von*60)/60*WP_HP;
+          if(bot>top){ var tn=document.createElement('div'); tn.className='sp-tint'; tn.style.cssText='top:'+top.toFixed(1)+'px;height:'+(bot-top).toFixed(1)+'px;background:color-mix(in srgb,'+col+' 16%,transparent)'; cols[i].insertBefore(tn,cols[i].firstChild); } }
+        if(heads[i]){ var bd=document.createElement('div'); bd.className='sp-band'; bd.setAttribute('data-sp','edit'); bd.setAttribute('data-id',s.id);
+          bd.title=(s.titel||spTyp(s.typ)[1])+' · '+lpFmtShort(s.von)+(s.vonZeit?' '+s.vonZeit:'')+'–'+lpFmtShort(s.bis)+(s.bisZeit?' '+s.bisZeit:''); bd.style.background=col;
+          bd.textContent=(first||d===s.von||d===s.bis)?spLbl(s,d):'\u00a0'; heads[i].appendChild(bd); }
       });
     }
   }catch(e){}
@@ -10691,14 +10696,14 @@ wpRender=function(){
 var _ckHeaderHTML_sp=ckHeaderHTML;
 ckHeaderHTML=function(){
   var h=_ckHeaderHTML_sp(), l=spOn(today()); if(!l.length||!h)return h;
-  var pills=l.map(function(s){ var col=s.farbe||spTyp(s.typ)[2]; return '<span class="sp-pill" style="border-color:'+col+'"><i style="background:'+col+'"></i>'+lpEsc(s.titel||spTyp(s.typ)[1])+' · bis '+lpEsc(lpDayLbl(s.bis)+' '+lpFmtShort(s.bis))+'</span>'; }).join('');
+  var pills=l.map(function(s){ var col=s.farbe||spTyp(s.typ)[2]; return '<span class="sp-pill" style="border-color:'+col+'"><i style="background:'+col+'"></i>'+lpEsc(s.titel||spTyp(s.typ)[1])+' · bis '+lpEsc(lpDayLbl(s.bis)+' '+lpFmtShort(s.bis)+(s.bisZeit?' '+s.bisZeit:''))+'</span>'; }).join('');
   return h+'<div class="lp-row" style="gap:6px;flex-wrap:wrap;margin-top:8px">'+pills+'</div>';
 };
 var _ckAgenda_sp=ckAgenda;
 ckAgenda=function(){
   var A=_ckAgenda_sp(), td=today(), lim=lpAdd(td,(+cfg('agenda.tage')||7)-1);
   spList().forEach(function(s){
-    [[s.von,'Beginn'],[s.bis,'Ende']].forEach(function(p){ if(!p[0]||p[0]<td)return; var it={date:p[0],time:'',titel:p[1]+': '+(s.titel||spTyp(s.typ)[1]),sub:'Zeitspanne',col:s.farbe||spTyp(s.typ)[2]}; (p[0]<=lim?A.items:A.later).push(it); });
+    [[s.von,'Beginn',s.vonZeit],[s.bis,'Ende',s.bisZeit]].forEach(function(p){ if(!p[0]||p[0]<td)return; var it={date:p[0],time:p[2]||'',titel:p[1]+': '+(s.titel||spTyp(s.typ)[1]),sub:'Zeitspanne',col:s.farbe||spTyp(s.typ)[2]}; (p[0]<=lim?A.items:A.later).push(it); });
   });
   A.items.sort(function(a,b){return (a.date+(a.dl?'0':'1')+a.time)>(b.date+(b.dl?'0':'1')+b.time)?1:-1;}); A.later.sort(function(a,b){return a.date>b.date?1:-1;});
   return A;
@@ -11107,9 +11112,12 @@ wpBlockHTML=function(b,z,now){
   }
   var mix=b.typ==='belohnung'?[]:pxMix(b).map(function(id){ return wpKats().find(function(k){return k.id===id;}); }).filter(Boolean);
   if(mix.length){
-    var n=mix.length, grad='linear-gradient(to bottom,'+mix.map(function(k,i){ return wpKatHex(k)+' '+(i*100/n).toFixed(1)+'% '+((i+1)*100/n).toFixed(1)+'%'; }).join(',')+')';
-    h=h.replace('class="wp-b ','class="wp-b mix ').replace('style="--bc:','style="--bcs:'+grad+';--bc:');
-    var k1=wpKats().find(function(k){return k.id===b.kategorie;});
+    var k1=wpKats().find(function(k){return k.id===b.kategorie;}), all=(k1?[k1]:[]).concat(mix), n=all.length, stt=b.status;
+    var stop=function(k){ var hx=wpKatHex(k); return b.typ==='fenster'?'color-mix(in srgb,'+hx+' 18%,transparent)':b.typ==='vorschlag'?'color-mix(in srgb,'+hx+' 10%,transparent)':stt==='ok'?hx:'color-mix(in srgb,'+hx+' '+(stt==='teil'?82:70)+'%,var(--lp-card))'; };
+    if(n>1&&stt!=='nein'&&stt!=='verschoben'){
+      var grad='linear-gradient(120deg,'+all.map(function(k,i){ return stop(k)+' '+(i*100/n).toFixed(1)+'% '+((i+1)*100/n).toFixed(1)+'%'; }).join(',')+')';
+      h=h.replace('class="wp-b ','class="wp-b mix ').replace('style="--bc:','style="background:'+grad+';--bc:');
+    }
     if(k1)h=h.replace('title="'+lpEsc(k1.name),'title="'+lpEsc([k1].concat(mix).map(function(k){return k.name;}).join(' + ')));
   }
   return h;
@@ -19250,6 +19258,87 @@ function lbMicroAdd(host){
   var mk=svg.querySelector('#lb-marks'); if(mk)svg.insertBefore(g,mk); else svg.appendChild(g);
 }
 (function(){ var st=document.createElement('style'); st.textContent='#lb-map #lb-micro .c{stroke:#9fc3d4;stroke-width:.7;vector-effect:non-scaling-stroke}#lb-map #lb-micro .c:hover{stroke:#fff}'; document.head.appendChild(st); })();
+
+// ═══════════════════════════════════════════════════════════
+// WOCHENPLAN: Priorität an Blöcken (hoch / normal / niedrig) · Schritte im Tagesabschluss
+// ═══════════════════════════════════════════════════════════
+var PZ={inSave:false,prio:null};
+var PZ_PRIO=[['niedrig','niedrig'],['','normal'],['hoch','hoch']];
+function pzPrioLbl(p){ return p==='hoch'?'hoch':p==='niedrig'?'niedrig':''; }
+// Text für Berichte (z. B. Wochenbericht → Claude): Kategorien und Priorität eines Blocks
+function pxInfo(b){
+  var kn=function(id){ var k=wpKats().find(function(x){return x.id===id;}); return k?k.name:id; };
+  var cats=[b.kategorie].concat(pxMix(b)).filter(Boolean).map(kn), p=pzPrioLbl(b.prio), bits=[];
+  if(cats.length>1)bits.push(cats.join('+'));
+  if(p)bits.push('Priorität '+p);
+  return bits.length?' ['+bits.join(', ')+']':'';
+}
+
+// ── Editor: Priorität wählen ──
+var _wpEditor_pz=wpEditor;
+wpEditor=function(id,pre){
+  var r=_wpEditor_pz(id,pre);
+  try{
+    var host=document.getElementById('wp-modal'), g=document.getElementById('wpm-kat'); if(!host||!g||document.getElementById('wpm-prio'))return r;
+    var b=id?wpFind(id):null; if(b&&(b.typ==='fix'||b.typ==='belohnung'))return r;
+    var cur=b?(b.prio||''):((pre&&pre.prio)||'');
+    var row=document.createElement('div'); row.className='lp-fld';
+    row.innerHTML='<label title="Damit Study OS (und Claude im Wochenbericht) weiss, was wie wichtig ist">Priorität</label><div class="lp-seg" id="wpm-prio" data-val="'+lpEsc(cur)+'">'
+      +PZ_PRIO.map(function(p){ return '<button type="button" class="'+((p[0]===cur)?'on':'')+'" data-pz="prio" data-val="'+p[0]+'">'+p[1]+'</button>'; }).join('')+'</div>';
+    var anchor=document.getElementById('wpm-mixhint')||g.closest('.lp-fld'); anchor.parentNode.insertBefore(row,anchor.nextSibling);
+  }catch(e){}
+  return r;
+};
+var _wpEditorSave_pz=wpEditorSave;
+wpEditorSave=function(){
+  var host=document.getElementById('wp-modal'), id=host&&host.getAttribute('data-id'), g=document.getElementById('wpm-prio');
+  PZ.prio=g?(g.getAttribute('data-val')||''):null; PZ.inSave=true;
+  try{ _wpEditorSave_pz(); }finally{ PZ.inSave=false; }
+  if(id&&PZ.prio!==null){ var b=wpFind(id); if(b&&b.typ!=='fix'&&(b.prio||'')!==PZ.prio){ if(PZ.prio)b.prio=PZ.prio; else delete b.prio; lpTouch(b); saveD(); try{ wpRender(); }catch(e){} } }
+  PZ.prio=null;
+};
+var _wpNew_pz=wpNew;
+wpNew=function(o){ var b=_wpNew_pz(o); if(PZ.inSave&&PZ.prio)b.prio=PZ.prio; return b; };
+var _wpMoveBlock_pz=wpMoveBlock;
+wpMoveBlock=function(b,tag,s,e,ghost){
+  var r=_wpMoveBlock_pz(b,tag,s,e,ghost);
+  if(r&&r!==b&&b.prio&&!r.prio){ r.prio=b.prio; lpTouch(r); saveD(); }
+  return r;
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-pz="prio"]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var g=document.getElementById('wpm-prio'); if(!g)return; g.setAttribute('data-val',el.getAttribute('data-val')||'');
+  Array.prototype.forEach.call(g.querySelectorAll('button'),function(x){ x.classList.toggle('on',x===el); });
+},true);
+
+// ── Darstellung: Markierung am Block ──
+var _wpBlockHTML_pz=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_pz(b,z,now); if(!h||!b.prio||b.typ==='belohnung')return h;
+  var mark=b.prio==='hoch'?'<b class="px-p">!</b> ':b.prio==='niedrig'?'<b class="px-p lo">↓</b> ':'';
+  h=h.replace('<span class="wp-bt">','<span class="wp-bt">'+mark);
+  return h.replace(/title="([^"]*)"/,function(m,t){ return 'title="'+t+' · Priorität '+pzPrioLbl(b.prio)+'"'; });
+};
+
+// ── Rettungsmodus: Priorität zuerst (hoch bleibt im Tag, niedrig wird zuerst verschoben) ──
+var _pdPrio_pz=pdPrio;
+pdPrio=function(b){ return (b.prio==='hoch'?-1000000:b.prio==='niedrig'?1000000:0)+_pdPrio_pz(b); };
+
+// ── Tagesabschluss (Teil Logbuch): Schritte ──
+var _taLogbuchHTML_pz=taLogbuchHTML;
+taLogbuchHTML=function(d){
+  var h=_taLogbuchHTML_pz(d), dt=(D.dailyTracker&&D.dailyTracker[d])||{};
+  var row='<div class="tal-h">Bewegung</div><div class="tal-row"><span class="tal-l">Schritte<small>heute insgesamt</small></span>'
+    +'<input class="lp-in lp-mono" type="number" min="0" step="500" inputmode="numeric" id="ta-steps" data-pz="steps" placeholder="z. B. 8000" value="'+(dt.steps!=null?lpEsc(dt.steps):'')+'" style="width:120px"/></div>';
+  var key='<div class="tal-h lp-row" style="justify-content:space-between;align-items:center"><span>Tagebuch';
+  return h.indexOf(key)>=0?h.replace(key,row+key):h.replace('</div></div>','</div>'+row+'</div>');
+};
+document.addEventListener('change',function(ev){
+  var e=ev.target; if(!e||e.id!=='ta-steps')return; var d=WP_TA&&WP_TA.date; if(!d)return;
+  var v=e.value.trim(), dt=trkDt(d);
+  if(v===''){ delete dt.steps; } else { var n=parseInt(v,10); if(!(n>=0&&n<=200000)){ showToast('Schritte: Zahl von 0 bis 200\'000.'); return; } dt.steps=n; }
+  saveD(); showToast('Schritte gespeichert ✓','ok');
+});
 
 // ═══════════════════════════════════════════════════════════
 // INIT
