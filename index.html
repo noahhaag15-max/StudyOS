@@ -21629,6 +21629,132 @@ document.addEventListener('click',function(ev){
 });
 
 // ═══════════════════════════════════════════════════════════
+// WOCHENBEFEHL · «Einplanen» mit Auswahl: Tag und Uhrzeit pro Slot wählen, oder direkt im Wochenplan auf eine freie Stelle tippen.
+// Unter jedem Pflicht-Slot steht, was bereits eingeplant ist (mit Bearbeiten und Entfernen).
+// ═══════════════════════════════════════════════════════════
+function wbFreiSlot(mon,vorl,reserved){
+  var td=today(), best=null, res=reserved||[], now=new Date().getHours()*60+new Date().getMinutes();
+  for(var i=0;i<7;i++){
+    var d=lpAdd(mon,i); if(d<td)continue;
+    var bl=wpBlocksOn(d).filter(function(b){ return b.status!=='verschoben'&&b.kategorie!=='schlaf'&&b.typ!=='belohnung'; }), same=bl.filter(function(b){ return wbBereich(b)===vorl.bereich&&wbUnter(b)===vorl.unter; }).length+res.filter(function(r){return r.tag===d;}).length;
+    vorl.fenster.forEach(function(f,fi){
+      for(var s=f[0];s+vorl.dauer<=1350;s+=15){
+        if(s>f[1])break; if(d===td&&s<now+30)continue;
+        var e=s+vorl.dauer, frei=!bl.some(function(b){ var bs=lpT2M(b.start), be=lpT2M(b.ende); if(be<=bs)be+=1440; return bs<e&&be>s&&['mahlzeit','routine'].indexOf(b.kategorie)<0; })&&!res.some(function(r){ return r.tag===d&&r.s<e&&r.e>s; });
+        if(!frei)continue;
+        var sc=same*10000+fi*1000+i*10+s/1440; if(!best||sc<best.sc)best={sc:sc,tag:d,start:s,ende:e};
+        break;
+      }
+    });
+  }
+  return best;
+}
+function wbBlockAus(vorl,tag,startMin,dauer){
+  var b=wpNew({tag:tag,start:wpM2T(startMin),ende:wpM2T(Math.min(1439,startMin+dauer)),titel:vorl.titel,kategorie:vorl.kat,typ:'aufgabe',quelle:'wochenbefehl'});
+  b.bereich=vorl.bereich; if(vorl.unter)b.unter=vorl.unter; b.angelegt=today(); wpAdd(b); return b;
+}
+function wbKonfliktTxt(tag,s,e){
+  var out=[]; wpBlocksOn(tag).forEach(function(b){ if(b.status==='verschoben'||b.typ==='belohnung'||['schlaf','mahlzeit','routine'].indexOf(b.kategorie)>=0)return; var bs=lpT2M(b.start), be=lpT2M(b.ende); if(be<=bs)be+=1440; if(bs<e&&be>s)out.push(b.titel+' '+b.start+'–'+b.ende); });
+  return out.join('; ');
+}
+// ── eingeplante Blöcke je Pflicht-Slot ──
+function wbRowBloecke(mon,rowId){
+  var row=WB_ROWS.find(function(r){return r.id===rowId;}), f=WB_COUNT[rowId]; if(!row||!f)return [];
+  var r=wbRange(row.scope,mon); return wbBloeckeRange(r[0],r[1],'plan').filter(function(b){ return (f(b,'plan')||0)>0; }).sort(function(a,b){ return a.tag===b.tag?a.start.localeCompare(b.start):(a.tag<b.tag?-1:1); });
+}
+function wbfPflicht(mon){
+  var A=wbAmpel(mon), w=wbW(mon)||{}, abl=w.abgelehnt||{}, h='<div class="lp-cap" style="margin-bottom:6px">PFLICHT-SLOTS · MODUS '+wbModusName(A.modus).toUpperCase()+'</div><div class="lp-mu" style="font-size:12px;margin-bottom:8px">Was unter dem Minimum liegt, bekommt jetzt einen Platz: Tag und Zeit selbst wählen oder direkt im Wochenplan antippen. Ablehnen geht nur mit Grund.</div>';
+  var rows=A.rows.filter(function(r){ return r.status==='unter'||wbRowBloecke(mon,r.id).some(function(b){return b.quelle==='wochenbefehl';}); });
+  if(!rows.length)return h+'<div class="hg-ln"><span style="font-size:13px">Alle Minima sind erfüllt ✓</span></div>';
+  rows.forEach(function(r){
+    var need=Math.max(0,Math.ceil((r.w.min||0)-r.n)), ab=abl[r.id], can=!!WB_VORLAGE[r.id], bl=wbRowBloecke(mon,r.id);
+    h+='<div class="lp-cd" style="margin-bottom:8px;padding:10px"><div class="lp-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div style="min-width:0"><div style="font-size:13px">'+lpEsc(r.name)+'</div><div class="lp-mu lp-mono" style="font-size:11px">geplant '+r.n+' · Minimum '+r.w.min+(need>0?' · es fehlen '+need:' · erfüllt ✓')+'</div></div>';
+    if(ab)h+='<span class="lp-mu" style="font-size:12px">abgelehnt: '+lpEsc(ab)+' <button type="button" class="lp-x" data-wb4="abl-undo" data-r="'+r.id+'" title="zurücknehmen">↺</button></span></div>';
+    else h+='<span class="lp-row" style="gap:6px">'+(can&&need>0?'<button type="button" class="lp-btn fill" data-wb15="open" data-r="'+r.id+'" data-n="'+need+'">'+need+'× einplanen …</button>':(can?'<button type="button" class="lp-btn gray" data-wb15="open" data-r="'+r.id+'" data-n="1">+ noch einen</button>':'<span class="lp-mu" style="font-size:11px">von Hand planen</span>'))+(need>0?'<button type="button" class="lp-btn gray" data-wb4="abl" data-r="'+r.id+'">Ablehnen …</button>':'')+'</span></div>';
+    if(bl.length)h+='<div style="margin-top:8px;border-top:1px solid var(--lp-border,#223);padding-top:6px"><div class="lp-mu" style="font-size:10px;margin-bottom:2px">EINGEPLANT</div>'+bl.map(function(b){ return '<div class="hg-ln" style="gap:6px"><span style="font-size:12px;min-width:0;flex:1">'+lpEsc(lpDayLbl(b.tag)+' '+lpFmtShort(b.tag)+' · '+b.start+'–'+b.ende+' · '+b.titel)+'</span><button type="button" class="lp-x" data-wb15="edit" data-id="'+lpEsc(b.id)+'" title="im Wochenplan öffnen"><i class="ti ti-pencil"></i></button><button type="button" class="lp-x" data-wb15="del" data-id="'+lpEsc(b.id)+'" title="entfernen">✕</button></div>'; }).join('')+'</div>';
+    h+='</div>';
+  });
+  return h;
+}
+
+// ── Auswahl-Dialog ──
+var WBP={row:null,mon:null,n:1,dauer:30,slots:[]};
+function wbpOpen(rowId,n){
+  var v=WB_VORLAGE[rowId], mon=WBF.mon; if(!v)return;
+  WBP={row:rowId,mon:mon,n:Math.max(1,n),dauer:v.dauer,slots:[]};
+  var res=[]; for(var k=0;k<WBP.n;k++){ var s=wbFreiSlot(mon,v,res); if(!s)break; WBP.slots.push({tag:s.tag,start:wpM2T(s.start)}); res.push({tag:s.tag,s:s.start,e:s.ende}); }
+  while(WBP.slots.length<WBP.n){ var d0=lpAdd(mon,0); for(var i=0;i<7;i++){ if(lpAdd(mon,i)>=today()){ d0=lpAdd(mon,i); break; } } WBP.slots.push({tag:d0,start:(v.fenster[0][0]>=1440?'19:00':wpM2T(v.fenster[0][0]))}); }
+  wbpRender();
+}
+function wbpRender(){
+  var v=WB_VORLAGE[WBP.row], row=WB_ROWS.find(function(r){return r.id===WBP.row;}), mon=WBP.mon, td=today();
+  var days=[]; for(var i=0;i<7;i++){ var d=lpAdd(mon,i); days.push(d); }
+  var h='<div style="width:100%;max-width:560px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:6px"><span class="lp-cap">EINPLANEN</span><button type="button" class="lp-x" data-wb15="close" aria-label="schliessen">✕</button></div>'
+    +'<div style="font-size:14px;font-weight:500">'+lpEsc(v.titel)+' <span class="lp-mu" style="font-weight:400">· '+lpEsc(row.name)+'</span></div><div class="lp-mu" style="font-size:12px;margin:4px 0 10px">Ich habe freie Zeiten vorgeschlagen. Ändere Tag und Uhrzeit, wie du magst, oder wähle direkt im Wochenplan.</div>'
+    +'<div class="lp-row" style="gap:8px;align-items:center;margin-bottom:8px"><span class="lp-mu" style="font-size:12px">Dauer</span><input class="lp-in lp-mono" type="number" min="5" step="5" id="wbp-dur" value="'+WBP.dauer+'" style="width:70px"><span class="lp-mu" style="font-size:12px">Min</span></div>';
+  WBP.slots.forEach(function(s,i){
+    var e=lpT2M(s.start)+WBP.dauer, kon=wbKonfliktTxt(s.tag,lpT2M(s.start),e);
+    h+='<div class="hg-ln" style="gap:6px;flex-wrap:wrap;align-items:center"><span class="lp-mono lp-mu" style="font-size:11px;min-width:16px">'+(i+1)+'</span><select class="lp-in" data-wbp="tag" data-i="'+i+'" style="width:auto">'+days.map(function(d){ return '<option value="'+d+'"'+(d===s.tag?' selected':'')+(d<td?' disabled':'')+'>'+lpDayLbl(d)+' '+lpFmtShort(d)+'</option>'; }).join('')+'</select><input class="lp-in lp-mono" type="time" step="300" data-wbp="start" data-i="'+i+'" value="'+lpEsc(s.start)+'" style="width:auto"><span class="lp-mu" style="font-size:11px">bis '+wpM2T(Math.min(1439,e))+'</span><button type="button" class="lp-x" data-wb15="slotdel" data-i="'+i+'" aria-label="diesen Slot weglassen">✕</button>'
+      +(kon?'<div style="flex-basis:100%;font-size:11px;color:var(--c-work);margin-left:22px">überschneidet: '+lpEsc(kon)+'</div>':'')+'</div>';
+  });
+  h+='<div class="lp-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px"><button type="button" class="lp-btn gray" data-wb15="pick">Im Wochenplan wählen …</button><span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-wb15="close">Abbrechen</button><button type="button" class="lp-btn fill" data-wb15="insert">'+WBP.slots.length+(WBP.slots.length===1?' Block':' Blöcke')+' einfügen</button></span></div></div>';
+  syModal('wb-plane',h);
+}
+function wbpInsert(){
+  var v=WB_VORLAGE[WBP.row], dur=Math.max(5,parseInt((document.getElementById('wbp-dur')||{}).value,10)||WBP.dauer), made=[], days={};
+  WBP.slots.forEach(function(s){ if(!s.tag||!s.start)return; var b=wbBlockAus(v,s.tag,lpT2M(s.start),dur); made.push(lpDayLbl(b.tag)+' '+lpFmtShort(b.tag)+' '+b.start); days[b.tag]=1; });
+  saveD(); var m=document.getElementById('wb-plane'); if(m)m.remove(); try{ wpAfterChange(Object.keys(days)); }catch(e){ try{ wpRender(); }catch(x){} }
+  showToast(made.length?'Eingeplant: '+made.join(', '):'Nichts eingeplant','ok'); wbfRender();
+}
+// ── Auswahl direkt im Wochenplan ──
+var WBK={row:null,left:0,mon:null,dauer:30};
+function wbkBanner(){
+  var b=document.getElementById('wb-pick'); if(!WBK.row){ if(b)b.remove(); return; }
+  var v=WB_VORLAGE[WBK.row]; if(!b){ b=document.createElement('div'); b.id='wb-pick'; b.className='lp'; b.style.cssText='position:fixed;left:50%;transform:translateX(-50%);top:10px;z-index:1950;width:calc(100% - 24px);max-width:520px;background:var(--lp-card,#101820);border:1px solid var(--c-accent);border-radius:14px;padding:10px 12px;box-shadow:0 8px 30px rgba(0,0,0,.5)'; document.body.appendChild(b); }
+  b.innerHTML='<div class="lp-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:13px"><b style="font-weight:500">'+lpEsc(v.titel)+'</b> · '+WBK.dauer+' Min · noch '+WBK.left+'<br><span class="lp-mu" style="font-size:11px">Tippe im Wochenplan auf eine freie Stelle.</span></span><span class="lp-row" style="gap:6px"><button type="button" class="lp-btn gray" data-wb15="pick-stop">Fertig</button></span></div>';
+}
+function wbkStart(){
+  var v=WB_VORLAGE[WBP.row], dur=Math.max(5,parseInt((document.getElementById('wbp-dur')||{}).value,10)||WBP.dauer);
+  WBK={row:WBP.row,left:WBP.n,mon:WBP.mon,dauer:dur}; var m=document.getElementById('wb-plane'); if(m)m.remove(); wbfClose(); WP_UI.week=WBK.mon; goSec('wplan'); try{ wpRender(); }catch(e){} wbkBanner();
+}
+function wbkStop(){ var mon=WBK.mon; WBK={row:null,left:0,mon:null,dauer:30}; wbkBanner(); wbfOpen(mon); }
+document.addEventListener('click',function(ev){
+  if(!WBK.row)return; var col=ev.target.closest&&ev.target.closest('.wp-col'); if(!col||ev.target!==col)return;
+  ev.preventDefault(); ev.stopPropagation();
+  var tag=col.getAttribute('data-wpday'); if(tag<today()){ showToast('Dieser Tag liegt in der Vergangenheit.'); return; }
+  var z=wpZeitPlan(), min=z.von*60+Math.floor(ev.offsetY/WP_HP*2)*30, kon=wbKonfliktTxt(tag,min,min+WBK.dauer);
+  var b=wbBlockAus(WB_VORLAGE[WBK.row],tag,min,WBK.dauer); WBK.left--; saveD();
+  try{ wpAfterChange([tag]); }catch(e){ wpRender(); }
+  showToast('Eingeplant: '+lpDayLbl(tag)+' '+lpFmtShort(tag)+' '+b.start+(kon?' (überschneidet: '+kon+')':''),'ok');
+  if(WBK.left<=0)wbkStop(); else wbkBanner();
+},true);
+
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb4="plane"]'); if(!el)return;   // alter Ein-Klick-Weg ersetzt
+  ev.preventDefault(); ev.stopImmediatePropagation(); wbpOpen(el.getAttribute('data-r'),+el.getAttribute('data-n')||1);
+},true);
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb15]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-wb15');
+  switch(a){
+    case 'open': return wbpOpen(el.getAttribute('data-r'),+el.getAttribute('data-n')||1);
+    case 'close': { var m=document.getElementById('wb-plane'); if(m)m.remove(); return; }
+    case 'slotdel': WBP.dauer=Math.max(5,parseInt((document.getElementById('wbp-dur')||{}).value,10)||WBP.dauer); WBP.slots.splice(+el.getAttribute('data-i'),1); WBP.n=WBP.slots.length; if(!WBP.slots.length){ var m2=document.getElementById('wb-plane'); if(m2)m2.remove(); return; } return wbpRender();
+    case 'insert': return wbpInsert();
+    case 'pick': return wbkStart();
+    case 'pick-stop': return wbkStop();
+    case 'edit': { var id=el.getAttribute('data-id'), b=wpFind(id); if(!b)return; wbfClose(); WP_UI.week=lpMonday(b.tag); goSec('wplan'); return wpEditor(id); }
+    case 'del': { var b2=wpFind(el.getAttribute('data-id')); if(!b2)return; var tg=b2.tag; wpRemove(b2); try{ wpAfterChange([tg]); }catch(e){} return wbfRender(); }
+  }
+});
+document.addEventListener('change',function(ev){
+  var e=ev.target; if(!e||!e.getAttribute||!e.getAttribute('data-wbp'))return; var i=+e.getAttribute('data-i'), s=WBP.slots[i]; if(!s)return;
+  WBP.dauer=Math.max(5,parseInt((document.getElementById('wbp-dur')||{}).value,10)||WBP.dauer);
+  if(e.getAttribute('data-wbp')==='tag')s.tag=e.value; else s.start=e.value;
+  wbpRender();
+});
+document.addEventListener('change',function(ev){ var e=ev.target; if(e&&e.id==='wbp-dur'){ WBP.dauer=Math.max(5,parseInt(e.value,10)||WBP.dauer); wbpRender(); } });
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
