@@ -20871,7 +20871,7 @@ function wbLpHTML(name){
   h+=wbBurndownSVG(name);
   if(v.over.length)h+='<details style="margin-top:8px"><summary class="lp-mu" style="cursor:pointer;font-size:12px">'+v.over.length+' überfällige Etappe'+(v.over.length===1?'':'n')+'</summary>'+v.over.slice(0,12).map(function(o){ return '<div class="hg-ln"><span style="font-size:12px;min-width:0;flex:1">'+lpEsc(o.e.titel)+'</span><span class="lp-mono" style="font-size:11px;color:'+(o.days>=WB_VERZUG_ROT?'var(--c-fun)':'var(--c-work)')+'">'+o.days+' T · Soll '+lpFmtShort(o.date)+'</span></div>'; }).join('')+'</details>';
   var hist=wbHistFach(name,8), n14=(D.wbVerschiebungen||[]).filter(function(x){return x.fach===name&&x.datum>=lpAdd(today(),-14);}).length;
-  h+='<details style="margin-top:8px"><summary class="lp-mu" style="cursor:pointer;font-size:12px">Verschiebe-Historie ('+n14+' in 14 Tagen)</summary>'+(hist.length?hist.map(function(x){ return '<div class="hg-ln"><span style="font-size:12px;min-width:0;flex:1">'+lpEsc(x.titel)+' <span class="lp-mu">· '+(x.art==='deadline'?'Abgabe':'geplant')+'</span></span><span class="lp-mono lp-mu" style="font-size:11px">'+lpFmtShort(x.datum)+': '+(x.von?lpFmtShort(x.von):'–')+' → '+(x.nach?lpFmtShort(x.nach):'–')+'</span></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Noch nichts verschoben.</div>')+'</details>';
+  h+='<details style="margin-top:8px"><summary class="lp-mu" style="cursor:pointer;font-size:12px">Verschiebe-Historie ('+n14+' in 14 Tagen)</summary>'+(hist.length?hist.map(function(x){ return '<div class="hg-ln"><span style="font-size:12px;min-width:0;flex:1">'+lpEsc(x.titel)+' <span class="lp-mu">· '+(x.art==='deadline'?'Abgabe':x.art==='abgelehnt'?'abgelehnt':'geplant')+'</span></span><span class="lp-mono lp-mu" style="font-size:11px">'+lpFmtShort(x.datum)+': '+(x.art==='abgelehnt'?'bleibt überfällig (war '+(x.von?lpFmtShort(x.von):'–')+')':(x.von?lpFmtShort(x.von):'–')+' → '+(x.nach?lpFmtShort(x.nach):'–'))+'</span></div>'; }).join(''):'<div class="lp-mu" style="font-size:12px">Noch nichts verschoben.</div>')+'</details>';
   if((f.baselineHist||[]).length)h+='<details style="margin-top:8px"><summary class="lp-mu" style="cursor:pointer;font-size:12px">Frühere Baselines ('+f.baselineHist.length+')</summary>'+f.baselineHist.slice().reverse().map(function(b){ return '<div class="hg-ln"><span class="lp-mono lp-mu" style="font-size:11px">'+lpFmt(b.gesetzt)+' → ersetzt '+lpFmt(b.ersetzt)+'</span><span class="lp-mono" style="font-size:11px">Verzug '+b.verzug+' T · '+b.kum+' E-T</span></div>'; }).join('')+'</details>';
   return h+'</div>';
 }
@@ -21753,6 +21753,89 @@ document.addEventListener('change',function(ev){
   wbpRender();
 });
 document.addEventListener('change',function(ev){ var e=ev.target; if(e&&e.id==='wbp-dur'){ WBP.dauer=Math.max(5,parseInt(e.value,10)||WBP.dauer); wbpRender(); } });
+
+// ═══════════════════════════════════════════════════════════
+// LERNPLAN EHRLICH HALTEN
+// • «Neu einplanen»: zusätzlich «Ablehnen, Verzug bleibt» (Etappe bleibt überfällig und zählt als Verzug) und eine Zeile pro Etappe,
+//   die zeigt, wie weit sie hinter der Baseline liegt. Verschieben verändert die Baseline nie.
+// • Baseline erst nach Bestätigung «Lernplan vollständig»; später dazugekommene Etappen lassen sich bewusst aufnehmen.
+// • Wochenbefehl-Prüfung: klargestellt, dass sie den Plan gegen Minima und Regeln prüft (kein Wissenstest).
+// ═══════════════════════════════════════════════════════════
+var _lpOverdue_wb16=lpOverdue;
+lpOverdue=function(){
+  return _lpOverdue_wb16.apply(this,arguments).filter(function(x){ return !(x.type==='etappe'?x.e.verzugBewusst:x.t.verzugBewusst); });
+};
+var _lpReplanApply_wb16=lpReplanApply;
+lpReplanApply=function(id,kind){
+  var ok=_lpReplanApply_wb16(id,kind);
+  if(ok){ var o=kind==='thema'?lpThema(id):lpEtappe(id); if(o&&o.verzugBewusst){ delete o.verzugBewusst; lpTouch(o); } }
+  return ok;
+};
+function wbReplanInfo(x){
+  if(x.type!=='etappe')return '';
+  var f=lpFach(x.fach,false), td=today();
+  if(!f||!f.baseline||!f.baseline.plan[x.e.id])return '<div class="lp-mu" style="font-size:11px;margin-top:6px">Ohne Baseline wird dieser Verzug nicht gemessen. Im Lernplan beim Fach «Baseline setzen».</div>';
+  var soll=f.baseline.plan[x.e.id], tage=Math.max(0,lpDayDiff(soll,td));
+  return '<div style="font-size:11px;margin-top:6px;color:'+(tage>=WB_VERZUG_ROT?'var(--c-fun)':'var(--c-work)')+'">Baseline-Soll: '+lpEsc(lpFmt(soll))+' · heute '+tage+' Tag'+(tage===1?'':'e')+' im Verzug. Ein neues Datum ändert das nicht: der Verzug zählt weiter, bis die Etappe erledigt ist.</div>';
+}
+var _lpReplanHTML_wb16=lpReplanHTML;
+lpReplanHTML=function(list){
+  var h=_lpReplanHTML_wb16(list);
+  h=h.replace('Diese Etappen sind noch offen. Gib jeder ein neues Datum — verschieben ist völlig okay, nur offen lassen geht nicht.','Diese Etappen sind überfällig. Setz ein neues Datum oder lehne ab: «Ablehnen» heisst, dass die Etappe überfällig bleibt und als Verzug sichtbar ist. Verschieben ist erlaubt, ändert aber nichts am Verzug gegenüber der Baseline.');
+  list.forEach(function(x){
+    var id=x.type==='etappe'?x.e.id:x.t.id, key='data-lprp="'+id+'"', i=h.indexOf(key); if(i<0)return;
+    var j=h.indexOf('<div class="lp-fld"',i); if(j<0)return;
+    h=h.slice(0,j)+wbReplanInfo(x)+h.slice(j);
+    var btn=x.type==='etappe'?'data-lpa="rp-ok" data-id="'+lpEsc(id)+'">Neu einplanen</button>':'data-lpa="rp-ok-th" data-id="'+lpEsc(id)+'">Neu einplanen</button>', k=h.indexOf(btn,i);
+    if(k>=0){ var e0=k+btn.length; h=h.slice(0,e0)+'<button type="button" class="lp-btn gray" data-wb16="ablehnen" data-kind="'+x.type+'" data-id="'+lpEsc(id)+'" title="Nicht verschieben: bleibt überfällig und zählt als Verzug">Ablehnen, Verzug bleibt</button>'+h.slice(e0); }
+  });
+  return h;
+};
+// ── Baseline mit Bestätigung ──
+function wbBaselineFrage(namen){
+  var zeilen=namen.map(function(n){ var f=lpFach(n,false), es=f?wbEtappenFach(f):[], offen=es.filter(function(x){return !x.done;}).length, th=f?lpThemenOf(f.id).length:0; return '<div class="hg-ln"><span style="font-size:13px">'+lpEsc(n)+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+th+' Themen · '+offen+' offene Etappen · Prüfung '+(f&&f.pruefung?lpFmt(f.pruefung):'fehlt')+'</span></div>'; }).join('');
+  syModal('wb-bl','<div style="width:100%;max-width:520px"><div class="lp-cap" style="margin-bottom:6px">BASELINE SETZEN</div><div style="font-size:14px;margin-bottom:8px">Ist der Lernplan vollständig?</div>'+zeilen
+    +'<div class="lp-mu" style="font-size:12px;margin:10px 0">Die Baseline hält fest, wann jede heute offene Etappe fertig sein soll, und misst ab jetzt den Verzug. Trage vorher alle Themen und Etappen ein und setze das Prüfungsdatum. Später dazukommende Etappen zählen nicht automatisch, du kannst sie aber bewusst aufnehmen.</div>'
+    +'<div class="lp-row" style="justify-content:flex-end;gap:8px"><button type="button" class="lp-btn gray" data-wb16="bl-no">Noch nicht</button><button type="button" class="lp-btn fill" data-wb16="bl-ok" data-f="'+lpEsc(namen.join('|'))+'">Ja, vollständig: Baseline setzen</button></div></div>');
+}
+function wbBaselineErgaenzen(name){
+  var f=lpFach(name,false); if(!f||!f.baseline)return 0;
+  var neu=wbEtappenFach(f).filter(function(x){ return !x.done&&!f.baseline.plan[x.e.id]; }); if(!neu.length)return 0;
+  var plan=wbBaselinePlan(f); if(!plan)return 0; var n=0;
+  neu.forEach(function(x){ if(plan[x.e.id]){ f.baseline.plan[x.e.id]=plan[x.e.id]; n++; } });
+  f.baseline.n=Object.keys(f.baseline.plan).length; lpTouch(f); saveD(); return n;
+}
+var _wbLpHTML_wb16=wbLpHTML;
+wbLpHTML=function(name){
+  var h=_wbLpHTML_wb16(name), f=lpFach(name,false); if(!h||!f||!f.baseline)return h;
+  var neu=wbEtappenFach(f).filter(function(x){ return !x.done&&!f.baseline.plan[x.e.id]; }).length;
+  if(!neu)return h;
+  return h.replace(/<\/div>$/,'<div class="lp-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px"><span class="lp-mu" style="font-size:12px">'+neu+' neue Etappe'+(neu===1?'':'n')+' seit der Baseline, nicht im Verzug-Mass.</span><button type="button" class="lp-btn gray" data-wb16="bl-add" data-f="'+lpEsc(name)+'">In die Baseline aufnehmen</button></div></div>');
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb6="set"],[data-wb6="alle"]'); if(!el)return;
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  var a=el.getAttribute('data-wb6'), namen=a==='set'?[el.getAttribute('data-f')]:lpAktiveFaecher().filter(function(x){ var ff=lpFach(x,false); return ff&&ff.pruefung&&!ff.baseline; });
+  if(!namen.length){ showToast('Keine Fächer ohne Baseline.'); return; } wbBaselineFrage(namen);
+},true);
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb16]'); if(!el)return; ev.preventDefault(); ev.stopPropagation(); var a=el.getAttribute('data-wb16'), id=el.getAttribute('data-id');
+  if(a==='bl-no'){ var m=document.getElementById('wb-bl'); if(m)m.remove(); }
+  else if(a==='bl-ok'){ var n=0; String(el.getAttribute('data-f')).split('|').forEach(function(x){ if(wbBaselineSetzen(x,false))n++; }); var m2=document.getElementById('wb-bl'); if(m2)m2.remove(); try{ lpRender(); wbfRender(); }catch(e){} showToast(n+' Baseline'+(n===1?'':'s')+' gesetzt ✓','ok'); }
+  else if(a==='bl-add'){ var k=wbBaselineErgaenzen(el.getAttribute('data-f')); try{ lpRender(); }catch(e){} showToast(k+' Etappe'+(k===1?'':'n')+' aufgenommen ✓','ok'); }
+  else if(a==='ablehnen'){
+    var kind=el.getAttribute('data-kind'), o=kind==='thema'?lpThema(id):lpEtappe(id); if(!o)return;
+    o.verzugBewusst=today(); lpTouch(o);
+    if(kind==='etappe'){ if(!Array.isArray(D.wbVerschiebungen))D.wbVerschiebungen=[]; var f=null, t=lpThema(o.themaId); if(t)f=lpFachById(t.fachId); D.wbVerschiebungen.push({id:'wbv:'+uid(),ts:Date.now(),datum:today(),fach:f?f.fach:'',etappeId:o.id,titel:o.titel,art:'abgelehnt',von:o.geplantAm||o.deadline||'',nach:''}); }
+    saveD(); try{ lpRender(); }catch(e){} showToast('Abgelehnt: bleibt überfällig und zählt als Verzug.','ok');
+  }
+});
+// ── Wochenbefehl-Prüfung: Einordnung ──
+var _wbfPruef_wb16=wbfPruef;
+wbfPruef=function(mon){
+  var h=_wbfPruef_wb16(mon), vorbei=lpAdd(mon,6)<today();
+  return h.replace('<div class="lp-cap" style="margin-bottom:6px">PRÜFUNG</div>','<div class="lp-cap" style="margin-bottom:6px">PRÜFUNG</div><div class="lp-mu" style="font-size:12px;margin-bottom:8px">Diese Prüfung vergleicht den <b style="font-weight:500">Plan</b> mit Minima, Maxima und Regeln. Sie prüft kein Wissen und keine Erledigung.'+(vorbei?' Diese Woche ist schon vorbei: gezählt wird, was im Plan steht.':'')+'</div>');
+};
 
 // ═══════════════════════════════════════════════════════════
 // INIT
