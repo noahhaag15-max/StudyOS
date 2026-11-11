@@ -21946,6 +21946,68 @@ function wbfLernplanHTML(td){
 }
 
 // ═══════════════════════════════════════════════════════════
+// BASELINE BEARBEITEN: Soll-Daten einzelner Posten ändern, ganze Themen verschieben, Posten aus der Baseline nehmen.
+// Jede Änderung wird festgehalten (wann, welcher Posten, von → nach, Grund) und steht in der Karte «Baseline». So bleibt sichtbar,
+// dass die Baseline angepasst wurde, und Verzug lässt sich nicht stillschweigend wegschieben.
+// ═══════════════════════════════════════════════════════════
+var BLE={name:null};
+function wbBleGruppen(f){
+  var g={}, order=[]; wbEtappenFach(f).forEach(function(x){
+    if(x.done||!f.baseline.plan[x.e.id])return; var k=x.t.id; if(!g[k]){ g[k]={t:x.t,items:[]}; order.push(k); } g[k].items.push(x);
+  });
+  return order.map(function(k){ g[k].items.sort(function(a,b){ return f.baseline.plan[a.e.id]<f.baseline.plan[b.e.id]?-1:1; }); return g[k]; });
+}
+function wbBleOpen(name){
+  var f=lpFach(name,false); if(!f||!f.baseline)return; BLE.name=name;
+  var ende=f.pruefung?lpAdd(f.pruefung,-(f.pufferTage==null?8:f.pufferTage)):'', G=wbBleGruppen(f), n=0; G.forEach(function(g){ n+=g.items.length; });
+  var h='<div style="width:100%;max-width:640px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:6px"><span class="lp-cap">BASELINE BEARBEITEN · '+lpEsc(name)+'</span><button type="button" class="lp-x" data-ble="close" aria-label="schliessen">✕</button></div>'
+    +'<div class="lp-mu" style="font-size:12px;margin-bottom:8px">Soll-Datum pro Posten ändern oder einen Posten aus der Baseline nehmen. Alles wird festgehalten und steht danach unter «Baseline-Anpassungen». Erledigte Posten sind nicht aufgeführt.'+(ende?' Der Puffer vor der Prüfung beginnt am '+lpFmt(ende)+'.':'')+'</div>'
+    +'<div class="lp-fld"><label>Grund</label><input class="lp-in" id="ble-grund" placeholder="z. B. Prüfungsdatum verschoben, Thema fällt weg" style="flex:1"></div>';
+  if(!n)h+='<div class="lp-mu" style="font-size:12px;margin:10px 0">Alle Posten der Baseline sind erledigt.</div>';
+  G.forEach(function(g,gi){
+    h+='<details style="margin-top:8px"'+(G.length<=3?' open':'')+'><summary style="cursor:pointer;font-size:13px">'+lpEsc(g.t.name)+' <span class="lp-mu" style="font-size:11px">· '+g.items.length+' offen</span></summary>'
+      +'<div class="lp-row" style="gap:6px;align-items:center;margin:6px 0;flex-wrap:wrap"><span class="lp-mu" style="font-size:11px">Alle in diesem Thema auf</span><input class="lp-in lp-mono" type="date" data-ble="grp" data-g="'+gi+'" style="width:auto"><button type="button" class="lp-btn gray" data-ble="grpset" data-g="'+gi+'">setzen</button></div>';
+    g.items.forEach(function(x){
+      var d=f.baseline.plan[x.e.id]; h+='<div class="hg-ln" style="gap:6px;align-items:center" data-gi="'+gi+'"><span style="font-size:12px;min-width:0;flex:1">'+lpEsc(x.e.titel)+'</span><input class="lp-in lp-mono" type="date" data-ble="d" data-id="'+lpEsc(x.e.id)+'" data-alt="'+d+'" value="'+d+'" style="width:auto;font-size:12px"><label class="lp-mu" style="font-size:11px;display:flex;gap:3px;align-items:center;cursor:pointer"><input type="checkbox" data-ble="rm" data-id="'+lpEsc(x.e.id)+'"> raus</label></div>';
+    });
+    h+='</details>';
+  });
+  h+='<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" class="lp-btn gray" data-ble="close">Abbrechen</button><button type="button" class="lp-btn fill" data-ble="save">Änderungen speichern</button></div></div>';
+  syModal('wb-ble',h);
+}
+function wbBleSave(){
+  var f=lpFach(BLE.name,false); if(!f||!f.baseline)return;
+  var grund=((document.getElementById('ble-grund')||{}).value||'').trim().slice(0,160), byId={}; wbEtappenFach(f).forEach(function(x){ byId[x.e.id]=x; });
+  var ch=[], rm={}; document.querySelectorAll('#wb-ble [data-ble="rm"]').forEach(function(c){ if(c.checked)rm[c.getAttribute('data-id')]=1; });
+  document.querySelectorAll('#wb-ble [data-ble="d"]').forEach(function(i){
+    var id=i.getAttribute('data-id'), alt=i.getAttribute('data-alt'), neu=i.value, x=byId[id]; if(!x)return;
+    if(rm[id]){ ch.push({id:id,titel:x.e.titel,von:alt,nach:'',art:'entfernt'}); return; }
+    if(neu&&/^\d{4}-\d\d-\d\d$/.test(neu)&&neu!==alt)ch.push({id:id,titel:x.e.titel,von:alt,nach:neu,art:'verschoben'});
+  });
+  if(!ch.length){ showToast('Keine Änderung.'); return; }
+  if(!Array.isArray(f.baselineAend))f.baselineAend=[];
+  ch.forEach(function(c){ if(c.art==='entfernt')delete f.baseline.plan[c.id]; else f.baseline.plan[c.id]=c.nach; f.baselineAend.push({ts:Date.now(),datum:today(),titel:c.titel,von:c.von,nach:c.nach,art:c.art,grund:grund}); });
+  f.baselineAend=f.baselineAend.slice(-300); f.baseline.n=Object.keys(f.baseline.plan).length; lpTouch(f); saveD();
+  var m=document.getElementById('wb-ble'); if(m)m.remove(); try{ lpRender(); }catch(e){}
+  var v=wbVerzug(BLE.name); showToast(ch.length+' Änderung'+(ch.length===1?'':'en')+' gespeichert'+(v?' · Verzug jetzt '+(v.oldest?v.oldest+' Tage':'keiner'):''),'ok');
+}
+var _wbLpHTML_wb19=wbLpHTML;
+wbLpHTML=function(name){
+  var h=_wbLpHTML_wb19(name), f=lpFach(name,false); if(!h||!f||!f.baseline)return h;
+  h=h.replace('<button type="button" class="lp-btn gray" data-wb6="re"','<button type="button" class="lp-btn gray" data-ble="open" data-f="'+lpEsc(name)+'" style="margin-right:6px">Baseline bearbeiten</button><button type="button" class="lp-btn gray" data-wb6="re"');
+  var A=(f.baselineAend||[]).slice().reverse();
+  if(A.length)h=h.replace(/<\/div>$/,'<details style="margin-top:8px"><summary class="lp-mu" style="cursor:pointer;font-size:12px">Baseline-Anpassungen ('+A.length+')</summary>'+A.slice(0,15).map(function(a){ return '<div class="hg-ln" style="align-items:flex-start;gap:6px"><span style="font-size:12px;min-width:0;flex:1">'+lpEsc(a.titel)+(a.grund?'<span class="lp-mu" style="display:block;font-size:10px">'+lpEsc(a.grund)+'</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px;text-align:right">'+lpEsc(lpFmtShort(a.datum))+': '+(a.art==='entfernt'?lpFmtShort(a.von)+' → raus':lpFmtShort(a.von)+' → '+lpFmtShort(a.nach))+'</span></div>'; }).join('')+(A.length>15?'<div class="lp-mu" style="font-size:11px">… und '+(A.length-15)+' ältere</div>':'')+'</details></div>');
+  return h;
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-ble]'); if(!el||el.tagName==='INPUT')return; ev.preventDefault(); var a=el.getAttribute('data-ble');
+  if(a==='open')wbBleOpen(el.getAttribute('data-f'));
+  else if(a==='close'){ var m=document.getElementById('wb-ble'); if(m)m.remove(); }
+  else if(a==='save')wbBleSave();
+  else if(a==='grpset'){ var gi=el.getAttribute('data-g'), v=(document.querySelector('#wb-ble [data-ble="grp"][data-g="'+gi+'"]')||{}).value; if(!v){ showToast('Bitte ein Datum wählen.'); return; } document.querySelectorAll('#wb-ble [data-gi="'+gi+'"] [data-ble="d"]').forEach(function(i){ i.value=v; }); }
+});
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
