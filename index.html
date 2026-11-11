@@ -2096,7 +2096,10 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 .px-p.lo { background: transparent; color: inherit; opacity: .7; border: 1px solid currentColor; }
 .wp-kat.main { outline: 2px solid var(--c-accent); outline-offset: 1px; }
 .wp-b.ol:hover { z-index: 7 !important; }
-.wp-b.ol { box-shadow: 0 0 0 1.5px var(--lp-bg), 0 2px 6px rgba(0,0,0,.35); }
+.wp-b.ol { outline: 2px solid rgba(255,255,255,.85); outline-offset: 1px; box-shadow: 0 0 0 4px rgba(7,18,26,.85), 0 4px 10px rgba(0,0,0,.5); filter: brightness(1.14) saturate(1.1); }
+.wp-b.ol.now { outline-color: var(--c-accent); }
+.px-ck { flex-shrink: 0; font-size: 9px; line-height: 12px; opacity: .9; white-space: nowrap; margin-right: 2px; cursor: pointer; border-radius: 6px; padding: 0 3px; background: rgba(7,18,26,.35); }
+.px-ck i { font-size: 10px; margin-right: 1px; vertical-align: -1px; } .px-ck.all { background: rgba(255,255,255,.28); }
 </style>
 </head>
 <body>
@@ -19339,6 +19342,100 @@ document.addEventListener('change',function(ev){
   if(v===''){ delete dt.steps; } else { var n=parseInt(v,10); if(!(n>=0&&n<=200000)){ showToast('Schritte: Zahl von 0 bis 200\'000.'); return; } dt.steps=n; }
   saveD(); showToast('Schritte gespeichert ✓','ok');
 });
+
+// ═══════════════════════════════════════════════════════════
+// WOCHENPLAN: Checkliste an jedem Block (Packliste, Lern-Checkliste …), nicht nur bei Routinen
+// Daten: b.checkliste = [{id,text,done}] (wie bei Routinen). Nur Routinen werten die Checkliste für Punkte;
+// bei allen anderen Blöcken bleibt der Status manuell (✓ ◐ ✗).
+// ═══════════════════════════════════════════════════════════
+var PK={inSave:false,items:null};
+function pkItems(b){ return Array.isArray(b.checkliste)?b.checkliste:[]; }
+function pkText(b){ return pkItems(b).map(function(c){return c.text;}).join('\n'); }
+function pkIsPlain(b){ return !!b&&!wpIsRoutine(b)&&b.typ!=='belohnung'&&pkItems(b).length>0; }
+
+// ── Anzeige im Block: kleines «☑ 2/5» ──
+var _wpBlockHTML_pk=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_pk(b,z,now); if(!h||!pkIsPlain(b))return h;
+  var l=pkItems(b), d=l.filter(function(c){return c.done;}).length;
+  return h.replace('<span class="wp-bi">','<span class="px-ck'+(d===l.length?' all':'')+'" data-pk="open" data-id="'+lpEsc(b.id)+'" title="Checkliste öffnen"><i class="ti ti-checklist"></i>'+d+'/'+l.length+'</span><span class="wp-bi">');
+};
+
+// ── Dialog ──
+function pkHTML(b){
+  var l=pkItems(b), n=l.length, d=l.filter(function(c){return c.done;}).length, pct=n?Math.round(d/n*100):0, id=lpEsc(b.id);
+  var h='<div class="lp-cap">CHECKLISTE</div><div style="font-size:15px;font-weight:500;margin:4px 0 2px">'+lpEsc(b.titel)+'</div><div class="lp-mu lp-mono" style="font-size:11px;margin-bottom:8px">'+lpEsc(lpDayLbl(b.tag)+' '+lpFmtShort(b.tag)+' · '+b.start+'–'+b.ende)+'</div>';
+  l.forEach(function(c,i){ h+='<div class="lp-cprow lp-row" data-pk="toggle" data-id="'+id+'" data-i="'+i+'" style="justify-content:space-between"><span class="lp-row" style="gap:8px;min-width:0"><span style="color:'+(c.done?'var(--c-ok)':'var(--lp-muted)')+';font-size:15px">'+(c.done?'☑':'☐')+'</span><span'+(c.done?' class="lp-done"':'')+' style="word-break:break-word">'+lpEsc(c.text)+'</span></span><button type="button" class="lp-x" data-pk="del" data-id="'+id+'" data-i="'+i+'" aria-label="Punkt entfernen">×</button></div>'; });
+  h+='<div class="sos-bar" style="margin:10px 0 4px"><i style="width:'+pct+'%;background:var(--c-ok)"></i></div><div class="lp-mu lp-mono" style="font-size:11px">'+d+' / '+n+' erledigt</div>'
+    +'<div class="lp-row" style="gap:6px;margin-top:8px"><input class="lp-in" id="pk-new" placeholder="Punkt hinzufügen …" data-pkenter="1" style="flex:1"><button type="button" class="lp-btn gray" data-pk="add" data-id="'+id+'">+</button></div>'
+    +'<div class="lp-row" style="justify-content:space-between;margin-top:12px;flex-wrap:wrap;gap:8px"><button type="button" class="lp-btn gray" data-pk="edit" data-id="'+id+'">Block bearbeiten</button><span class="lp-row" style="gap:8px">'
+    +((n&&d===n&&b.status==='offen'&&(b.typ==='aufgabe'||b.typ==='fix'))?'<button type="button" class="lp-btn" data-pk="finish" data-id="'+id+'">Block abhaken ✓</button>':'')
+    +'<button type="button" class="lp-btn fill" data-pk="close">Fertig</button></span></div>';
+  return h;
+}
+function pkOpen(id,focusNew){
+  var b=wpFind(id); if(!b)return;
+  var old=document.getElementById('pk-dlg'); if(old){ var inner=old.firstChild; inner.innerHTML=pkHTML(b); } else syModal('pk-dlg',pkHTML(b));
+  var inp=document.getElementById('pk-new'); if(inp&&focusNew)inp.focus();
+}
+function pkAfter(b){ lpTouch(b); saveD(); try{ wpRender(); }catch(e){} }
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-pk]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var a=el.getAttribute('data-pk'), id=el.getAttribute('data-id'), b=id?wpFind(id):null, i=+el.getAttribute('data-i');
+  switch(a){
+    case 'open': return pkOpen(id);
+    case 'close': var m=document.getElementById('pk-dlg'); if(m)m.remove(); return;
+    case 'toggle': if(!b||!pkItems(b)[i])return; var c=b.checkliste[i]; c.done=!c.done; pkAfter(b); pkOpen(id); if(b.checkliste.every(function(x){return x.done;}))showToast('Checkliste komplett ✓','ok'); return;
+    case 'del': if(!b||!pkItems(b)[i])return; b.checkliste.splice(i,1); if(!b.checkliste.length)delete b.checkliste; pkAfter(b); if(b.checkliste)pkOpen(id); else { var m2=document.getElementById('pk-dlg'); if(m2)m2.remove(); } return;
+    case 'add': { var inp=document.getElementById('pk-new'), v=inp&&inp.value.trim(); if(!b||!v)return; if(!Array.isArray(b.checkliste))b.checkliste=[]; b.checkliste.push({id:uid(),text:v,done:false}); pkAfter(b); return pkOpen(id,true); }
+    case 'edit': var m3=document.getElementById('pk-dlg'); if(m3)m3.remove(); return wpEditor(id);
+    case 'finish': var m4=document.getElementById('pk-dlg'); if(m4)m4.remove(); return wpComplete(b,'ok');
+    case 'tpl': { var t=wpEnsure().routinen.find(function(x){return x.id===id;}); var ta=document.getElementById('wpm-ck'); if(!t||!ta)return; ta.value=t.items.join('\n'); var ti=document.getElementById('wpm-titel'); if(ti&&!ti.value.trim())ti.value=t.name; return; }
+  }
+},true);
+document.addEventListener('keydown',function(ev){ if(ev.key==='Enter'&&ev.target&&ev.target.id==='pk-new'){ ev.preventDefault(); var bt=document.querySelector('#pk-dlg [data-pk="add"]'); if(bt)bt.click(); } });
+
+// ── Editor: Checkliste für alle Blöcke ausser Routinen (die haben ihr eigenes Feld) ──
+function pkSync(){
+  var row=document.getElementById('wpm-ckrow'), g=document.getElementById('wpm-kat'), ty=document.getElementById('wpm-typ'); if(!row||!g||!ty)return;
+  var rout=(g.getAttribute('data-val')==='routine'||(g.getAttribute('data-sel')||'').split(',')[0]==='routine')&&ty.getAttribute('data-val')==='aufgabe';
+  row.style.display=(rout||ty.getAttribute('data-val')==='belohnung')?'none':'';
+}
+document.addEventListener('click',function(ev){ if(ev.target.closest&&ev.target.closest('#wp-modal'))setTimeout(pkSync,0); });
+var _wpEditor_pk=wpEditor;
+wpEditor=function(id,pre){
+  var r=_wpEditor_pk(id,pre);
+  try{
+    var host=document.getElementById('wp-modal'), g=document.getElementById('wpm-kat'); if(!host||!g||document.getElementById('wpm-ckrow'))return r;
+    var b=id?wpFind(id):null; if(b&&(b.typ==='fix'||b.typ==='belohnung'))return r;
+    var row=document.createElement('div'); row.id='wpm-ckrow'; row.className='lp-fld'; row.style.alignItems='flex-start';
+    row.innerHTML='<label title="Packliste, Lern-Checkliste …">Checkliste</label><div style="flex:1;min-width:0"><div class="lp-row" style="flex-wrap:wrap;gap:6px;margin-bottom:6px">'
+      +wpRoutinen().map(function(t){ return '<button type="button" class="wp-rew" data-pk="tpl" data-id="'+lpEsc(t.id)+'"><i class="ti ti-repeat"></i> '+lpEsc(t.name)+' <b class="lp-mono" style="font-weight:400">'+t.items.length+'</b></button>'; }).join('')+'</div>'
+      +'<textarea class="lp-in" id="wpm-ck" rows="3" style="width:100%" placeholder="Optional, ein Punkt pro Zeile (z. B. Packliste: Ausweis, Uniform, Ladegerät)">'+lpEsc(b?pkText(b):((pre&&pre.checkliste)?pre.checkliste.map(function(c){return c.text;}).join('\n'):''))+'</textarea></div>';
+    var anchor=document.getElementById('wpm-prio'); anchor=anchor?anchor.closest('.lp-fld'):g.closest('.lp-fld'); anchor.parentNode.insertBefore(row,anchor.nextSibling);
+    pkSync();
+  }catch(e){}
+  return r;
+};
+var _wpEditorSave_pk=wpEditorSave;
+wpEditorSave=function(){
+  var host=document.getElementById('wp-modal'), id=host&&host.getAttribute('data-id'), ta=document.getElementById('wpm-ck'), row=document.getElementById('wpm-ckrow');
+  var items=(ta&&row&&row.style.display!=='none')?wpItemsFromText(ta.value):null, tt=((document.getElementById('wpm-titel')||{}).value||'').trim();
+  PK.items=items; PK.inSave=true;
+  try{ _wpEditorSave_pk(); }finally{ PK.inSave=false; }
+  if(id&&items!==null){ var b=wpFind(id); if(b&&b.typ!=='fix'&&!wpIsRoutine(b)&&pkText(b)!==items.join('\n')){ if(items.length)wpRoutineSetItems(b,items); else delete b.checkliste; lpTouch(b); saveD(); try{ wpRender(); }catch(e){} } }
+  if(items&&items.length&&tt){ wpRoutineSave(tt,items); saveD(); }   // Liste als Vorlage merken (wie bei Routinen)
+  PK.items=null;
+};
+var _wpNew_pk=wpNew;
+wpNew=function(o){ var b=_wpNew_pk(o); if(PK.inSave&&PK.items&&PK.items.length&&o.kategorie!=='routine'&&o.typ!=='belohnung')wpRoutineSetItems(b,PK.items); return b; };
+// Verschobene Kopie: Checkliste mitnehmen (ohne Haken)
+var _wpMoveBlock_pk=wpMoveBlock;
+wpMoveBlock=function(b,tag,s,e,ghost){
+  var r=_wpMoveBlock_pk(b,tag,s,e,ghost);
+  if(r&&r!==b&&pkIsPlain(b)&&!pkItems(r).length){ r.checkliste=pkItems(b).map(function(c){ return {id:uid(),text:c.text,done:c.done}; }); lpTouch(r); saveD(); }
+  return r;
+};
 
 // ═══════════════════════════════════════════════════════════
 // INIT
