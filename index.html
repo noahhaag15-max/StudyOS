@@ -21429,6 +21429,60 @@ var _hgSectionHTML_uw=hgSectionHTML;
 hgSectionHTML=function(){ var h=_hgSectionHTML_uw(); return HG.sec==='daten'?h+'<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">UNI-BLÖCKE ENTFERNEN</div><div class="lp-mu" style="font-size:12px;margin-bottom:8px">Wenn du an einem Wochentag nicht mehr zur Uni gehst: alle künftigen Uni-Blöcke dieses Tages mit Vorschau entfernen.</div><button type="button" class="lp-btn fill" data-uw="open">Uni-Blöcke eines Wochentags entfernen</button></div>':h; };
 
 // ═══════════════════════════════════════════════════════════
+// BEREICHE ERWEITERN: neuer Standardbereich «Selbstentwicklung» und eigene Bereiche (Hangar › Wochenbefehl › Eigene Bereiche)
+// Eigene Bereiche erscheinen im Block-Editor, in der Kategorie-Zuordnung, in den Regeln und als Zeile in der Min/Std/Max-Tabelle.
+// ═══════════════════════════════════════════════════════════
+var WB_BER_BASE=WB_BEREICHE.slice();
+WB_BER_BASE.splice(Math.max(0,WB_BER_BASE.findIndex(function(x){return x[0]==='planen';})),0,['selbst','Selbstentwicklung']);
+WB_UNTER.selbst=[['reflexion','Reflexion / Journaling'],['skill','Fähigkeit / Sprache üben'],['meditation','Meditation / Atmen']];
+WB_HEUR.unshift({re:/meditation|atemübung|achtsamkeit/i,b:'selbst',u:'meditation'},{re:/journal|reflexion|selbstreflexion|tagebuch schreiben/i,b:'selbst',u:'reflexion'},{re:/self.?improvement|selbstentwicklung|sprache üben|vokabeln|duolingo/i,b:'selbst',u:'skill'});
+WB_ROWS.push({id:'selbst',name:'Selbstentwicklung',einheit:'×',scope:'woche',min:null,std:3,max:null});
+WB_COUNT.selbst=function(b){ return wbIs(b,'selbst')?1:0; };
+WB_VORLAGE.selbst={titel:'Selbstentwicklung',dauer:30,kat:'aufgabe',bereich:'selbst',unter:'reflexion',fenster:[[1290,1350],[420,540]]};
+['lernphase','unterwegs','militaer'].forEach(function(m){ WB_MODUS_DEF[m]=WB_MODUS_DEF[m]||{}; if(m!=='lernphase')WB_MODUS_DEF[m].selbst={min:null,std:null,max:null}; });
+CFG_DEFAULTS['wb.bereiche']=[]; CFG_META['wb.bereiche']={gruppe:'Wochenbefehl',label:'Eigene Bereiche'};
+CFG_VALIDATE['wb.bereiche']=function(v){ return (Array.isArray(v)&&v.every(function(x){ return x&&/^u-[a-z0-9]{1,24}$/.test(x.id)&&String(x.name||'').trim(); }))?null:'Ungültig.'; };
+
+function wbBereicheSync(){
+  var ex=cfg('wb.bereiche')||[], key=JSON.stringify(ex); if(wbBereicheSync.k===key)return; wbBereicheSync.k=key;
+  WB_BEREICHE.length=0; WB_BER_BASE.forEach(function(b){ WB_BEREICHE.push(b); }); ex.forEach(function(e){ WB_BEREICHE.push([e.id,e.name]); });
+  WB_ROWS=WB_ROWS.filter(function(r){ return r.id.indexOf('x:')!==0; });
+  ex.forEach(function(e){
+    WB_ROWS.push({id:'x:'+e.id,name:e.name,einheit:'×',scope:'woche',min:null,std:null,max:null});
+    WB_COUNT['x:'+e.id]=function(b){ return wbIs(b,e.id)?1:0; };
+    WB_VORLAGE['x:'+e.id]={titel:e.name,dauer:45,kat:'aufgabe',bereich:e.id,unter:'',fenster:[[1080,1260],[540,1080]]};
+  });
+}
+['wbBerName','waBerOpts','waHgHTML','waRgEdit','wbAmpel'].forEach(function(n){ var f=window[n]; if(typeof f==='function')window[n]=function(){ try{ wbBereicheSync(); }catch(e){} return f.apply(this,arguments); }; });
+var _wpEditor_wb12=wpEditor;
+wpEditor=function(){ try{ wbBereicheSync(); }catch(e){} return _wpEditor_wb12.apply(this,arguments); };
+var _waInit_wb12=waInit;
+waInit=function(){ try{ wbBereicheSync(); }catch(e){} _waInit_wb12(); };
+
+var _waHgMehr_wb12=waHgMehr;
+waHgMehr=function(){
+  var ex=cfg('wb.bereiche')||[];
+  var h='<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">EIGENE BEREICHE</div><div class="lp-mu" style="font-size:11px;margin-bottom:6px">Standardbereiche: '+WB_BER_BASE.map(function(b){return lpEsc(b[1]);}).join(', ')+'. Hier ergänzt du weitere. Sie erscheinen im Block-Editor und als Zeile in der Tabelle oben (Minimum, Standard, Maximum pro Woche).</div>';
+  ex.forEach(function(e){ h+='<div class="hg-ln"><span style="font-size:13px;flex:1;min-width:0">'+lpEsc(e.name)+'</span><button type="button" class="lp-x" data-wb12="del" data-id="'+lpEsc(e.id)+'" aria-label="entfernen">✕</button></div>'; });
+  if(!ex.length)h+='<div class="lp-mu" style="font-size:12px">Noch keine eigenen Bereiche.</div>';
+  h+='<div class="lp-row" style="gap:6px;margin-top:8px"><input class="lp-in" id="wb12-name" placeholder="Name des Bereichs, z. B. Sprachen" maxlength="40" style="flex:1;min-width:0"><button type="button" class="lp-btn gray" data-wb12="add">+</button></div></div>';
+  return _waHgMehr_wb12()+h;
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb12]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-wb12'), ex=JSON.parse(JSON.stringify(cfg('wb.bereiche')||[]));
+  if(a==='add'){
+    var name=String((document.getElementById('wb12-name')||{}).value||'').replace(/[<>]/g,'').trim().slice(0,40); if(!name)return;
+    if(WB_BEREICHE.some(function(b){ return String(b[1]).toLowerCase()===name.toLowerCase(); })){ showToast('Diesen Bereich gibt es schon.'); return; }
+    var slug=name.toLowerCase().replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/[^a-z0-9]/g,'').slice(0,16)||'neu', id='u-'+slug, n=1; while(WB_BEREICHE.some(function(b){return b[0]===id;}))id='u-'+slug+(++n);
+    ex.push({id:id,name:name}); setCfg('wb.bereiche',ex,'hangar'); wbBereicheSync(); waHgRender(); showToast('Bereich «'+name+'» angelegt ✓','ok');
+  } else if(a==='del'){
+    var id2=el.getAttribute('data-id'), used=0; Object.keys(wpEnsure().wochen).forEach(function(k){ wpEnsure().wochen[k].bloecke.forEach(function(b){ if(b.bereich===id2)used++; }); });
+    if(used)showToast((used===1?'1 Block verwendet':used+' Blöcke verwenden')+' diesen Bereich; sie behalten ihn, bis du sie änderst.');
+    setCfg('wb.bereiche',ex.filter(function(e){return e.id!==id2;}),'hangar'); wbBereicheSync(); waHgRender();
+  }
+});
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
