@@ -20014,7 +20014,7 @@ var WB_DAY={
   }
 };
 function wbBloeckeRange(from,to,mode){
-  var out=[]; for(var d=from;d<=to;d=lpAdd(d,1)){ wpBlocksOn(d).forEach(function(b){ if(b.typ!=='aufgabe'&&b.typ!=='fix')return; if(b.status==='verschoben')return; if(mode==='ist'&&b.status!=='ok'&&b.status!=='teil')return; out.push(b); }); }
+  var out=[]; for(var d=from;d<=to;d=lpAdd(d,1)){ wpBlocksOn(d).forEach(function(b){ var fz=(b.typ==='fenster'&&b.dabei==='ja'); if(b.typ!=='aufgabe'&&b.typ!=='fix'&&!fz)return; if(b.status==='verschoben')return; if(mode==='ist'&&!fz&&b.status!=='ok'&&b.status!=='teil')return; out.push(b); }); }
   return out;
 }
 function wbMonatRange(d){ var ym=d.slice(0,7), last=new Date(+ym.slice(0,4),+ym.slice(5,7),0).getDate(); return [ym+'-01',ym+'-'+(last<10?'0':'')+last]; }
@@ -21481,6 +21481,73 @@ document.addEventListener('click',function(ev){
     setCfg('wb.bereiche',ex.filter(function(e){return e.id!==id2;}),'hangar'); wbBereicheSync(); waHgRender();
   }
 });
+
+// ═══════════════════════════════════════════════════════════
+// 1) «Mache ich / mache ich nicht» bei Fenster-Blöcken (Matches, Liv-Zeit, Besuche …): b.dabei = 'ja' | 'nein' | '' (offen)
+//    Fenster-Blöcke haben keine Wertung. «Ja» zählt in der Bereichs-Ampel (z. B. Fussball), «Nein» wird abgeblendet und zählt nicht.
+// 2) Tracking: Snus ist ausgeblendet (die Daten bleiben erhalten, Schalter im Hangar), Schritte stehen an seiner Stelle bei Konsum.
+// ═══════════════════════════════════════════════════════════
+CFG_DEFAULTS['ui.snus']=false; CFG_META['ui.snus']={gruppe:'Anzeige',label:'Snus im Tracking anzeigen'};
+CFG_VALIDATE['ui.snus']=function(v){ return (v===true||v===false)?null:'Ein oder aus.'; };
+WB_HEUR.unshift({re:/^match:|\bmatch\b/i,b:'frei',u:'fussball'});
+(function(){ var st=document.createElement('style'); st.textContent='.wp-b.dj-nein{opacity:.45;text-decoration:line-through}.wp-b.dj-ja{border-style:solid !important}.wb-dj{position:absolute;top:2px;right:4px;z-index:6;font-size:11px;line-height:1;padding:2px 5px;border-radius:99px;background:color-mix(in srgb,var(--c-accent) 16%,var(--lp-card,#111));color:var(--c-accent);cursor:pointer;text-decoration:none}';
+  document.head.appendChild(st); })();
+function wbDabeiLbl(v){ return v==='ja'?'✓ dabei':v==='nein'?'✗ nicht dabei':'? offen'; }
+var _wpBlockHTML_wb13=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_wb13(b,z,now);
+  if(!h||b.typ!=='fenster'||String(b.id).indexOf('md:')===0)return h;
+  var v=b.dabei||'';
+  h=h.replace('class="wp-b ','class="wp-b dj-'+(v||'offen')+' ');
+  return h.replace(/(<div class="wp-b[^>]*>)/,'$1<span class="wb-dj" data-wb13="cyc" data-id="'+lpEsc(b.id)+'" title="'+wbDabeiLbl(v)+' (antippen zum Wechseln)">'+(v==='ja'?'✓':v==='nein'?'✗':'?')+'</span>');
+};
+function wbDabeiSet(b,v){ if(v)b.dabei=v; else delete b.dabei; lpTouch(b); saveD(); try{ wpRender(); }catch(e){} }
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb13]'); if(!el)return; var a=el.getAttribute('data-wb13');
+  if(a==='cyc'){ ev.preventDefault(); ev.stopPropagation(); var b=wpFind(el.getAttribute('data-id')); if(!b)return; wbDabeiSet(b,b.dabei==='ja'?'nein':(b.dabei==='nein'?'':'ja')); }
+  else if(a==='set'){ ev.preventDefault(); var host=document.getElementById('wp-modal'), b2=host&&wpFind(host.getAttribute('data-id')); if(!b2)return; wbDabeiSet(b2,el.getAttribute('data-v')); document.querySelectorAll('#wb13-row [data-wb13="set"]').forEach(function(x){ x.classList.toggle('on',(x.getAttribute('data-v')||'')===(b2.dabei||'')); }); }
+  else if(a==='snus'){ ev.preventDefault(); setCfg('ui.snus',!cfg('ui.snus'),'hangar'); wb13Konsum(); waHgRender(); try{ trkRender(); }catch(e){} }
+},true);
+var _wpEditor_wb13=wpEditor;
+wpEditor=function(id,pre){
+  var r=_wpEditor_wb13(id,pre);
+  try{
+    var b=id?wpFind(id):null, g=document.getElementById('wpm-kat'); if(!b||b.typ!=='fenster'||!g||document.getElementById('wb13-row'))return r;
+    var row=document.createElement('div'); row.className='lp-fld'; row.id='wb13-row';
+    row.innerHTML='<label>Mache ich</label><div class="lp-row" style="gap:4px;flex-wrap:wrap">'+[['ja','✓ Ja'],['nein','✗ Nein'],['','Offen']].map(function(x){ return '<button type="button" class="wp-pill'+((b.dabei||'')===x[0]?' on':'')+'" data-wb13="set" data-v="'+x[0]+'">'+x[1]+'</button>'; }).join('')+'</div>';
+    var anchor=g.closest('.lp-fld'); anchor.parentNode.insertBefore(row,anchor);
+  }catch(e){}
+  return r;
+};
+
+// ── Ampel: Fenster-Blöcke mit «Ja» zählen mit ──
+// (Anpassung in wbBloeckeRange, siehe Patch im Index)
+
+// ── Tracking ──
+var TA_KONSUM_ALLE=TA_KONSUM.slice();
+function wb13Konsum(){ TA_KONSUM.length=0; TA_KONSUM_ALLE.forEach(function(k){ if(k[0]!=='snus'||cfg('ui.snus'))TA_KONSUM.push(k); }); }
+var _trkRender_wb13=trkRender;
+trkRender=function(){
+  _trkRender_wb13.apply(this,arguments);
+  try{
+    var root=document.getElementById('trk-root')||document.getElementById('sec-tracking'); if(!root)return;
+    var ks=[].slice.call(root.querySelectorAll('.trk-k')), sn=ks.filter(function(k){ var s=k.querySelector('span'); return s&&s.textContent.trim()==='Snus'; })[0];
+    var inp=root.querySelector('input[data-trk-f="steps"]'), lab=inp&&inp.closest('label'), anchor=sn||ks.filter(function(k){ var s=k.querySelector('span'); return s&&s.textContent.trim()==='Porn'; })[0];
+    if(lab&&anchor&&!root.querySelector('.wb13-steps')){
+      var d=document.createElement('div'); d.className='trk-k wb13-steps'; d.innerHTML='<span>Schritte</span>'; lab.style.display='inline-block'; var t=lab.firstChild; if(t&&t.nodeType===3)t.remove(); inp.style.cssText='display:inline-block;width:110px'; d.appendChild(inp); lab.remove(); anchor.parentNode.insertBefore(d,anchor);
+    }
+    if(sn&&!cfg('ui.snus'))sn.remove();
+    var th=[].slice.call(root.querySelectorAll('.trk-tbl th')), i=th.findIndex(function(x){return x.textContent.trim()==='Snus';});
+    if(i>=0&&!cfg('ui.snus')){ th[i].remove(); [].slice.call(root.querySelectorAll('.trk-tbl tbody tr')).forEach(function(tr){ var c=tr.children[i]; if(c)c.remove(); }); }
+  }catch(e){}
+};
+
+var _waHgMehr_wb13=waHgMehr;
+waHgMehr=function(){
+  return _waHgMehr_wb13()+'<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">TRACKING</div><div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:13px">Snus im Tracking anzeigen</div><div class="lp-mu" style="font-size:11px">Aus: Snus verschwindet aus Tracking und Tagesabschluss, die bisherigen Werte bleiben gespeichert.</div></div><button type="button" class="lp-sw'+(cfg('ui.snus')?' on':'')+'" data-wb13="snus" aria-label="Snus anzeigen"><i></i></button></div></div>';
+};
+var _waInit_wb13=waInit;
+waInit=function(){ wb13Konsum(); _waInit_wb13(); };
 
 // ═══════════════════════════════════════════════════════════
 // INIT
