@@ -2094,6 +2094,7 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 .wp-b.mix { padding-left: 12px; }
 .wp-b.mix::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: var(--bcs); }
 .wp-kat.main { outline: 2px solid var(--c-accent); outline-offset: 1px; }
+.wp-b.ol:hover { z-index: 7 !important; }
 .wp-b.ol { box-shadow: 0 0 0 1.5px var(--lp-bg), 0 2px 6px rgba(0,0,0,.35); }
 </style>
 </head>
@@ -11101,7 +11102,7 @@ var _wpBlockHTML_px=wpBlockHTML;
 wpBlockHTML=function(b,z,now){
   var h=_wpBlockHTML_px(b,z,now); if(!h)return h;
   if(b._ol){
-    h=h.replace(/left:calc\([^;]*\);width:calc\([^;]*\)/,'left:calc('+b._ox.toFixed(2)+'% + 1px);width:calc('+b._ow.toFixed(2)+'% - 2px);z-index:3');
+    h=h.replace(/left:calc\([^;]*\);width:calc\([^;]*\)/,'left:calc('+b._ox.toFixed(2)+'% + 1px);width:calc('+b._ow.toFixed(2)+'% - 2px);z-index:6');
     h=h.replace('class="wp-b ','class="wp-b ol ');
   }
   var mix=b.typ==='belohnung'?[]:pxMix(b).map(function(id){ return wpKats().find(function(k){return k.id===id;}); }).filter(Boolean);
