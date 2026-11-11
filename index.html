@@ -21379,6 +21379,56 @@ var _hgSectionHTML_ck=hgSectionHTML;
 hgSectionHTML=function(){ var h=_hgSectionHTML_ck(); return HG.sec==='daten'?h+'<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">CHECKPOINT-PAKET</div><div class="lp-mu" style="font-size:12px;margin-bottom:8px">Plan-Paket (Blöcke, Termine, Aufgaben, Monatsziele, Regeln) aus Text oder Datei einlesen, mit Vorschau und automatischem Backup.</div><button type="button" class="lp-btn fill" data-ckp="open">Checkpoint-Paket importieren</button></div>':h; };
 
 // ═══════════════════════════════════════════════════════════
+// UNI-BLÖCKE EINES WOCHENTAGS ENTFERNEN (z. B. wenn man an einem Tag nicht mehr zur Uni geht)
+// Vorschau pro Block, Backup, Löschmarke (der Stundenplan-Import legt entfernte Blöcke nicht wieder an), Rückgängig.
+// ═══════════════════════════════════════════════════════════
+var UW={wd:4,ab:'',L:[]};
+function uwListe(wd,ab){
+  var out=[], td=ab||today(), W=wpEnsure();
+  Object.keys(W.wochen).forEach(function(k){ (W.wochen[k].bloecke||[]).forEach(function(b){
+    if(b.kategorie!=='uni'||b.status==='verschoben'||b.tag<td||lpWd(b.tag)!==+wd)return;
+    out.push(b);
+  }); });
+  return out.sort(function(a,b){ return a.tag===b.tag?a.start.localeCompare(b.start):(a.tag<b.tag?-1:1); });
+}
+function uwOpen(){
+  var h='<div style="width:100%;max-width:620px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><span class="lp-cap">UNI-BLÖCKE EINES WOCHENTAGS ENTFERNEN</span><button type="button" class="lp-x" data-uw="close" aria-label="schliessen">✕</button></div>'
+    +'<div class="lp-row" style="gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px"><span class="lp-mu">Wochentag</span><select class="lp-in" id="uw-wd" style="width:auto">'+[[1,'Montag'],[2,'Dienstag'],[3,'Mittwoch'],[4,'Donnerstag'],[5,'Freitag'],[6,'Samstag']].map(function(x){ return '<option value="'+x[0]+'"'+(x[0]===UW.wd?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select><span class="lp-mu">ab</span><input class="lp-in lp-mono" type="date" id="uw-ab" value="'+lpEsc(UW.ab||today())+'" style="width:auto"><button type="button" class="lp-btn gray" data-uw="list">Anzeigen</button></div>'
+    +'<div id="uw-list"></div></div>';
+  syModal('uw-dlg',h); uwShow();
+}
+function uwShow(){
+  var wd=+(document.getElementById('uw-wd')||{}).value||UW.wd, ab=(document.getElementById('uw-ab')||{}).value||today(); UW.wd=wd; UW.ab=ab;
+  var L=uwListe(wd,ab), box=document.getElementById('uw-list'); UW.L=L; if(!box)return;
+  if(!L.length){ box.innerHTML='<div class="lp-mu" style="font-size:12px">Keine Uni-Blöcke an diesem Wochentag ab diesem Datum.</div>'; return; }
+  box.innerHTML='<div class="lp-mu" style="font-size:12px;margin-bottom:6px">'+L.length+' Block'+(L.length===1?'':'e')+'. Prüfungen sind nicht angehakt. Entfernte Blöcke kommen beim Stundenplan-Import nicht zurück; «Rückgängig» holt sie sofort wieder.</div>'
+    +L.map(function(b,i){ var pr=!!b.pruefDatum; return '<label class="hg-ln" style="gap:8px;cursor:pointer"><input type="checkbox" data-uwi="'+i+'"'+(pr?'':' checked')+'><span style="flex:1;min-width:0;font-size:13px">'+lpEsc(b.titel)+(pr?' <span class="lp-mu">· Prüfung</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmtShort(b.tag)+' '+b.start+'–'+b.ende)+'</span></label>'; }).join('')
+    +'<div class="lp-row" style="justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="lp-btn gray" data-uw="backup">Backup herunterladen</button><button type="button" class="lp-btn fill" data-uw="go">Ausgewählte entfernen</button></div>';
+}
+function uwRun(){
+  var sel=[]; document.querySelectorAll('#uw-dlg [data-uwi]').forEach(function(c){ if(c.checked)sel.push(UW.L[+c.getAttribute('data-uwi')]); });
+  sel=sel.filter(Boolean); if(!sel.length){ showToast('Nichts ausgewählt.'); return; }
+  try{ sosDownloadJson('study-os-backup-vor-uni-entfernen'); }catch(e){}
+  var snaps=sel.map(function(b){ return JSON.parse(JSON.stringify(b)); }), days={};
+  wbBypass(function(){ sel.forEach(function(b){ days[b.tag]=1; wpRemove(b); }); });
+  saveD(); try{ wpAfterChange(Object.keys(days)); }catch(e){ try{ wpRender(); }catch(x){} }
+  var m=document.getElementById('uw-dlg'); if(m)m.remove();
+  pdUndoPush(snaps.length+' Uni-Block'+(snaps.length===1?'':'e')+' entfernt',function(){
+    snaps.forEach(function(s){ if(D.tombstones)delete D.tombstones[s.id]; if(!wpFind(s.id))wpAdd(s); });
+    saveD(); try{ wpAfterChange(Object.keys(days)); }catch(e){}
+  });
+  showToast(snaps.length+' Uni-Block'+(snaps.length===1?'':'e')+' entfernt ✓','ok');
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-uw]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-uw');
+  if(a==='open')uwOpen(); else if(a==='close'){ var m=document.getElementById('uw-dlg'); if(m)m.remove(); }
+  else if(a==='list')uwShow(); else if(a==='go')uwRun();
+  else if(a==='backup'){ try{ sosDownloadJson('study-os-backup-vor-uni-entfernen'); el.textContent='Backup heruntergeladen ✓'; }catch(e){} }
+});
+var _hgSectionHTML_uw=hgSectionHTML;
+hgSectionHTML=function(){ var h=_hgSectionHTML_uw(); return HG.sec==='daten'?h+'<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">UNI-BLÖCKE ENTFERNEN</div><div class="lp-mu" style="font-size:12px;margin-bottom:8px">Wenn du an einem Wochentag nicht mehr zur Uni gehst: alle künftigen Uni-Blöcke dieses Tages mit Vorschau entfernen.</div><button type="button" class="lp-btn fill" data-uw="open">Uni-Blöcke eines Wochentags entfernen</button></div>':h; };
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
