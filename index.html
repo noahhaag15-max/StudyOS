@@ -3416,7 +3416,7 @@ var D = {
 // nichts, was nur lokal existiert, geht verloren. Einzige Ausnahme: bewusst lokal gelöschte
 // Einträge können durch einen älteren Snapshot wieder auftauchen — das ist der bewusste
 // Kompromiss (lieber ein Karteileichen-Eintrag zurück als echte Daten verloren).
-var MERGE_ARRAY_COLLECTIONS = ['kpLog','kpRegel','kpLeit','kpGeld','kpBuch','kpFlug','wbWochen','wbAntraege','wbRapporte','wbRegeln','wbBuecher','wbVerschiebungen','hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','lbKonflikte','lbBuendnisse','lpAufgaben','lpLabs','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
+var MERGE_ARRAY_COLLECTIONS = ['kpLog','kpRegel','kpLeit','kpGeld','kpBuch','kpFlug','wbWochen','wbAntraege','wbRapporte','wbRegeln','wbBuecher','wbVerschiebungen','wbNotizen','wbImporte','hallOfFame','lbMeldungen','lbLaender','lbBeziehungen','lbKonflikte','lbBuendnisse','lpAufgaben','lpLabs','spannen','lernplan','woechentlich','monatsziele','jahresziele','habits','calEvs','deadlines','fussball','nfl','flugshows','miscEvents','bucket','films','orte','countdowns','birthdays','tomorrow'];
 // wplan & track sind hier bewusst NICHT drin — die brauchen einen ECHTEN Tiefen-Merge (siehe
 // mergeWplan/mergeTrack unten), weil ihre Werte pro Woche/Tag komplexe, häufig aktiv bearbeitete
 // Strukturen sind. Ein einfacher Object.assign auf oberster Ebene hätte (und hat!) eine ganze
@@ -21170,6 +21170,213 @@ document.addEventListener('click',function(ev){
   var rew=JSON.parse(JSON.stringify(cfg('lounge.belohnungen')||[])), r=rew.find(function(x){return x.id===id;}); if(!r)return; r.preis=o;
   setCfg('lounge.belohnungen',rew,'korrektur'); try{ renderHangar(); }catch(e){} showToast('Preis zurückgesetzt ✓','ok');
 },true);
+
+// ═══════════════════════════════════════════════════════════
+// CHECKPOINT-PAKET IMPORTIEREN (Format «sos-checkpoint», Version 1)
+// blocks → Wochenplan-Blöcke · appointments → Zeitspannen · tasks → Backlog · monthGoals → Monatsziele (mit Zähler)
+// rules, lessons → Notizen «Regeln und Erkenntnisse» (Hangar › Wochenbefehl). Gleiche Id = bestehenden Eintrag aktualisieren.
+// Überschneidungen mit bestehenden Blöcken werden als Konflikt gezeigt und sind standardmässig nicht angehakt.
+// Die Pakete enthalten persönliche Inhalte: sie werden nur per Text/Datei eingelesen und nie im Code abgelegt.
+// ═══════════════════════════════════════════════════════════
+SY_LIST_LABEL.wbNotizen='Regeln und Erkenntnisse'; SY_LIST_LABEL.wbImporte='Checkpoint-Importe';
+var CKP={pkg:null,entries:[],step:'in'};
+var CKP_D=/^\d{4}-\d\d-\d\d$/, CKP_T=/^\d\d:\d\d$/;
+function ckpTxt(v,n){ return String(v==null?'':v).replace(/[<>]/g,'').trim().slice(0,n||240); }
+function ckpKat(name){
+  var n=String(name||'').toLowerCase(), k=wpKats().find(function(x){ return x.id===n||String(x.name).toLowerCase()===n; });
+  return k?k.id:'aufgabe';
+}
+function ckpPrio(p){ p=String(p||'').toUpperCase(); return p==='A'?'hoch':p==='C'?'niedrig':''; }
+function ckpMonat(m){ return /^\d{4}-\d\d$/.test(m||'')?m:''; }
+function ckpParse(text){
+  var o; try{ o=JSON.parse(text); }catch(e){ return {err:'Das ist kein gültiges JSON.'}; }
+  if(!o||o.format!=='sos-checkpoint')return {err:'Das ist kein Checkpoint-Paket (format «sos-checkpoint» fehlt).'};
+  if(+o.version!==1)return {err:'Version '+o.version+' wird nicht unterstützt (erwartet: 1).'};
+  return {pkg:o};
+}
+function ckpKonflikte(x,id){
+  var out=[]; if(!x.date)return out;
+  var s=lpT2M(x.start), e=lpT2M(x.end);
+  wpBlocksOn(x.date).forEach(function(b){
+    if(b.id===id||b.status==='verschoben'||(b.typ!=='aufgabe'&&b.typ!=='fix')||['schlaf','mahlzeit','routine'].indexOf(b.kategorie)>=0)return;
+    var bs=lpT2M(b.start), be=lpT2M(b.ende); if(be<=bs)be+=1440;
+    if(bs<e&&be>s)out.push(b.titel+' '+b.start+'–'+b.ende);
+  });
+  return out;
+}
+function ckpBuild(pkg){
+  var E=[], bad=function(grp,label,why){ E.push({grp:grp,label:label,status:'fehler',note:why,checked:false}); };
+  (Array.isArray(pkg.blocks)?pkg.blocks:[]).forEach(function(x){
+    var label=(x&&x.title)?ckpTxt(x.title,90):'(ohne Titel)';
+    if(!x||!x.id||!CKP_D.test(x.date||'')||!CKP_T.test(x.start||'')||!CKP_T.test(x.end||'')||lpT2M(x.end)<=lpT2M(x.start)||!x.title)return bad('blocks',label,'Angaben unvollständig oder Zeit ungültig');
+    var id='ckp:'+ckpTxt(x.id,60), ex=wpFind(id), kon=ckpKonflikte(x,id), tomb=!!(D.tombstones&&D.tombstones[id]&&!ex), kat=ckpKat(x.category);
+    E.push({grp:'blocks',label:label,sub:lpDayLbl(x.date)+' '+lpFmtShort(x.date)+' · '+x.start+'–'+x.end+' · '+(wpKats().find(function(k){return k.id===kat;})||{name:kat}).name+(x.prio?' · Prio '+ckpTxt(x.prio,3):''),
+      status:ex?'update':(kon.length?'konflikt':(tomb?'geloescht':'neu')),note:kon.length?'Überschneidet: '+kon.join('; '):(tomb?'wurde früher gelöscht':''),checked:!kon.length&&!tomb,
+      apply:function(){
+        var b=wpFind(id), mkt=x.date;
+        if(!b){ b=wpNew({tag:mkt,start:x.start,ende:x.end,titel:ckpTxt(x.title,120),kategorie:kat,typ:'aufgabe',quelle:'checkpoint'}); b.id=id; wpAdd(b); if(D.tombstones)delete D.tombstones[id]; }
+        else { if(lpMonday(b.tag)!==lpMonday(mkt)){ var w=wpWeek(lpMonday(b.tag)); if(w)w.bloecke=w.bloecke.filter(function(y){return y.id!==b.id;}); b.tag=mkt; wpAdd(b); } else b.tag=mkt; b.start=x.start; b.ende=x.end; b.titel=ckpTxt(x.title,120); b.kategorie=kat; }
+        var p=ckpPrio(x.prio); if(p)b.prio=p; else delete b.prio; lpTouch(b); return {ort:'Wochenplan',tag:mkt};
+      }});
+  });
+  (Array.isArray(pkg.appointments)?pkg.appointments:[]).forEach(function(x){
+    var label=(x&&x.title)?ckpTxt(x.title,90):'(ohne Titel)';
+    if(!x||!x.id||!x.title||!CKP_D.test(x.date||'')||(x.endDate&&(!CKP_D.test(x.endDate)||x.endDate<x.date)))return bad('appointments',label,'Datum fehlt oder ungültig');
+    var id='ckp:'+ckpTxt(x.id,60), ex=spList().find(function(s){return s.id===id;}), cat=String(x.category||'').toLowerCase();
+    var typ=/militär|\bwk\b/i.test(x.title)?'militaer':(cat==='liv'?'liv':(cat==='arbeit'?'arbeit':'sonst')), modus=typ==='militaer'?'militaer':((cat==='liv'&&x.endDate&&x.endDate!==x.date)?'unterwegs':'');
+    var bis=x.endDate||x.date, vz=CKP_T.test(x.start||'')?x.start:'', bz=CKP_T.test(x.end||'')?x.end:''; if(x.date===bis&&vz&&bz&&bz<=vz){ vz=''; bz=''; }
+    var tage=lpDayDiff(x.date,bis)+1;
+    E.push({grp:'appointments',label:label,sub:lpFmtShort(x.date)+(bis!==x.date?'–'+lpFmtShort(bis):'')+(vz?' · '+vz+(bz?'–'+bz:''):'')+' · '+tage+' Tag'+(tage===1?'':'e')+(modus?' · Modus '+wbModusName(modus):'')+(x.locked?' · fest':''),status:ex?'update':'neu',checked:true,
+      apply:function(){
+        var o={typ:typ,titel:ckpTxt(x.title,120),von:x.date,bis:bis,vonZeit:vz,bisZeit:bz,notiz:x.locked?'fest':''}, s=spList().find(function(y){return y.id===id;});
+        if(s)Object.assign(s,o); else { s=Object.assign({id:id,farbe:''},o); spList().push(s); if(D.tombstones)delete D.tombstones[id]; }
+        if(modus)s.modus=modus; lpTouch(s); return {ort:'Zeitspannen'};
+      }});
+  });
+  (Array.isArray(pkg.tasks)?pkg.tasks:[]).forEach(function(x){
+    var label=(x&&x.title)?ckpTxt(x.title,100):'(ohne Titel)';
+    if(!x||!x.id||!x.title)return bad('tasks',label,'Titel oder Id fehlt');
+    var id='ckp:'+ckpTxt(x.id,60), ex=clTasks().find(function(t){return t.id===id;}), cat=String(x.category||'').toLowerCase();
+    var ber=cat==='arbeit'?'arbeit':((cat==='lernen'||cat==='uni'||/analysis|uni\b|prüfung|lab\b|serien/i.test(x.title))?'uni':'privat'), due=CKP_D.test(x.due||'')?x.due:'';
+    E.push({grp:'tasks',label:label,sub:(due?'fällig '+lpFmtShort(due)+' · ':'')+CL_BEREICHE.find(function(b){return b[0]===ber;})[1]+(x.prio?' · Prio '+ckpTxt(x.prio,3):''),status:ex?'update':'neu',checked:true,
+      apply:function(){
+        var t=clTasks().find(function(y){return y.id===id;}), note=(x.prio?'Priorität '+ckpTxt(x.prio,3):'');
+        if(!t){ t={id:id,name:ckpTxt(x.title,200),status:'Nicht begonnen',erledigt:false,faellig:due,notizen:note,bereich:ber}; clTasks().push(t); if(D.tombstones)delete D.tombstones[id]; }
+        else { t.name=ckpTxt(x.title,200); t.faellig=due; t.notizen=note; t.bereich=ber; }
+        lpTouch(t); return {ort:'Backlog'};
+      }});
+  });
+  (Array.isArray(pkg.monthGoals)?pkg.monthGoals:[]).forEach(function(x){
+    var label=(x&&x.title)?ckpTxt(x.title,100):'(ohne Titel)';
+    if(!x||!x.id||!x.title||!ckpMonat(x.month))return bad('monthGoals',label,'Monat (JJJJ-MM) oder Titel fehlt');
+    var id='ckp:'+ckpTxt(x.id,60), ex=(D.monatsziele||[]).find(function(z){return z.id===id;}), ziel=Math.max(0,parseInt(x.target,10)||0);
+    E.push({grp:'monthGoals',label:label,sub:x.month+(ziel?' · Ziel '+ziel:'')+(ex&&ex.ziel!==ziel&&ex.ziel?' (bisher '+ex.ziel+')':''),status:ex?'update':'neu',checked:true,
+      apply:function(){
+        if(!D.monatsziele)D.monatsziele=[]; var z=D.monatsziele.find(function(y){return y.id===id;});
+        if(!z){ z={id:id,name:ckpTxt(x.title,200),erledigt:false,monat:x.month,ziel:ziel,stand:0}; D.monatsziele.push(z); if(D.tombstones)delete D.tombstones[id]; }
+        else { z.name=ckpTxt(x.title,200); z.monat=x.month; z.ziel=ziel; if(z.stand==null)z.stand=0; if(ziel&&z.stand<ziel)z.erledigt=false; }
+        lpTouch(z); return {ort:'Monatsziele'};
+      }});
+  });
+  [['rules','regel','Regel'],['lessons','erkenntnis','Erkenntnis']].forEach(function(g){
+    (Array.isArray(pkg[g[0]])?pkg[g[0]]:[]).forEach(function(t){
+      var tx=ckpTxt(t,400); if(!tx)return bad(g[0],'(leer)','Eintrag ist leer');
+      var id='wbn:'+g[1]+':'+syHash(tx), ex=(D.wbNotizen||[]).some(function(n){return n.id===id;});
+      E.push({grp:g[0],label:tx,sub:g[2],status:ex?'gleich':'neu',checked:!ex,
+        apply:function(){ if(!Array.isArray(D.wbNotizen))D.wbNotizen=[]; if(!D.wbNotizen.some(function(n){return n.id===id;})){ D.wbNotizen.push({id:id,art:g[1],text:tx,datum:today(),quelle:'checkpoint',ts:Date.now()}); if(D.tombstones)delete D.tombstones[id]; } return {ort:'Regeln und Erkenntnisse'}; }});
+    });
+  });
+  return E;
+}
+var CKP_GRP={blocks:'Wochenplan-Blöcke',appointments:'Termine → Zeitspannen',tasks:'Aufgaben → Backlog',monthGoals:'Monatsziele',rules:'Regeln → Notizen',lessons:'Erkenntnisse → Notizen'};
+var CKP_ST={neu:['neu','var(--c-ok)'],update:['aktualisiert','var(--c-accent)'],konflikt:['Konflikt','var(--c-work)'],geloescht:['früher gelöscht','var(--c-work)'],gleich:['schon vorhanden','var(--tx3)'],fehler:['Fehler','var(--c-fun)']};
+function ckpClose(){ var m=document.getElementById('ckp-dlg'); if(m)m.remove(); }
+function ckpOpen(){
+  CKP={pkg:null,entries:[],step:'in'};
+  syModal('ckp-dlg','<div style="width:100%;max-width:640px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><span class="lp-cap">CHECKPOINT-PAKET IMPORTIEREN</span><button type="button" class="lp-x" data-ckp="close" aria-label="schliessen">✕</button></div>'
+    +'<div class="lp-mu" style="font-size:12px;margin-bottom:8px">Text des Pakets einfügen oder die Datei wählen. Vor dem Import wird automatisch ein Backup heruntergeladen. Danach siehst du eine Vorschau und wählst pro Eintrag.</div>'
+    +'<textarea class="lp-in lp-mono" id="ckp-txt" rows="9" style="width:100%;font-size:11px" placeholder="{ &quot;format&quot;: &quot;sos-checkpoint&quot;, … }"></textarea>'
+    +'<div class="lp-row" style="justify-content:space-between;align-items:center;margin-top:8px;gap:8px;flex-wrap:wrap"><label class="lp-btn gray" style="cursor:pointer">Datei wählen<input type="file" id="ckp-file" accept=".json,application/json,text/plain" style="display:none"></label><button type="button" class="lp-btn fill" data-ckp="check">Prüfen</button></div><div id="ckp-err" class="lp-mu" style="font-size:12px;margin-top:8px;color:var(--c-fun)"></div></div>');
+}
+function ckpPreview(){
+  var E=CKP.entries, pkg=CKP.pkg, h='<div style="width:100%;max-width:700px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:4px"><span class="lp-cap">VORSCHAU</span><button type="button" class="lp-x" data-ckp="close" aria-label="schliessen">✕</button></div>'
+    +'<div class="lp-mu" style="font-size:12px;margin-bottom:8px">Paket vom '+lpEsc(lpFmt(pkg.date||''))+(pkg.type?' · Art: '+lpEsc(ckpTxt(pkg.type,40)):'')+'. Gleiche Ids aktualisieren den bestehenden Eintrag. Konflikte sind nicht angehakt.</div>';
+  Object.keys(CKP_GRP).forEach(function(g){
+    var L=E.map(function(e,i){ return {e:e,i:i}; }).filter(function(x){return x.e.grp===g;}); if(!L.length)return;
+    h+='<div class="lp-cap" style="margin:12px 0 4px">'+CKP_GRP[g].toUpperCase()+' ('+L.length+')</div>';
+    L.forEach(function(x){ var e=x.e, st=CKP_ST[e.status];
+      h+='<label class="hg-ln" style="gap:8px;align-items:flex-start;cursor:'+(e.status==='fehler'?'default':'pointer')+'"><input type="checkbox" data-ckpi="'+x.i+'"'+(e.checked?' checked':'')+(e.status==='fehler'?' disabled':'')+' style="margin-top:3px"><span style="flex:1;min-width:0"><span style="font-size:13px">'+lpEsc(e.label)+'</span>'+(e.sub?'<span class="lp-mu lp-mono" style="display:block;font-size:11px">'+lpEsc(e.sub)+'</span>':'')+(e.note?'<span style="display:block;font-size:11px;color:'+st[1]+'">'+lpEsc(e.note)+'</span>':'')+'</span><span style="font-size:11px;color:'+st[1]+';white-space:nowrap">'+st[0]+'</span></label>'; });
+  });
+  h+='<div class="lp-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px"><button type="button" class="lp-btn gray" data-ckp="back">Zurück</button><span class="lp-row" style="gap:8px"><button type="button" class="lp-btn gray" data-ckp="backup">Backup herunterladen</button><button type="button" class="lp-btn fill" data-ckp="go">Ausgewählte importieren</button></span></div></div>';
+  syModal('ckp-dlg',h);
+}
+function ckpCheck(){
+  var tx=(document.getElementById('ckp-txt')||{}).value||'', r=ckpParse(tx), err=document.getElementById('ckp-err');
+  if(r.err){ if(err)err.textContent=r.err; return; }
+  CKP.pkg=r.pkg; CKP.entries=ckpBuild(r.pkg);
+  if(!CKP.entries.length){ if(err)err.textContent='Das Paket enthält keine Einträge.'; return; }
+  ckpPreview();
+}
+function ckpRun(){
+  var chosen=[]; document.querySelectorAll('#ckp-dlg [data-ckpi]').forEach(function(c){ if(c.checked)chosen.push(CKP.entries[+c.getAttribute('data-ckpi')]); });
+  chosen=chosen.filter(function(e){return e&&e.apply;});
+  if(!chosen.length){ showToast('Nichts ausgewählt.'); return; }
+  var go=function(){
+    var res={}, tage={}, n=0;
+    chosen.forEach(function(e){ try{ var r=e.apply(); var k=r.ort+'|'+e.status; res[k]=(res[k]||0)+1; if(r.tag)tage[r.tag]=1; n++; }catch(x){ res['Fehler|fehler']=(res['Fehler|fehler']||0)+1; } });
+    if(!Array.isArray(D.wbImporte))D.wbImporte=[];
+    D.wbImporte.push({id:'imp:'+uid(),ts:Date.now(),format:'sos-checkpoint',datum:CKP.pkg.date||'',art:ckpTxt(CKP.pkg.type,40),anzahl:n});
+    saveD(); try{ wpAfterChange(Object.keys(tage)); }catch(e){ try{ wpRender(); }catch(x){} }
+    try{ renderMonatsziele(); }catch(e){} try{ clBacklog(); }catch(e){} try{ ckRender(); }catch(e){} try{ waHgRender(); }catch(e){}
+    var weeks={}; Object.keys(tage).forEach(function(d){ weeks[lpMonday(d)]=1; });
+    var rows=Object.keys(res).sort().map(function(k){ var p=k.split('|'); return '<div class="hg-ln"><span style="font-size:13px">'+lpEsc(p[0])+'</span><span class="lp-mono" style="font-size:12px;color:'+CKP_ST[p[1]][1]+'">'+res[k]+' '+CKP_ST[p[1]][0]+'</span></div>'; }).join('');
+    var first=Object.keys(tage).sort()[0];
+    syModal('ckp-dlg','<div style="width:100%;max-width:520px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><span class="lp-cap">IMPORT ABGESCHLOSSEN</span><button type="button" class="lp-x" data-ckp="close" aria-label="schliessen">✕</button></div>'+rows
+      +'<div class="lp-mu" style="font-size:12px;margin:10px 0">'+n+' Einträge übernommen'+(Object.keys(weeks).length?' · Wochen: '+Object.keys(weeks).sort().map(function(m){return 'KW '+wbKW(m);}).join(', '):'')+'.</div>'
+      +'<div class="lp-row" style="justify-content:flex-end;gap:8px;flex-wrap:wrap">'+(first?'<button type="button" class="lp-btn gray" data-ckp="plan" data-d="'+first+'">Zum Wochenplan</button>':'')+'<button type="button" class="lp-btn gray" data-ckp="notes">Zu den Notizen</button><button type="button" class="lp-btn fill" data-ckp="close">Fertig</button></div></div>');
+    showToast('Checkpoint-Paket importiert ✓','ok');
+  };
+  var name='studyos_backup_'+syDateStamp()+'_vor-checkpoint.json';
+  try{ sosDownloadJson('study-os-backup-vor-checkpoint'); }catch(e){}
+  if(syToken()&&syGistId()){ syGistBackup(name,JSON.stringify(D),'studyos_backup_2',10).then(go,go); } else go();
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-ckp]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-ckp');
+  switch(a){
+    case 'open': return ckpOpen();
+    case 'close': return ckpClose();
+    case 'check': return ckpCheck();
+    case 'back': return ckpOpen();
+    case 'backup': try{ sosDownloadJson('study-os-backup-vor-checkpoint'); el.textContent='Backup heruntergeladen ✓'; }catch(e){} return;
+    case 'go': return ckpRun();
+    case 'plan': ckpClose(); WP_UI.week=lpMonday(el.getAttribute('data-d')); return goSec('wplan');
+    case 'notes': ckpClose(); HG.open=true; HG.sec='wochenbefehl'; goSec('set-hangar'); try{ renderHangar(); }catch(e){} return;
+  }
+});
+document.addEventListener('change',function(ev){
+  var e=ev.target; if(e&&e.id==='ckp-file'&&e.files&&e.files[0]){ var rd=new FileReader(); rd.onload=function(){ var t=document.getElementById('ckp-txt'); if(t)t.value=String(rd.result||''); ckpCheck(); }; rd.readAsText(e.files[0]); e.value=''; }
+});
+
+// ── Monatsziele mit Zähler ──
+var _renderMonatsziele_ck=renderMonatsziele;
+renderMonatsziele=function(){
+  _renderMonatsziele_ck();
+  try{
+    var el=document.getElementById('monatsziele-full'); if(!el)return;
+    el.querySelectorAll('.crow[data-mid]').forEach(function(r){
+      var z=(D.monatsziele||[]).find(function(x){return x.id===r.getAttribute('data-mid');}); if(!z||!(z.ziel>0))return;
+      var cn=r.querySelector('.cn'); if(!cn||r.querySelector('[data-ckmg]'))return;
+      cn.insertAdjacentHTML('afterend','<span style="display:inline-flex;gap:4px;align-items:center;margin-left:6px;white-space:nowrap"><button type="button" class="lp-x" data-ckmg="-" data-id="'+lpEsc(z.id)+'" aria-label="eins weniger">−</button><span class="lp-mono" style="font-size:12px">'+(z.stand||0)+'/'+z.ziel+'</span><button type="button" class="lp-x" data-ckmg="+" data-id="'+lpEsc(z.id)+'" aria-label="eins mehr">+</button></span>');
+    });
+  }catch(e){}
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-ckmg]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var z=(D.monatsziele||[]).find(function(x){return x.id===el.getAttribute('data-id');}); if(!z)return;
+  z.stand=Math.max(0,(z.stand||0)+(el.getAttribute('data-ckmg')==='+'?1:-1)); z.erledigt=z.ziel>0&&z.stand>=z.ziel; lpTouch(z); saveD(); try{ renderMonatsziele(); renderAufgabenCurrent(); }catch(e){}
+},true);
+
+// ── Notizen «Regeln und Erkenntnisse» + Import-Knopf (Hangar) ──
+var _waHgMehr_ck=waHgMehr;
+waHgMehr=function(){
+  var N=(D.wbNotizen||[]).slice().sort(function(a,b){return (a.ts||0)-(b.ts||0);});
+  var h=_waHgMehr_ck()+'<div class="lp-cd" style="margin-top:12px"><div class="lp-row" style="justify-content:space-between;align-items:center;margin-bottom:6px"><span class="lp-cap">REGELN UND ERKENNTNISSE</span><button type="button" class="lp-btn gray" data-ckp="open">Checkpoint-Paket importieren</button></div><div class="lp-mu" style="font-size:11px;margin-bottom:6px">Notizen aus Checkpoint-Paketen. Sie werden nicht automatisch geprüft; wer daraus eine echte Regel will, legt sie oben unter «Regeln» an.</div>';
+  [['regel','Regeln'],['erkenntnis','Erkenntnisse']].forEach(function(g){
+    var L=N.filter(function(n){return n.art===g[0];}); if(!L.length)return;
+    h+='<div class="lp-mu" style="font-size:11px;margin:8px 0 2px">'+g[1].toUpperCase()+'</div>';
+    L.forEach(function(n){ h+='<div class="hg-ln" style="align-items:flex-start;gap:8px"><span style="font-size:13px;flex:1;min-width:0">'+lpEsc(n.text)+'</span><button type="button" class="lp-x" data-wbn="del" data-id="'+lpEsc(n.id)+'" aria-label="löschen">✕</button></div>'; });
+  });
+  if(!N.length)h+='<div class="lp-mu" style="font-size:12px">Noch keine Notizen.</div>';
+  h+='<div class="lp-row" style="gap:6px;margin-top:8px"><select class="lp-in" id="wbn-art" style="width:auto"><option value="regel">Regel</option><option value="erkenntnis">Erkenntnis</option></select><input class="lp-in" id="wbn-txt" placeholder="Notiz hinzufügen" style="flex:1;min-width:0"><button type="button" class="lp-btn gray" data-wbn="add">+</button></div></div>';
+  return h;
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wbn]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-wbn');
+  if(a==='del'){ var id=el.getAttribute('data-id'); markDeleted(id); D.wbNotizen=(D.wbNotizen||[]).filter(function(n){return n.id!==id;}); saveD(); waHgRender(); }
+  else if(a==='add'){ var t=ckpTxt((document.getElementById('wbn-txt')||{}).value,400); if(!t)return; var art=(document.getElementById('wbn-art')||{}).value||'regel'; if(!Array.isArray(D.wbNotizen))D.wbNotizen=[]; var id2='wbn:'+art+':'+syHash(t); if(!D.wbNotizen.some(function(n){return n.id===id2;}))D.wbNotizen.push({id:id2,art:art,text:t,datum:today(),quelle:'manuell',ts:Date.now()}); saveD(); waHgRender(); }
+});
+var _hgSectionHTML_ck=hgSectionHTML;
+hgSectionHTML=function(){ var h=_hgSectionHTML_ck(); return HG.sec==='daten'?h+'<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">CHECKPOINT-PAKET</div><div class="lp-mu" style="font-size:12px;margin-bottom:8px">Plan-Paket (Blöcke, Termine, Aufgaben, Monatsziele, Regeln) aus Text oder Datei einlesen, mit Vorschau und automatischem Backup.</div><button type="button" class="lp-btn fill" data-ckp="open">Checkpoint-Paket importieren</button></div>':h; };
 
 // ═══════════════════════════════════════════════════════════
 // INIT
