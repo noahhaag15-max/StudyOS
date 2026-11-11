@@ -19654,7 +19654,7 @@ function oeMigrateAsk(){
     +'<div class="hg-ln"><span>Streak-Bonus</span><span class="lp-mono">×1,2 / ×1,5 → ×1,1 / ×1,25</span></div>'
     +'<div class="hg-ln"><span>Zwei Kernblöcke am selben Tag ✗</span><span class="lp-mono">−10 XP (Recovery +5)</span></div>'
     +'<div class="hg-ln"><span>XP-Abzug pro Woche höchstens</span><span class="lp-mono">150 XP</span></div>'
-    +'<div class="lp-mu" style="margin:10px 0 4px">Sofort: Lounge-Preise ×2,5 (z. B. '+rew.slice(0,3).map(function(r){ return lpEsc(r.name)+' '+fmtCH(OE_ALT[r.id]||r.preis)+' → '+fmtCH(oeNeuPreis(r)); }).join(', ')+' …). Der XP-Stand kann nicht unter 0 fallen. Ein Rang sinkt nur nach Vorwarnung und '+OE_RANG_TAGE+' Tagen unter seiner Schwelle. Bereits gesammelte XP, Ränge und Trophäen bleiben unverändert. Alles ist im Hangar einstellbar.</div>'
+    +'<div class="lp-mu" style="margin:10px 0 4px">Sofort: Standard-Belohnungen ×2,5, selbst angelegte Sparziele bleiben (z. B. '+rew.slice(0,3).map(function(r){ return lpEsc(r.name)+' '+fmtCH(OE_ALT[r.id]||r.preis)+' → '+fmtCH(oeNeuPreis(r)); }).join(', ')+' …). Der XP-Stand kann nicht unter 0 fallen. Ein Rang sinkt nur nach Vorwarnung und '+OE_RANG_TAGE+' Tagen unter seiner Schwelle. Bereits gesammelte XP, Ränge und Trophäen bleiben unverändert. Alles ist im Hangar einstellbar.</div>'
     +'<div class="lp-row" style="flex-wrap:wrap;justify-content:flex-end;gap:8px"><button type="button" class="lp-btn gray" data-oe="later">Später</button><button type="button" class="lp-btn gray" data-oe="backup">Backup herunterladen</button><button type="button" class="lp-btn fill" data-oe="go">Anwenden</button></div>');
 }
 function oeMigrateRun(){
@@ -19664,7 +19664,7 @@ function oeMigrateRun(){
     neu.block_ok_alltag=3; neu.kern_minus=-10; neu.xpMinusCap=150; neu.mult=[{ab:7,f:1.1},{ab:14,f:1.25}];
     var basis=sets.filter(function(s){return s.ab!==morgen;}); basis.push({ab:morgen,werte:neu}); basis.sort(function(a,b){return a.ab>b.ab?1:-1;});
     setCfg('punkte',basis,'wirtschaft');
-    var rew=JSON.parse(JSON.stringify(cfg('lounge.belohnungen')||[])); rew.forEach(function(r){ if(r&&r.preis>0)r.preis=oeNeuPreis(r); }); setCfg('lounge.belohnungen',rew,'wirtschaft');
+    var rew=JSON.parse(JSON.stringify(cfg('lounge.belohnungen')||[])); rew.forEach(function(r){ if(r&&r.preis>0&&OE_ALT[r.id]!=null)r.preis=oeNeuPreis(r); }); setCfg('lounge.belohnungen',rew,'wirtschaft');
     setCfg('economy.v',2,'wirtschaft');
     var m=document.getElementById('oe-mig'); if(m)m.remove(); try{ syLog('Migration','Wirtschaft angepasst (ab '+morgen+')'); }catch(e){}
     try{ syRefresh(); }catch(e){} showToast('Wirtschaft angepasst ✓ — neue Punkte ab morgen','ok');
@@ -21141,6 +21141,35 @@ var WB_HILFE='<details class="lp-cd" style="margin-bottom:12px"><summary style="
   +'<div class="lp-mu">Regeln (unten) prüfen den Plan und fügen z. B. das Briefing vor der Flugstunde automatisch ein. Im Lernplan hält die Baseline fest, wann jede Etappe fertig sein soll; Verzug und Burndown zeigen den Abstand (violett ab 7 Tagen, nie rot). Die Kurs-Prüfung vergleicht Soll- und Ist-Tempo mit Prognose. Der Export (Mittwoch: Zwischenstand, Sonntag: Wochenrapport) lässt sich kopieren. Abzüge und Antragskosten gelten erst ab dem Datum oben und nur für freigegebene Wochen; der XP-Stand fällt nie unter 0.</div></div></details>';
 var _waHgHTML_wb8=waHgHTML;
 waHgHTML=function(){ return WB_HILFE+_waHgHTML_wb8(); };
+
+// ═══════════════════════════════════════════════════════════
+// SPARZIEL-PREISE PRÜFEN — die Wirtschafts-Umstellung (×2,5) darf nur die Standard-Belohnungen treffen, nicht selbst angelegte
+// Sparziele. Wer betroffen ist, sieht hier den Preis vor der Umstellung (aus dem Änderungsprotokoll) und kann ihn zurücksetzen.
+// ═══════════════════════════════════════════════════════════
+function oeSparOrig(id){
+  var l=(D.cfgLog||[]).filter(function(e){ return e&&e.path==='lounge.belohnungen'&&e.quelle==='wirtschaft'&&Array.isArray(e.alt); }).sort(function(a,b){return a.ts-b.ts;});
+  for(var i=0;i<l.length;i++){ var it=l[i].alt.find(function(x){return x&&x.id===id;}); if(it&&it.preis>0)return it.preis; }
+  return null;
+}
+function oeSparListe(){
+  return (cfg('lounge.belohnungen')||[]).filter(function(r){ return r&&OE_ALT[r.id]==null; }).map(function(r){ return {r:r,orig:oeSparOrig(r.id)}; });
+}
+function oeSparHTML(){
+  var L=oeSparListe(), n=(D.cfgLog||[]).filter(function(e){ return e&&e.path==='lounge.belohnungen'&&e.quelle==='wirtschaft'; }).length;
+  var h='<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">SPARZIELE · PREISE PRÜFEN</div><div class="lp-mu" style="font-size:11px;margin-bottom:8px">Die Wirtschafts-Umstellung hat im Protokoll '+n+' Preisänderung'+(n===1?'':'en')+' an Belohnungen und Sparzielen vermerkt. Hier stehen deine selbst angelegten Sparziele mit dem Preis vor der Umstellung.</div>';
+  if(!L.length)return h+'<div class="lp-mu" style="font-size:12px">Keine selbst angelegten Sparziele.</div></div>';
+  L.forEach(function(x){ var diff=x.orig!=null&&x.orig!==x.r.preis;
+    h+='<div class="hg-ln" style="gap:8px;flex-wrap:wrap"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(x.r.name)+'</span><span class="lp-mono" style="font-size:12px">'+fmtCH(x.r.preis)+(x.orig!=null?' <span class="lp-mu">· vorher '+fmtCH(x.orig)+'</span>':'')+'</span>'+(diff?'<button type="button" class="lp-btn gray" data-oe2="reset" data-id="'+lpEsc(x.r.id)+'">auf '+fmtCH(x.orig)+' zurück</button>':'')+'</div>'; });
+  return h+'</div>';
+}
+var _hgSectionHTML_oe2=hgSectionHTML;
+hgSectionHTML=function(){ var h=_hgSectionHTML_oe2(); return HG.sec==='daten'?h+oeSparHTML():h; };
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-oe2]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var id=el.getAttribute('data-id'), o=oeSparOrig(id); if(o==null)return;
+  var rew=JSON.parse(JSON.stringify(cfg('lounge.belohnungen')||[])), r=rew.find(function(x){return x.id===id;}); if(!r)return; r.preis=o;
+  setCfg('lounge.belohnungen',rew,'korrektur'); try{ renderHangar(); }catch(e){} showToast('Preis zurückgesetzt ✓','ok');
+},true);
 
 // ═══════════════════════════════════════════════════════════
 // INIT
