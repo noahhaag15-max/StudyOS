@@ -2089,6 +2089,11 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 .sp-tint { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
 .sp-band { font-size: 9px; line-height: 14px; height: 14px; border-radius: 6px; margin-top: 3px; color: #0b1620; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; padding: 0 3px; }
 .sp-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid; border-radius: 99px; padding: 2px 10px; font-size: 11px; color: var(--lp-text); } .sp-pill i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+/* WOCHENPLAN: Mischkategorie + Überlappen */
+.wp-b.mix { padding-left: 12px; }
+.wp-b.mix::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: var(--bc2); }
+.wp-b.ol { box-shadow: 0 0 0 1.5px var(--lp-bg), 0 2px 6px rgba(0,0,0,.35); }
 </style>
 </head>
 <body>
@@ -4893,7 +4898,7 @@ function wpEditorSave(){
 }
 function wpVorlageSpeichern(){
   var name=(document.getElementById('wp-vorl-name').value||'').trim()||'Standardwoche', mon=WP_UI.week, w=wpWeek(mon); if(!w||!w.bloecke.length){ showToast('Diese Woche ist leer — nichts zu speichern.'); return; }
-  var W=wpEnsure(), bl=w.bloecke.filter(function(b){return b.typ!=='fix'&&b.status!=='verschoben'&&b.typ!=='belohnung';}).map(function(b){ return {tagIdx:(lpWd(b.tag)+6)%7,start:b.start,ende:b.ende,titel:b.titel,kategorie:b.kategorie,typ:b.typ}; });
+  var W=wpEnsure(), bl=w.bloecke.filter(function(b){return b.typ!=='fix'&&b.status!=='verschoben'&&b.typ!=='belohnung';}).map(function(b){ return {tagIdx:(lpWd(b.tag)+6)%7,start:b.start,ende:b.ende,titel:b.titel,kategorie:b.kategorie,kategorie2:b.kategorie2||'',typ:b.typ}; });
   var ex=W.vorlagen.find(function(v){return v.name===name;});
   if(ex){ ex.bloecke=bl; ex.ts=Date.now(); } else W.vorlagen.push({id:uid(),name:name,bloecke:bl,ts:Date.now()});
   saveD(); showToast('Vorlage «'+name+'» gespeichert ('+bl.length+' Blöcke) ✓','ok'); wpRender();
@@ -4904,7 +4909,7 @@ function wpVorlageAnwenden(id){
   (v.bloecke||[]).forEach(function(t){
     var tag=lpAdd(mon,t.tagIdx);
     if(wpBlocksOn(tag).some(function(b){return b.titel===t.titel&&b.start===t.start;}))return;
-    wpAdd(wpNew({tag:tag,start:t.start,ende:t.ende,titel:t.titel,kategorie:t.kategorie,typ:t.typ,quelle:'vorlage'})); n++;
+    var vb=wpNew({tag:tag,start:t.start,ende:t.ende,titel:t.titel,kategorie:t.kategorie,typ:t.typ,quelle:'vorlage'}); if(t.kategorie2)vb.kategorie2=t.kategorie2; wpAdd(vb); n++;
   });
   WP_UI.vorlagen=false; saveD(); wpRender(); showToast('Vorlage angewendet: '+n+' Blöcke ✓','ok');
 }
@@ -11050,6 +11055,108 @@ document.addEventListener('click',function(ev){
   if(el.getAttribute('data-md')==='hof'){ hofToggle(el.getAttribute('data-id')); return; }
   if(el.getAttribute('data-hof')==='del')hofRemove(el.getAttribute('data-id'));
 });
+
+// ═══════════════════════════════════════════════════════════
+// WOCHENPLAN: Mischkategorien (zweite Kategorie) + Überlappen statt Verkleinern
+// ═══════════════════════════════════════════════════════════
+CFG_DEFAULTS['wp.ueberlappen']=true;
+CFG_META['wp.ueberlappen']={gruppe:'Anzeige',label:'Wochenplan: Block in langem Block überlappt statt zu verkleinern'};
+CFG_VALIDATE['wp.ueberlappen']=function(v){ return (v===true||v===false)?null:'Ein oder aus.'; };
+var PX={inSave:false};
+
+// ── Überlappen: Ein Block, der komplett in einem deutlich längeren liegt, liegt darüber (rechter Teil) ──
+var _wpLanes_px=wpLanes;
+wpLanes=function(list){
+  list.forEach(function(b){ b._ol=false; });
+  if(!cfg('wp.ueberlappen'))return _wpLanes_px(list);
+  var st=function(b){ return lpT2M(b.start); }, en=function(b){ return Math.max(lpT2M(b.ende),st(b)+15); }, du=function(b){ return en(b)-st(b); };
+  var cont=function(b){
+    var best=null;
+    list.forEach(function(a){
+      if(a===b||a.typ==='vorschlag'||a.status==='verschoben')return;
+      if(st(a)<=st(b)&&en(a)>=en(b)&&du(a)>=1.5*du(b)&&du(a)-du(b)>=30&&(!best||du(a)>du(best)))best=a;
+    });
+    return best;
+  };
+  var roots=[], over=[], parent={};
+  list.forEach(function(b){ var c=cont(b); if(c){ over.push(b); parent[b.id]=c; } else roots.push(b); });
+  if(!over.length)return _wpLanes_px(list);
+  var sorted=_wpLanes_px(roots), groups={};
+  over.forEach(function(o){ var p=parent[o.id]; (groups[p.id]=groups[p.id]||{p:p,l:[]}).l.push(o); });
+  var res=sorted.slice();
+  Object.keys(groups).forEach(function(k){
+    var g=groups[k], p=g.p, pl=(p._c||0)*100/(p._n||1), pw=100*(p._sp||1)/(p._n||1), strip=pw*0.18, al=pl+strip, aw=pw-strip;
+    _wpLanes_px(g.l).forEach(function(o){
+      o._ol=true; o._ox=al+(o._c||0)*aw/(o._n||1); o._ow=(o._sp||1)*aw/(o._n||1); res.push(o);
+    });
+  });
+  return res;
+};
+
+// ── Darstellung: Überlappung (Position/Stapel) und Mischkategorie (Streifen in der zweiten Farbe) ──
+var _wpBlockHTML_px=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_px(b,z,now); if(!h)return h;
+  if(b._ol){
+    h=h.replace(/left:calc\([^;]*\);width:calc\([^;]*\)/,'left:calc('+b._ox.toFixed(2)+'% + 1px);width:calc('+b._ow.toFixed(2)+'% - 2px);z-index:3');
+    h=h.replace('class="wp-b ','class="wp-b ol ');
+  }
+  if(b.kategorie2&&b.typ!=='belohnung'){
+    var k1=wpKats().find(function(k){return k.id===b.kategorie;}), k2=wpKats().find(function(k){return k.id===b.kategorie2;});
+    if(k2){
+      h=h.replace('class="wp-b ','class="wp-b mix ').replace('style="--bc:','style="--bc2:'+wpKatHex(k2)+';--bc:');
+      if(k1)h=h.replace('title="'+lpEsc(k1.name),'title="'+lpEsc(k1.name+' + '+k2.name));
+    }
+  }
+  return h;
+};
+
+// ── Editor: «Zusätzlich» (zweite Kategorie) ──
+var _wpEditor_px=wpEditor;
+wpEditor=function(id,pre){
+  var r=_wpEditor_px(id,pre);
+  try{
+    var host=document.getElementById('wp-modal'), g=document.getElementById('wpm-kat'); if(!host||!g||document.getElementById('wpm-kat2'))return r;
+    var b=id?wpFind(id):null; if(b&&(b.typ==='fix'||b.typ==='belohnung'))return r;
+    var o=b||pre||{}, k2=o.kategorie2||'', cur=(b?b.kategorie:(o.kategorie||'aufgabe'));
+    var row=document.createElement('div'); row.className='lp-fld'; row.style.alignItems='flex-start';
+    row.innerHTML='<label title="Mischkategorie: zählt weiter als Hauptkategorie, wird aber zusätzlich in der zweiten Farbe markiert">Zusätzlich</label><div class="wp-katgrid" id="wpm-kat2" data-val="'+lpEsc(k2)+'">'
+      +'<button type="button" class="wp-kat'+(k2?'':' on')+'" data-px="kat2" data-id="" style="--bc:#7d8b99"><i></i>keine</button>'
+      +wpKats().map(function(k){ return '<button type="button" class="wp-kat'+(k2===k.id?' on':'')+'" data-px="kat2" data-id="'+lpEsc(k.id)+'" style="--bc:'+wpKatHex(k)+'"><i></i>'+lpEsc(k.name)+'</button>'; }).join('')+'</div>';
+    var anchor=g.closest('.lp-fld'); if(anchor)anchor.parentNode.insertBefore(row,anchor.nextSibling);
+    var hint=document.createElement('div'); hint.className='lp-mu'; hint.style.cssText='margin:-4px 0 8px;font-size:10px'; hint.textContent='Mischkategorie, z. B. Lernen + Freizeit oder Termin + Uni: zählt als Hauptkategorie, bekommt zusätzlich einen Streifen in der zweiten Farbe.';
+    row.parentNode.insertBefore(hint,row.nextSibling);
+  }catch(e){}
+  return r;
+};
+var _wpEditorSave_px=wpEditorSave;
+wpEditorSave=function(){
+  var host=document.getElementById('wp-modal'), id=host&&host.getAttribute('data-id'), g=document.getElementById('wpm-kat2'), k2=g?(g.getAttribute('data-val')||''):null, kat=(document.getElementById('wpm-kat')||{getAttribute:function(){return '';}}).getAttribute('data-val');
+  PX.k2=(k2!==null&&k2!==kat)?k2:(k2===kat?'':null); PX.inSave=true;
+  try{ _wpEditorSave_px(); }finally{ PX.inSave=false; }
+  if(id&&PX.k2!==null){ var b=wpFind(id); if(b&&b.typ!=='fix'&&(b.kategorie2||'')!==PX.k2){ if(PX.k2)b.kategorie2=PX.k2; else delete b.kategorie2; lpTouch(b); saveD(); try{ wpRender(); }catch(e){} } }
+  PX.k2=null;
+};
+var _wpNew_px=wpNew;
+wpNew=function(o){ var b=_wpNew_px(o); if(PX.inSave&&PX.k2)b.kategorie2=PX.k2; return b; };
+// Verschobene Kopie, Vorlagen: zweite Kategorie mitnehmen
+var _wpMoveBlock_px=wpMoveBlock;
+wpMoveBlock=function(b,tag,s,e,ghost){
+  var r=_wpMoveBlock_px(b,tag,s,e,ghost);
+  if(r&&r!==b&&b.kategorie2&&!r.kategorie2){ r.kategorie2=b.kategorie2; lpTouch(r); saveD(); }
+  return r;
+};
+// Zeit mit Liv (auch als zweite Kategorie) zählt als Liv-Zeit
+lvIsLiv=function(b){ return b.status!=='verschoben'&&(b.kategorie==='liv'||b.kategorie2==='liv'||/\bliv\b/i.test(b.titel||'')); };
+
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-px]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var a=el.getAttribute('data-px');
+  if(a==='kat2'){ var g=document.getElementById('wpm-kat2'); if(!g)return; var v=el.getAttribute('data-id')||''; g.setAttribute('data-val',v); Array.prototype.forEach.call(g.querySelectorAll('.wp-kat'),function(x){ x.classList.toggle('on',(x.getAttribute('data-id')||'')===v); }); }
+  else if(a==='ueberlappen'){ setCfg('wp.ueberlappen',!cfg('wp.ueberlappen'),'hangar'); try{ renderHangar(); wpRender(); }catch(e){} }
+},true);
+var _hgAnsichtHTML_px=hgAnsichtHTML;
+hgAnsichtHTML=function(){ var h=_hgAnsichtHTML_px(); return h.replace(/<\/div>$/,'<div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:13px">Wochenplan: Überlappen statt Verkleinern</div><div class="lp-mu" style="font-size:11px">Ein Block, der ganz in einem langen Block liegt (z. B. Mittagspause im Arbeitstag), liegt darüber, statt den langen Block schmal zu machen.</div></div><button type="button" class="lp-sw'+(cfg('wp.ueberlappen')?' on':'')+'" data-px="ueberlappen" aria-label="Überlappen"><i></i></button></div></div>'); };
 
 // ═══════════════════════════════════════════════════════════
 // LERNPLAN-MODUL — Fach → Thema → Etappe → Checkpoints (D.lp). Ersetzt den alten Themenplan.
