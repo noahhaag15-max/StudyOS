@@ -22148,9 +22148,9 @@ wpRender=function(){
 // Ohne eigene Priorität steht ein Fenster-Block auf «Optional», ein dicker Block auf «Befohlen» (Mittel). Ein dicker grüner Block ist
 // «befohlene Freizeit» und steht damit über einem optionalen Match. Gilt für die Sortierung (Heute zuerst, Morgen zuerst) und die Beschriftung.
 // ═══════════════════════════════════════════════════════════
-function wbPrioEff(b){ return b.prio||(b.typ==='fenster'?'optional':''); }
+function wbPrioEff(b){ return b.prio||(b.typ==='fenster'?(b.dabei==='ja'?'moeglich':'optional'):''); }
 function wbRank(b){ return pzRank(wbPrioEff(b)); }
-function wbPrioText(b){ if(b.prio)return pzPrioLbl(b.prio); if(b.typ==='fenster')return 'Optional'; return b.kategorie==='freizeit'?'Freizeit, befohlen':'Befohlen'; }
+function wbPrioText(b){ if(b.prio)return pzPrioLbl(b.prio); if(b.typ==='fenster')return b.dabei==='ja'?'Wenn möglich':'Optional'; return b.kategorie==='freizeit'?'Freizeit, befohlen':'Befohlen'; }
 var _wpBlockHTML_wb23=wpBlockHTML;
 wpBlockHTML=function(b,z,now){
   var h=_wpBlockHTML_wb23(b,z,now); if(!h||b.typ==='belohnung'||String(b.id).indexOf('md:')===0)return h;
@@ -22173,6 +22173,24 @@ function wbHeuteZuerstHTML(){
   rh.slice(0,2).forEach(function(x){ h+='<div class="lp-mu" style="font-size:11px;margin-top:6px;color:var(--c-fun)"><i class="ti ti-alert-triangle"></i> '+lpEsc(x.text)+'</div>'; });
   return h;
 }
+
+// ═══════════════════════════════════════════════════════════
+// WOCHENPLAN-LAYOUT: dicke (befohlene) Blöcke zuerst und in voller Breite, gestrichelte (optionale) Blöcke liegen als Überlappung darüber,
+// rechts im Block. Ein gestrichelter Block verkleinert dicke Blöcke nie. Ohne Überschneidung bleibt er wie bisher in der Spalte.
+// ═══════════════════════════════════════════════════════════
+var _wpLanes_wb24=wpLanes;
+wpLanes=function(list){
+  var fen=list.filter(function(b){ return b.typ==='fenster'&&b.status!=='verschoben'; }), sol=list.filter(function(b){ return fen.indexOf(b)<0; });
+  if(!fen.length||!sol.length)return _wpLanes_wb24(list);
+  var st=function(b){ return lpT2M(b.start); }, en=function(b){ return Math.max(lpT2M(b.ende),st(b)+15); };
+  var res=_wpLanes_wb24(sol).slice(), W=62;
+  var ueber=function(f){ return sol.some(function(s){ return s.status!=='verschoben'&&s.typ!=='vorschlag'&&st(s)<en(f)&&en(s)>st(f); }); };
+  _wpLanes_wb24(fen).forEach(function(f){
+    if(ueber(f)){ var n=f._n||1, c=f._c||0, sp=f._sp||1; f._ol=true; f._ox=(100-W)+c*W/n; f._ow=sp*W/n; } else f._ol=false;
+    res.push(f);
+  });
+  return res;
+};
 
 // ═══════════════════════════════════════════════════════════
 // INIT
