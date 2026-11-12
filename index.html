@@ -22235,7 +22235,7 @@ wpBlockHTML=function(b,z,now){
   var h=_wpBlockHTML_wb26(b,z,now); if(!h||b.typ==='belohnung')return h;
   h=h.replace(/<b class="px-p[^"]*">[^<]*<\/b> /g,'');
   if(!b.prio)return h;
-  var mk='<b class="px-p" style="color:'+wbPrioColor(b.prio)+'">'+(b.prio==='must'?'!!':'!')+'</b> ';
+  var hell=(['must','sehr','niedrig'].indexOf(b.prio)>=0), mk='<b class="px-p" style="background:'+wbPrioColor(b.prio)+';color:'+(hell?'#fff':'#06121a')+'">'+(b.prio==='must'?'!!':'!')+'</b> ';
   return h.replace('<span class="wp-bt">','<span class="wp-bt">'+mk);
 };
 // Editor: ohne gesetzte Priorität ist «Mittel» sichtbar vorgewählt (gespeichert wird dann nichts)
