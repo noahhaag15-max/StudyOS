@@ -22501,6 +22501,108 @@ document.addEventListener('change',function(ev){
 });
 
 // ═══════════════════════════════════════════════════════════
+// FOKUSMODUS — «Nächste Etappe» wählt nicht mehr selbst: es FRAGT, was als Nächstes kommt
+// (gleiches Thema, Lernblöcke im Wochenplan, Lernplan heute, beliebige offene Etappe), oder Fokusmodus schliessen.
+// ═══════════════════════════════════════════════════════════
+function fkNextCands(){
+  var cur=LM&&lpEtappe(LM.etappeId), td=today(), seen={}, out={thema:[],block:[],heute:[]};
+  if(cur)seen[cur.id]=1; lpSessionsOn(td).forEach(function(s){ seen[s.etappeId]=1; });
+  if(cur&&cur.themaId!=='fokus-th'){
+    var t=lpThema(cur.themaId), m=lpModus(t), es=lpEtappenOf(cur.themaId), i=es.findIndex(function(e){return e.id===cur.id;});
+    es.slice(i+1).concat(es.slice(0,Math.max(0,i))).forEach(function(e){ if(!seen[e.id]&&!lpEtappeDone(e,m)&&out.thema.length<4){ seen[e.id]=1; out.thema.push(e); } });
+  }
+  wpBlocksOn(td).forEach(function(b){ if(wbIstLernBlock(b)&&b.status==='offen'&&b.id!==(LM&&LM.blockId)&&b.ende>=wpM2T(ckNowMin()))out.block.push(b); });
+  out.block.sort(function(a,b){ return a.start.localeCompare(b.start); }); out.block=out.block.slice(0,4);
+  try{ lpHeuteItems().forEach(function(c){ if(!seen[c.e.id]&&out.heute.length<4){ seen[c.e.id]=1; out.heute.push(c.e); } }); }catch(e){}
+  return out;
+}
+function fkEtLabel(e){ var t=lpThema(e.themaId), f=t&&lpFachById(t.fachId); return (f?f.fach+' › ':'')+(t?t.name+' › ':'')+e.titel; }
+function fkAlleOptionen(){
+  var L=lpEnsure(), h='';
+  L.faecher.forEach(function(f){ if(f.fach==='Fokus-Blöcke')return;
+    L.themen.filter(function(t){return t.fachId===f.id;}).forEach(function(t){ var m=lpModus(t), es=lpEtappenOf(t.id).filter(function(e){return !lpEtappeDone(e,m)&&e.id!==(LM&&LM.etappeId);}); if(!es.length)return;
+      h+='<optgroup label="'+lpEsc(f.fach+' › '+t.name)+'">'+es.map(function(e){ return '<option value="'+lpEsc(e.id)+'">'+lpEsc(e.titel)+'</option>'; }).join('')+'</optgroup>'; }); });
+  return h;
+}
+var _lpLmBreakHTML_fk=lpLmBreakHTML;
+lpLmBreakHTML=function(){
+  if(!LM||!LM.pick)return _lpLmBreakHTML_fk.apply(this,arguments);
+  var left=Math.max(0,LM.breakMin*60000-(Date.now()-LM.breakStart)), c=fkNextCands();
+  var btn=function(attr,id,txt,sub){ return '<button type="button" class="lp-btn gray" '+attr+'="'+lpEsc(id)+'" style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:8px 10px"><span style="font-size:13px">'+lpEsc(txt)+'</span>'+(sub?'<div class="lp-mu" style="font-size:10px">'+lpEsc(sub)+'</div>':'')+'</button>'; };
+  var sec=function(t,list){ return list.length?'<div class="lp-cap" style="margin:10px 0 6px;text-align:left">'+t+'</div>'+list.join(''):''; };
+  var alle=fkAlleOptionen();
+  return '<div class="lm-dlgwrap soft"><div class="lp-cd lm-dlg" style="max-height:86vh;overflow-y:auto"><div class="lp-row" style="justify-content:space-between"><span style="font-size:14px;font-weight:500">Was machst du jetzt?</span><span class="lp-mono" data-lm="bdur" style="color:var(--lp-ok)">'+lpFmtDur(left)+'</span></div>'
+    +'<div class="lp-mu" style="font-size:11px">Es startet genau das, was du antippst. Nichts davon? Dann «Etwas anderes».</div>'
+    +sec('GLEICHES THEMA',c.thema.map(function(e){ return btn('data-fkn',e.id,e.titel,'nächste offene Etappe'); }))
+    +sec('LERNBLÖCKE IM WOCHENPLAN HEUTE',c.block.map(function(b){ return btn('data-fkb',b.id,b.titel,b.start+'–'+b.ende); }))
+    +sec('LERNPLAN HEUTE',c.heute.map(function(e){ return btn('data-fkn',e.id,e.titel,fkEtLabel(e)); }))
+    +(alle?'<div class="lp-cap" style="margin:10px 0 6px;text-align:left">ANDERE ETAPPE</div><div class="lp-row" style="gap:6px"><select class="lp-in" id="fk-alle" style="flex:1;min-width:0"><option value="">wählen …</option>'+alle+'</select><button type="button" class="lp-btn" data-fkn="__sel">Starten</button></div>':'')
+    +'<div class="lp-row" style="justify-content:flex-end;flex-wrap:wrap;margin-top:12px;gap:6px"><button type="button" class="lp-btn gray" data-fkx="back">Zurück</button><button type="button" class="lp-btn gray" data-fkx="close">Etwas anderes</button><button type="button" class="lp-btn gray" data-fkx="close">Fertig für heute</button></div></div></div>';
+};
+function fkStartNext(fn){ var sm=LM.sessMin; LM=null; fn(); if(LM&&LM.mode==='start'){ LM.sessMin=sm; LM.pauseMin=sm===25?5:10; } lpLmRender(); }
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-lpa="lm-next"],[data-fkn],[data-fkb],[data-fkx]'); if(!el||!LM)return;
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  if(el.getAttribute('data-lpa')==='lm-next'){ LM.pick=true; return lpLmRender(); }
+  var x=el.getAttribute('data-fkx'); if(x==='back'){ LM.pick=false; return lpLmRender(); } if(x==='close')return lpLmClose();
+  var b=el.getAttribute('data-fkb'); if(b)return fkStartNext(function(){ wbFokusStart(b); });
+  var id=el.getAttribute('data-fkn'); if(id==='__sel'){ var s=document.getElementById('fk-alle'); id=s&&s.value; if(!id){ showToast('Bitte eine Etappe wählen.'); return; } }
+  if(id&&lpEtappe(id))fkStartNext(function(){ lpLmOpenStart(id); });
+},true);
+
+// ═══════════════════════════════════════════════════════════
+// AUFGABEN-POOL — «Sicher» plant KEINE Wiederholung mehr (Aufgabe sitzt). Zäh / Mit Hilfe / Nicht gelöst:
+// die App FRAGT, wann du nachholen willst (oder gar nicht), statt selbst ein Datum zu setzen.
+// ═══════════════════════════════════════════════════════════
+var _apApplyResult_q=apApplyResult;
+apApplyResult=function(a,res){
+  _apApplyResult_q(a,res);
+  if(res==='sicher'){ a.naechsteWdh=null; if(a.status!=='pruefungsfest')a.status=apEtaPuffer(a.themaId)?'pruefungsfest':'sitzt'; lpTouch(a); saveD(); }
+};
+function apWdhAsk(a,res){
+  var td=today(), vor=a.naechsteWdh||lpAdd(td,1), lbl={zaeh:'✓ Zäh',hilfe:'~ Mit Hilfe',falsch:'✗ Nicht gelöst'}[res]||'';
+  var opt=function(d,t){ return '<button type="button" class="lp-btn gray" data-apw="set" data-d="'+d+'" style="justify-content:space-between;display:flex;width:100%;margin-bottom:6px"><span>'+t+'</span><span class="lp-mono lp-mu">'+lpEsc(lpDayLbl(d)+' '+lpFmtShort(d))+'</span></button>'; };
+  var h=syModal('ap-wdh','<div class="lp-cap">WANN NACHHOLEN?</div><div style="font-size:15px;font-weight:500;margin:4px 0 2px">'+lpEsc(a.quelle+' · '+a.nummer)+'</div><div class="lp-mu" style="font-size:12px;margin-bottom:10px">Eingetragen: '+lbl+'. Wann willst du die Aufgabe nochmals lösen?</div>'
+    +opt(lpAdd(td,1),'Morgen')+opt(lpAdd(td,3),'In 3 Tagen')+opt(lpAdd(td,7),'In einer Woche')
+    +'<div class="lp-row" style="gap:6px;margin:4px 0 10px"><input class="lp-in lp-mono" type="date" id="apw-d" value="'+lpEsc(vor)+'" min="'+td+'" style="flex:1"/><button type="button" class="lp-btn fill" data-apw="datum">Dieses Datum</button></div>'
+    +'<div class="lp-row" style="justify-content:flex-end"><button type="button" class="lp-btn gray" data-apw="nie">Nicht nachholen</button></div>');
+  h.setAttribute('data-id',a.id);
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-ap="log"]'); if(!el)return;
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  var a=lpAufgaben().find(function(x){return x.id===el.getAttribute('data-id');}), res=el.getAttribute('data-res'); if(!a)return;
+  apApplyResult(a,res); lpRender();
+  if(res==='sicher')return showToast('«'+a.quelle+' · '+a.nummer+'» sitzt ✓ — keine Wiederholung geplant','ok');
+  apWdhAsk(a,res);
+},true);
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-apw]'); if(!el)return; ev.preventDefault();
+  var host=document.getElementById('ap-wdh'), a=host&&lpAufgaben().find(function(x){return x.id===host.getAttribute('data-id');}); if(!a)return;
+  var w=el.getAttribute('data-apw'), d=null;
+  if(w==='set')d=el.getAttribute('data-d');
+  else if(w==='datum'){ d=(document.getElementById('apw-d')||{}).value||''; if(!/^\d{4}-\d\d-\d\d$/.test(d)){ showToast('Bitte ein Datum wählen.'); return; } }
+  a.naechsteWdh=d; lpTouch(a); saveD(); host.remove(); lpRender();
+  showToast(d?'Nachholen am '+lpDayLbl(d)+' '+lpFmtShort(d)+' ✓':'Wird nicht nachgeholt.','ok');
+});
+// Bestehende Aufgaben, deren letztes Ergebnis «Sicher» war: sitzen jetzt, ohne geplante Wiederholung
+function apSicherMigrate(){
+  var ch=false;
+  lpAufgaben().forEach(function(a){ var l=a.log||[], last=l[l.length-1]; if(!last||last.ergebnis!=='sicher')return;
+    if(a.naechsteWdh||(a.status!=='sitzt'&&a.status!=='pruefungsfest')){ a.naechsteWdh=null; if(a.status!=='pruefungsfest')a.status=apEtaPuffer(a.themaId)?'pruefungsfest':'sitzt'; lpTouch(a); ch=true; } });
+  return ch;
+}
+setTimeout(function(){ try{ if(apSicherMigrate()){ saveD(); try{ lpRender(); }catch(e){} } }catch(e){} },1200);
+// Themen-Balken: Legende mit Farben, «gelöst» = mindestens einmal bearbeitet
+apThemaBalken=function(themaId){
+  var list=lpAufgabenOf(themaId), n=list.length; if(!n)return '<div class="lp-mu" style="font-size:12px">Noch keine Aufgaben — unten mit der Schnelleingabe anlegen.</div>';
+  var c={neu:0,ueben:0,sitzt:0,pruefungsfest:0}; list.forEach(function(a){c[a.status||'neu']++;});
+  var dot=function(s,t){ return c[s]?'<span style="white-space:nowrap"><i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+AP_STATUS_VAR[s]+';margin-right:4px"></i>'+c[s]+' '+t+'</span>':''; };
+  return '<div class="ck-track" style="height:10px;display:flex;overflow:hidden;border-radius:99px">'+['pruefungsfest','sitzt','ueben','neu'].map(function(s){ return c[s]?'<i style="width:'+(c[s]/n*100)+'%;background:'+AP_STATUS_VAR[s]+';display:block;height:100%"></i>':''; }).join('')+'</div>'
+    +'<div class="lp-mu" style="font-size:10px;margin-top:4px;display:flex;gap:10px;flex-wrap:wrap"><span>'+n+' Aufgaben</span>'+[dot('pruefungsfest','prüfungsfest'),dot('sitzt','sitzt'),dot('ueben','am Üben'),dot('neu','noch nicht gelöst')].filter(Boolean).join('')+'</div>';
+};
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
