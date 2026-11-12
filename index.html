@@ -22042,17 +22042,17 @@ function wbIstTermin(b){
 }
 function wbTermineVor(from,tage){
   var out=[], seen={}; for(var i=0;i<=tage;i++){ var d=lpAdd(from,i); wpBlocksOn(d).forEach(function(b){ if(!wbIstTermin(b))return; var k=b.tag+'|'+b.titel+'|'+b.start; if(seen[k])return; seen[k]=1; out.push(b); }); }
-  out.sort(function(a,b){ return a.tag===b.tag?(pzRank(b.prio)-pzRank(a.prio))||a.start.localeCompare(b.start):(a.tag<b.tag?-1:1); });
+  out.sort(function(a,b){ return a.tag===b.tag?(wbRank(b)-wbRank(a))||a.start.localeCompare(b.start):(a.tag<b.tag?-1:1); });
   return out;
 }
 function wbfTermineHTML(from){
   var bl=wbTermineVor(from,14), bis=lpAdd(from,14), sp=spList().filter(function(s){ return s.von&&s.bis&&s.von<=bis&&s.bis>=from; }).sort(function(a,b){ return a.von<b.von?-1:1; });
-  var byPrio=bl.slice().sort(function(a,b){ return (pzRank(b.prio)-pzRank(a.prio))||(a.tag<b.tag?-1:a.tag>b.tag?1:a.start.localeCompare(b.start)); }), max=14;
+  var byPrio=bl.slice().sort(function(a,b){ return (wbRank(b)-wbRank(a))||(a.tag<b.tag?-1:a.tag>b.tag?1:a.start.localeCompare(b.start)); }), max=14;
   var h='<div class="lp-cap" style="margin:14px 0 6px">TERMINE IN DEN NÄCHSTEN 14 TAGEN</div>';
   if(!bl.length&&!sp.length)return h+'<div class="lp-mu" style="font-size:12px">Im Wochenplan stehen keine Termine, Prüfungen, Flugstunden, Arbeits- oder Militärblöcke.</div>';
   sp.forEach(function(s){ h+='<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1"><i class="ti ti-calendar-event lp-mu"></i> '+lpEsc(s.titel||spTyp(s.typ)[1])+(wbSpModus(s)?' <span class="lp-mu" style="font-size:11px">· Modus '+lpEsc(wbModusName(wbSpModus(s)))+'</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmtShort(s.von)+(s.bis!==s.von?'–'+lpFmtShort(s.bis):''))+'</span></div>'; });
   byPrio.slice(0,max).forEach(function(b){
-    var p=pzPrioLbl(b.prio), hi=pzRank(b.prio)>=6, ber=wbBereich(b), art=b.pruefDatum||b.kategorie==='pruefung'?'Prüfung':(ber==='ppl'&&wbUnter(b)==='flugstunde')?'Flugstunde':ber==='arbeit'?'Arbeit':ber==='militaer'?'Militär':'Termin';
+    var p=wbPrioText(b), hi=wbRank(b)>=6, ber=wbBereich(b), art=b.pruefDatum||b.kategorie==='pruefung'?'Prüfung':(ber==='ppl'&&wbUnter(b)==='flugstunde')?'Flugstunde':ber==='arbeit'?'Arbeit':ber==='militaer'?'Militär':'Termin';
     h+='<div class="hg-ln" style="gap:6px"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(b.titel)+' <span class="lp-mu" style="font-size:10px">· '+art+'</span>'+(p?' <span style="font-size:10px;color:'+(hi?'var(--c-fun)':'var(--tx3)')+'">· '+lpEsc(p)+'</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px;white-space:nowrap">'+lpEsc(wbFmtT(b.tag)+' '+b.start)+'</span></div>';
   });
   if(byPrio.length>max)h+='<div class="lp-mu" style="font-size:11px">… und '+(byPrio.length-max)+' weitere im Wochenplan.</div>';
@@ -22142,6 +22142,37 @@ wpRender=function(){
     }
   }catch(e){}
 };
+
+// ═══════════════════════════════════════════════════════════
+// PRIORITÄT NACH BLOCKART: gestrichelte Blöcke (Fenster) gelten als OPTION, dicke Blöcke als BEFOHLEN.
+// Ohne eigene Priorität steht ein Fenster-Block auf «Optional», ein dicker Block auf «Befohlen» (Mittel). Ein dicker grüner Block ist
+// «befohlene Freizeit» und steht damit über einem optionalen Match. Gilt für die Sortierung (Heute zuerst, Morgen zuerst) und die Beschriftung.
+// ═══════════════════════════════════════════════════════════
+function wbPrioEff(b){ return b.prio||(b.typ==='fenster'?'optional':''); }
+function wbRank(b){ return pzRank(wbPrioEff(b)); }
+function wbPrioText(b){ if(b.prio)return pzPrioLbl(b.prio); if(b.typ==='fenster')return 'Optional'; return b.kategorie==='freizeit'?'Freizeit, befohlen':'Befohlen'; }
+var _wpBlockHTML_wb23=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_wb23(b,z,now); if(!h||b.typ==='belohnung'||String(b.id).indexOf('md:')===0)return h;
+  var tip=b.prio?'':(b.typ==='fenster'?'optional (gestrichelter Block)':'befohlen (dicker Block)');
+  return tip?h.replace(/title="([^"]*)"/,function(m,t){ return 'title="'+t+' · '+tip+'"'; }):h;
+};
+function wbHeuteZuerstHTML(){
+  var td=today(), h='<div class="lp-cap" style="margin-bottom:6px">HEUTE ZUERST</div>', note=wbMorgenZuerst(td), n=0;
+  if(note){ h+='<div class="lp-mu" style="font-size:11px">Von gestern</div><div style="font-size:14px;font-weight:500;margin-bottom:8px">'+lpEsc(note)+'</div>'; n++; }
+  var bl=ckBlocksToday().filter(function(b){ return b.status==='offen'&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0&&!wpIsRoutine(b); }).sort(function(a,b){ return (wbRank(b)-wbRank(a))||a.start.localeCompare(b.start); }).slice(0,3);
+  bl.forEach(function(b){ var hi=wbRank(b)>=6; h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px"><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(b.start)+'</span> '+lpEsc(b.titel)+' <span style="font-size:10px;color:'+(hi?'var(--c-fun)':'var(--tx3)')+'">· '+lpEsc(wbPrioText(b))+'</span></span><button type="button" class="wp-pill" data-ck="blk-done" data-id="'+lpEsc(b.id)+'">✓</button></div>'; n++; });
+  var opt=wpBlocksOn(td).filter(function(b){ return b.typ==='fenster'&&String(b.id).indexOf('md:')!==0&&b.dabei!=='nein'; }).sort(function(a,b){ return a.start.localeCompare(b.start); }).slice(0,3);
+  if(opt.length){
+    h+='<div class="lp-mu" style="font-size:10px;margin:8px 0 2px">OPTIONAL HEUTE</div>';
+    opt.forEach(function(b){ h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:12px;opacity:.85"><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(b.start)+'</span> '+lpEsc(b.titel)+'</span><button type="button" class="wp-pill'+(b.dabei==='ja'?' on':'')+'" data-wb13="cyc" data-id="'+lpEsc(b.id)+'" title="mache ich / mache ich nicht">'+(b.dabei==='ja'?'✓ dabei':'?')+'</button></div>'; });
+  }
+  if(!n&&!opt.length)h+='<div class="lp-mu" style="font-size:12px">Heute ist nichts Wichtiges offen.</div>';
+  else if(!n)h+='<div class="lp-mu" style="font-size:12px;margin-top:4px">Nichts Befohlenes offen.</div>';
+  var rh=wbRegelTreffer(lpMonday(td)).filter(function(x){return x.tag===td;});
+  rh.slice(0,2).forEach(function(x){ h+='<div class="lp-mu" style="font-size:11px;margin-top:6px;color:var(--c-fun)"><i class="ti ti-alert-triangle"></i> '+lpEsc(x.text)+'</div>'; });
+  return h;
+}
 
 // ═══════════════════════════════════════════════════════════
 // INIT
