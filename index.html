@@ -20055,7 +20055,7 @@ function wbAmpelHTML(mon){
   var h='<details class="lp-cd" id="wb-ampel" style="margin:8px 0"'+(WB2.open?' open':'')+'><summary style="cursor:pointer;list-style:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="lp-cap">BEREICHE</span><span class="lp-mu" style="font-size:12px">'+chips+'</span></summary><div style="margin-top:10px"><div class="lp-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"><span class="lp-mu" style="font-size:11px">'+(A.vorbei?'Woche vorbei: gezählt wird, was erledigt wurde.':'Gezählt wird, was im Plan steht (erledigt in Klammern).')+'</span>'+sel+'</div>';
   A.rows.forEach(function(r){
     var st=WB_ST[r.status], ist=r.einheit==='Min'?r.n+' Min':String(r.n);
-    h+='<div class="hg-ln" style="gap:8px"><span style="flex:1;min-width:0;font-size:13px"><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+st[1]+';margin-right:7px"></i>'+lpEsc(r.name)+'<span class="lp-mu" style="font-size:10px"> · '+({woche:'Woche',monat:'Monat','14t':'2 Wochen'}[r.scope])+'</span></span>'
+    h+='<div class="hg-ln" data-wb27="row" data-r="'+r.id+'" style="gap:8px;cursor:pointer" title="Antippen: zeigt die gezählten Blöcke"><span style="flex:1;min-width:0;font-size:13px"><i style="display:inline-block;width:9px;height:9px;border-radius:50%;background:'+st[1]+';margin-right:7px"></i>'+lpEsc(r.name)+'<span class="lp-mu" style="font-size:10px"> · '+({woche:'Woche',monat:'Monat','14t':'2 Wochen'}[r.scope])+'</span></span>'
       +'<span class="lp-mono" style="font-size:13px;color:'+st[1]+'">'+ist+(!A.vorbei&&r.ist!==r.plan?' <span class="lp-mu" style="font-size:10px">('+r.ist+')</span>':'')+'</span><span class="lp-mu lp-mono" style="font-size:10px;min-width:92px;text-align:right">'+wbSoll(r.w,r.einheit)+'</span></div>';
   });
   if(!A.rows.length)h+='<div class="lp-mu" style="font-size:12px">Für diesen Modus sind keine Werte gesetzt (Hangar › Wochenbefehl).</div>';
@@ -22264,6 +22264,22 @@ document.addEventListener('click',function(ev){
   var w=el.closest('.wb26-chip'); if(w)w.remove();
   pdUndoPush('Vorlage «'+snap.name+'» gelöscht',function(){ if(D.tombstones)delete D.tombstones[id]; if(!wpEnsure().routinen.some(function(x){return x.id===id;}))wpEnsure().routinen.push(snap); saveD(); });
 },true);
+
+// ═══════════════════════════════════════════════════════════
+// AMPEL TRANSPARENT: Tippt man auf eine Zeile der Bereichs-Ampel, steht darunter, welche Blöcke gezählt wurden (Tag, Zeit, Titel, ✓ erledigt).
+// Zahl links = im Plan, Zahl in Klammern = davon erledigt. «Wägen» und «Pushups» zählen nicht mehr als Körper-Training (Alltagsroutinen).
+// ═══════════════════════════════════════════════════════════
+WB_MAP_DEFAULT.waegen='erholung'; WB_MAP_DEFAULT.pushups='erholung';
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb27="row"]'); if(!el)return; ev.preventDefault();
+  var nx=el.nextElementSibling; if(nx&&nx.classList.contains('wb27-list')){ nx.remove(); return; }
+  var id=el.getAttribute('data-r'), mon=WP_UI.week, L=wbRowBloecke(mon,id), row=WB_ROWS.find(function(r){return r.id===id;});
+  var h='<div class="wb27-list lp-inner" style="margin:2px 0 8px 18px;padding:6px 10px">';
+  if(!L.length)h+='<div class="lp-mu" style="font-size:12px">Keine Blöcke gezählt. Gezählt wird, was im Bereich «'+lpEsc(row?row.name:id)+'» steht (Bereich und Unterart im Block-Editor, sonst automatisch aus Kategorie und Titel).</div>';
+  else L.forEach(function(b){ var ok=(b.status==='ok'||b.status==='teil'); h+='<div class="hg-ln" style="gap:6px"><span style="font-size:12px;min-width:0;flex:1">'+lpEsc(b.titel)+'</span><span class="lp-mono lp-mu" style="font-size:11px;white-space:nowrap">'+lpEsc(lpDayLbl(b.tag)+' '+lpFmtShort(b.tag)+' '+b.start)+'</span><span style="font-size:12px;color:'+(ok?'var(--c-ok)':'var(--tx3)')+'">'+(ok?'✓':'offen')+'</span></div>'; });
+  h+='<div class="lp-mu" style="font-size:10px;margin-top:4px">Falsch eingeordnet? Im Block-Editor Bereich und Unterart ändern, oder im Hangar › Wochenbefehl die Kategorie einem anderen Bereich zuordnen.</div></div>';
+  el.insertAdjacentHTML('afterend',h);
+});
 
 // ═══════════════════════════════════════════════════════════
 // INIT
