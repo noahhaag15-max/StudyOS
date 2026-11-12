@@ -22058,6 +22058,13 @@ function wbfTermineHTML(from){
   if(byPrio.length>max)h+='<div class="lp-mu" style="font-size:11px">… und '+(byPrio.length-max)+' weitere im Wochenplan.</div>';
   return h+'<div class="lp-mu" style="font-size:10px;margin-top:4px">Aus dem Wochenplan: Kategorie «Termin» (auch als Teil einer Mischung), Prüfungen, Flugstunden, Arbeits- und Militärblöcke, dazu die Zeitspannen. Sortiert nach Priorität, dann Datum.</div>';
 }
+// Alle Termin-Anzeigen (Cockpit, Dashboard, Heute & Morgen) nutzen dieselbe Regel wie der Wochenbefehl (wbIstTermin).
+function wpTermineForDate(date){
+  var seen={};
+  return wpBlocksOn(date).filter(function(b){ if(!wbIstTermin(b))return false; var k=b.titel+'|'+b.start; if(seen[k])return false; seen[k]=1; return true; })
+    .sort(function(a,b){ return a.start.localeCompare(b.start)||(wbRank(b)-wbRank(a)); })
+    .map(function(b){ var ber=wbBereich(b); return {time:b.start,end:b.ende,name:b.titel,cat:(ber==='arbeit'||ber==='militaer')?'c-arbeit':'c-termin'}; });
+}
 
 // ── Habits → Vorsätze ──
 function wbHabitsOffen(){ var namen={}; vsEnsure().forEach(function(v){ namen[String(v.name||'').toLowerCase()]=1; }); return (D.habits||[]).filter(function(h){ return h&&!h.migriert&&String(h.name||'').trim()&&!namen[String(h.name).toLowerCase()]; }); }
