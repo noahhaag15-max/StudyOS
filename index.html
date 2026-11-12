@@ -22282,6 +22282,19 @@ document.addEventListener('click',function(ev){
 });
 
 // ═══════════════════════════════════════════════════════════
+// ÄLTERE «✓ dabei»-MARKIERUNGEN umwandeln: Fenster-Blöcke, die vor «Fest einplanen» mit ✓ markiert wurden, werden zu normalen dicken Blöcken.
+// ═══════════════════════════════════════════════════════════
+function wbDabeiMigrate(nurWoche){
+  var W=wpEnsure(), n=0, keys=nurWoche?[nurWoche]:Object.keys(W.wochen);
+  keys.forEach(function(k){ var w=W.wochen[k]; if(!w)return; (w.bloecke||[]).forEach(function(b){ if(b.typ==='fenster'&&b.dabei==='ja'&&String(b.id).indexOf('md:')!==0){ wbFestEinplanen(b); n++; } }); });
+  if(n)saveD(); return n;
+}
+var _wpRender_wb28=wpRender;
+wpRender=function(){ try{ wbDabeiMigrate(WP_UI&&WP_UI.week); }catch(e){} return _wpRender_wb28.apply(this,arguments); };
+var _waInit_wb28=waInit;
+waInit=function(){ _waInit_wb28(); try{ if(wbDabeiMigrate())wpRender(); }catch(e){} };
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
