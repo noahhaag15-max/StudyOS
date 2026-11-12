@@ -5556,7 +5556,7 @@ function wpTaRender(){
     +'<div style="font-size:15px;font-weight:500;margin:4px 0 10px">Wie lief dein '+HG_TAGE[lpWd(d)]+(WP_TA.nachhol?' <span class="lp-mu">(gestern)</span>':'')+'?</div>';
   if(!offen.length&&!routinen.length)h+='<div class="lp-mu" style="margin-bottom:8px">Alle Blöcke des Tages sind bewertet ✓</div>';
   offen.forEach(function(b){
-    var kat=wpKat(b.kategorie), hint=wpNeedsData(b)?(b.kategorie==='mahlzeit'?'kcal':b.kategorie==='sport'?'Übung + Min':b.kategorie==='lernen'?'Lernzeit':b.kategorie==='waegen'?'kg':b.kategorie==='pushups'?'Anzahl':'Stunden'):'';
+    var kat=wpKat(b.kategorie), hint=wpNeedsData(b)?(b.kategorie==='mahlzeit'?'kcal':b.kategorie==='sport'?'Übung + Min':b.kategorie==='lernen'?'Lernzeit':b.kategorie==='waegen'?'kg':b.kategorie==='messen'?'cm':b.kategorie==='pushups'?'Anzahl':'Stunden'):'';
     if(wpIsRoutine(b)){
       var c=b.checkliste||[], n=c.filter(function(x){return x.done;}).length;
       h+='<div class="q"><i class="wp-dot" style="background:'+wpKatHex(kat)+'"></i><span style="flex:1;min-width:0">'+lpEsc(b.titel)+' <span class="lp-mono lp-mu">'+n+'/'+c.length+'</span></span><button type="button" class="pill ok on" data-wp="ta-routine" data-id="'+lpEsc(b.id)+'">Abhaken</button></div>'; return;
@@ -18718,7 +18718,7 @@ function labPunkteAuto(l){
   if(a==null&&c==null)return (l.punkte!=null&&l.punkte!=='')?+l.punkte:null;
   if(a>=100&&c>=100)return 2; if((a||0)>0||(c||0)>0)return 1; return 0;
 }
-function labSync(l){ if(labEinzel(l)){ l.status=labPct(l,'lab')!=null?'voll':'offen'; l.punkte=null; return; } var a=labPct(l,'lab')||0, c=labPct(l,'cr')||0, art=labArt(l); if(art!=='beides'){ var v=art==='cr'?c:a; a=v; c=v; } l.status=(a>=100&&c>=100)?'voll':(a>0||c>0)?'inArbeit':'offen'; var p=labPunkteAuto(l); if(p!=null)l.punkte=p; }
+function labSync(l){ if(labEinzel(l)){ l.status=labPct(l,'lab')!=null?'voll':'offen'; l.punkte=null; return; } var a=labPct(l,'lab')||0, c=labPct(l,'cr')||0, art=labArt(l); if(art!=='beides'){ var v=art==='cr'?c:a; a=v; c=v; } l.status=(l.fertig||(a>=100&&c>=100))?'voll':(a>0||c>0)?'inArbeit':'offen'; var p=labPunkteAuto(l); if(p!=null)l.punkte=p; }
 labStatusLabel=function(l){ if(l.status==='voll')return l.mitHilfe?'Fertig · wiederholen':'Fertig ✓'; if(l.status==='inArbeit')return 'In Arbeit'; return 'Offen'; };
 labNaechsteWdh=function(l){ if(!l.mitHilfe)return null; var last=(l.pctLog||[]).map(function(x){return x.datum;}).sort().pop()||l.hilfeAm||today(); return lpAdd(last,2); };
 var LAB_RUN_EDIT={};
@@ -18769,6 +18769,8 @@ labCardHTML=function(l){
     +(labArt(l)==='mini'?labMiniHTML(l):labArt(l)==='runner'?labRunnerHTML(l):(labHat(l,'lab')?labPctRow(l,'lab','Lab'):'')+(labHat(l,'cr')?labPctRow(l,'cr','Code-Review'):''))
     +(labEinzel(l)?'':'<div class="lp-row" style="gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap"><label class="lp-row" style="gap:6px;align-items:center;font-size:12px;cursor:pointer"><input type="checkbox" data-lab2="hilfe" data-id="'+id+'"'+(l.mitHilfe?' checked':'')+'/> mit Hilfe gelöst → später wiederholen</label>'
     +(l.mitHilfe&&wdh?'<span class="lp-mu lp-mono" style="font-size:11px">Wdh. '+(wdh<=td?'fällig':lpFmtShort(wdh))+'</span><button type="button" class="lp-btn gray" data-lab2="wdh" data-id="'+id+'" style="padding:4px 8px">Wiederholt ✓</button>':'')+'</div>')
+    +(labEinzel(l)?'':(l.fertig?'<div class="lp-row" style="gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><span style="font-size:12px;color:var(--c-ok)"><i class="ti ti-flag-check"></i> Als fertig markiert'+(l.fertigAm?' am '+lpFmtShort(l.fertigAm):'')+' — keine weiteren Versuche, zählt nicht mehr als offen.</span><button type="button" class="lp-btn gray" data-lab2="offen" data-id="'+id+'" style="padding:4px 8px">Wieder öffnen</button></div>'
+      :(l.status!=='voll'?'<div class="lp-row" style="gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap"><button type="button" class="lp-btn gray" data-lab2="fertig" data-id="'+id+'" style="padding:4px 8px"><i class="ti ti-flag-check"></i> Als fertig markieren</button><span class="lp-mu" style="font-size:11px">wenn keine Versuche mehr möglich sind — die Prozente bleiben, wie sie sind.</span></div>':'')))
     +'<div class="lp-row" style="gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center">'
     +(labEinzel(l)?'<label class="lp-mu" style="font-size:11px">'+(labArt(l)==='mini'?'Abgabe bis':'Termin')+' <input class="lp-in lp-mono" type="date" data-lpc="lab.abgabeDatum" data-id="'+id+'" value="'+(l.abgabeDatum||l.crAbgabe||'')+'" style="max-width:150px"/></label>':'')
     +(labHat(l,'lab')?'<label class="lp-mu" style="font-size:11px">Abgabe Lab <input class="lp-in lp-mono" type="date" data-lpc="lab.abgabeDatum" data-id="'+id+'" value="'+(l.abgabeDatum||'')+'" style="max-width:150px"/></label>':'')
@@ -18805,6 +18807,8 @@ document.addEventListener('click',function(ev){
   if(a==='p100')return labSetPct(id,el.getAttribute('data-art'),100);
   if(a==='runner-edit'){ LAB_RUN_EDIT[id]=true; return lpRender(); }
   if(a==='art'){ l.art=el.getAttribute('data-v'); if(l.art==='cr'&&!l.crAbgabe&&l.abgabeDatum){ l.crAbgabe=l.abgabeDatum; } if((l.art==='runner'||l.art==='mini')&&!l.abgabeDatum&&l.crAbgabe){ l.abgabeDatum=l.crAbgabe; } if(l.art==='runner'||l.art==='mini'){ l.mitHilfe=false; } labSync(l); lpTouch(l); saveD(); return lpRender(); }
+  if(a==='fertig'){ l.fertig=true; l.fertigAm=today(); labSync(l); lpTouch(l); saveD(); showToast('«'+l.titel+'» als fertig markiert ✓','ok'); return lpRender(); }
+  if(a==='offen'){ l.fertig=false; delete l.fertigAm; labSync(l); lpTouch(l); saveD(); showToast('«'+l.titel+'» wieder geöffnet','ok'); return lpRender(); }
   if(a==='wdh'){ l.mitHilfe=false; l.wdhAm=today(); l.pctLog=l.pctLog||[]; l.pctLog.push({datum:today(),art:'wdh',pct:100,ts:Date.now()}); lpTouch(l); saveD(); showToast('Wiederholung erledigt ✓','ok'); return lpRender(); }
 });
 // «+ Lab» ohne Eingabefenster: legt «Lab n» an und klappt es auf (Titel im Lab änderbar)
@@ -18878,8 +18882,9 @@ function aomItems(fach){
     labMigrate2(l);
     var a=labPct(l,'lab')||0, c=labPct(l,'cr')||0;
     if(labEinzel(l)){ var rd=labDue(l); if(rd)out.push({t:(labArt(l)==='mini'?'Minitest':'Coderunner')+' «'+l.titel+'»'+(labPct(l,'lab')!=null?' ('+labPct(l,'lab')+' %)':''),d:rd,v:labPct(l,'lab')!=null?1:0}); return; }
-    if(labHat(l,'lab')&&l.abgabeDatum)out.push({t:'Lab «'+l.titel+'»'+(a&&a<100?' ('+a+' %)':'')+(a>=100&&l.mitHilfe?' (mit Hilfe)':''),d:l.abgabeDatum,v:a>=100?(l.mitHilfe?0.5:1):(a>0?0.5:0)});
-    var crd=labCrAbgabe(l); if(labHat(l,'cr')&&crd)out.push({t:'Code-Review «'+l.titel+'»'+(c&&c<100?' ('+c+' %)':''),d:crd,v:c>=100?1:(c>0?0.5:0)});
+    var fz=l.fertig?' · fertig markiert':'';
+    if(labHat(l,'lab')&&l.abgabeDatum)out.push({t:'Lab «'+l.titel+'»'+(a&&a<100?' ('+a+' %'+fz+')':'')+(a>=100&&l.mitHilfe?' (mit Hilfe)':''),d:l.abgabeDatum,v:l.fertig?(l.mitHilfe?0.5:1):a>=100?(l.mitHilfe?0.5:1):(a>0?0.5:0)});
+    var crd=labCrAbgabe(l); if(labHat(l,'cr')&&crd)out.push({t:'Code-Review «'+l.titel+'»'+(c&&c<100?' ('+c+' %'+fz+')':''),d:crd,v:l.fertig?1:c>=100?1:(c>0?0.5:0)});
   });
   (D.woechentlich||[]).forEach(function(t){
     if(!t.faellig||!aomMatch(t.name+' '+(t.notizen||''),keys))return;
@@ -22390,6 +22395,110 @@ wpEditor=function(id,pre){
   }catch(e){}
   return r;
 };
+
+// ═══════════════════════════════════════════════════════════
+// MESSEN — Bauchumfang: Kategorie «Messen» (cm Pflicht beim ✓), jeden Morgen automatisch ein Block (Id «ms:<datum>»),
+// Werte in D.track[datum].bauch, Anzeige im Tracking. Gelöschte Tage kommen nicht wieder (Tombstone).
+// ═══════════════════════════════════════════════════════════
+WP_KAT_DEFAULT.push({id:'messen',name:'Messen',farbe:'#8fd3e8'});
+WB_MAP_DEFAULT.messen='erholung';
+CFG_DEFAULTS['ms.auto']={aktiv:true,zeit:'07:00',dauer:5};
+CFG_META['ms.auto']={gruppe:'Tracking',label:'Messen (Bauchumfang) jeden Morgen'};
+CFG_VALIDATE['ms.auto']=function(v){ return (v&&typeof v==='object'&&/^\d\d:\d\d$/.test(v.zeit||''))?null:'Uhrzeit fehlt.'; };
+function msCm(d){ var x=D.track&&D.track[d]&&D.track[d].bauch; var v=x?parseFloat(x.cm):NaN; return (isFinite(v)&&v>=40&&v<=200)?v:null; }
+function msLastCm(){ var best=null, bd=''; Object.keys(D.track||{}).forEach(function(d){ var v=msCm(d); if(v!=null&&d>=bd){ bd=d; best=v; } }); return best; }
+var _oeAlltag_ms=oeAlltag;
+oeAlltag=function(b){ return b.kategorie==='messen'||_oeAlltag_ms(b); };
+var _wpNeedsData_ms=wpNeedsData;
+wpNeedsData=function(b){ return (b.kategorie==='messen'&&(b.typ==='aufgabe'||b.typ==='fix'))||_wpNeedsData_ms(b); };
+var _wpDlgOpen_ms=wpDlgOpen;
+wpDlgOpen=function(b,st){
+  if(b.kategorie!=='messen')return _wpDlgOpen_ms(b,st);
+  var host=wpDlgHost(), d=b.daten||{};
+  host.innerHTML='<div class="lp-cd" style="max-width:380px;width:100%"><div class="lp-cap">MESSEN ABSCHLIESSEN</div><div style="font-size:15px;font-weight:500;margin:4px 0 10px">'+lpEsc(b.titel)+'</div>'
+    +'<div class="lp-fld"><label>Bauchumfang</label><input class="lp-in lp-mono" type="number" min="40" max="200" step="0.1" id="wpd-cm" value="'+(d.cm||msLastCm()||'')+'" placeholder="z. B. 84,5" style="max-width:110px"/><span class="lp-mu">cm gemessen (Pflicht)</span></div>'
+    +'<div class="lp-row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="lp-btn gray" data-wp="dlg-close">Abbrechen</button><button type="button" class="lp-btn fill" data-wp="dlg-ok" data-st="'+st+'">Abschliessen</button></div></div>';
+  host.style.display='flex'; host.setAttribute('data-id',b.id);
+  var f=host.querySelector('input'); if(f){ f.focus(); if(f.select)f.select(); }
+};
+var _wpDlgOk_ms=wpDlgOk;
+wpDlgOk=function(st){
+  var host=wpDlgHost(), b=wpFind(host.getAttribute('data-id')); if(!b||b.kategorie!=='messen')return _wpDlgOk_ms(st);
+  var e=document.getElementById('wpd-cm'), cm=parseFloat(String(e?e.value:'').replace(',','.'));
+  if(!(cm>=40&&cm<=200)){ showToast('Bitte den gemessenen Bauchumfang in cm eintragen.'); return; }
+  b.daten={cm:Math.round(cm*10)/10,fertig:true}; wpLogData(b);
+  host.style.display='none'; host.innerHTML=''; host.removeAttribute('data-id');
+  wpSetStatus(b,st);
+  if(document.getElementById('wp-ta')&&document.getElementById('wp-ta').style.display==='flex')wpTaRender();
+};
+var _wpLogData_ms=wpLogData;
+wpLogData=function(b){ _wpLogData_ms(b); var d=b.daten||{}; if(b.kategorie==='messen'&&d.cm){ getDayFor(b.tag).bauch={cm:d.cm,wpId:b.id,ts:Date.now()}; } };
+var _wpUnlogData_ms=wpUnlogData;
+wpUnlogData=function(b){ _wpUnlogData_ms(b); var day=D.track&&D.track[b.tag]; if(day&&day.bauch&&day.bauch.wpId===b.id)delete day.bauch; };
+// Jeden Morgen ein Block: direkt nach einem Wägen-Block am Morgen, sonst zur eingestellten Zeit
+function msStart(d,c){
+  var w=wpBlocksOn(d).filter(function(b){ return b.kategorie==='waegen'&&b.status!=='verschoben'&&lpT2M(b.start)<11*60; }).sort(function(a,b){ return a.start.localeCompare(b.start); })[0];
+  return w?lpT2M(w.ende):lpT2M(c.zeit||'07:00');
+}
+function msEnsure(von,bis){
+  var c=cfg('ms.auto')||{}; if(!c.aktiv)return false;
+  var td=today(), ch=false; if(von<td)von=td;
+  for(var d=von;d<=bis;d=lpAdd(d,1)){
+    var id='ms:'+d; if(wpFind(id)||(D.tombstones&&D.tombstones[id]))continue;
+    if(wpBlocksOn(d).some(function(b){ return b.kategorie==='messen'; }))continue;
+    var s=msStart(d,c), b=wpNew({tag:d,start:wpM2T(s),ende:wpM2T(s+(+c.dauer||5)),titel:'Messen',kategorie:'messen',typ:'aufgabe',quelle:'messen'});
+    b.id=id; b.bereich='erholung'; wpAdd(b); ch=true;
+  }
+  return ch;
+}
+var _wpRender_ms=wpRender;
+wpRender=function(){
+  try{ var m=(WP_UI&&WP_UI.week)||lpMonday(today()), td=today(), bis=lpAdd(m,6), lim=lpAdd(td,13); if(bis>lim)bis=lim; if(msEnsure(m,bis))saveD(); }catch(e){}
+  return _wpRender_ms.apply(this,arguments);
+};
+setTimeout(function(){ try{ if(msEnsure(today(),lpAdd(today(),6))){ saveD(); try{ ckRender(); }catch(e){} } }catch(e){} },1500);
+// Tracking: Kachel, Verlauf 30 Tage, Spalte in der Wochentabelle
+var _trkRender_ms=trkRender;
+trkRender=function(){
+  _trkRender_ms.apply(this,arguments);
+  try{
+    var root=document.getElementById('trk-root'); if(!root)return; var d=trkDate(), td=today(), v=msCm(d);
+    var auto=root.querySelector('.trk-auto');
+    if(auto&&!root.querySelector('.ms-tile')){ var t=document.createElement('div'); t.className='trk-tile ms-tile'; t.innerHTML='<i class="ti ti-ruler-measure" style="color:#8fd3e8"></i><b>'+(v!=null?nrF(v,1)+' cm':'offen')+'</b><small>Bauchumfang'+(v==null?' · <a href="#" data-ms="block">Block anlegen</a>':'')+'</small>'; auto.appendChild(t); }
+    var tbl=root.querySelector('.trk-tbl'), wk=tbl&&tbl.closest('.lp-cd');
+    if(wk&&!root.querySelector('.ms-card')){
+      var s30=trkSeries(td,30,msCm), vv=s30.filter(function(x){return x!=null;}), txt=vv.length?('zuletzt '+nrF(vv[vv.length-1],1)+' cm'+(vv.length>1?' · '+(vv[vv.length-1]-vv[0]>=0?'+':'')+nrF(vv[vv.length-1]-vv[0],1)+' cm im Zeitraum':'')):'';
+      var g=document.createElement('div'); g.className='trk-grid ms-card'; g.style.marginTop='12px';
+      g.innerHTML=trkCard('BAUCHUMFANG · 30 TAGE','ruler-measure',trkSpark(s30,{color:'#8fd3e8',dates:trkDates(td,30),unit:' cm',axis:true,pad:true,h:96}),txt);
+      wk.parentNode.insertBefore(g,wk);
+    }
+    if(tbl&&!tbl.querySelector('.ms-th')){
+      var th=[].slice.call(tbl.querySelectorAll('thead th')), i=th.findIndex(function(x){ return x.textContent.trim()==='kg'; });
+      if(i>=0){
+        var nt=document.createElement('th'); nt.className='ms-th'; nt.textContent='cm'; th[i].parentNode.insertBefore(nt,th[i].nextSibling);
+        var mon=lpMonday(d);
+        [].slice.call(tbl.querySelectorAll('tbody tr')).forEach(function(tr,j){ var c=tr.children[i], x=msCm(lpAdd(mon,j)), td2=document.createElement('td'); td2.textContent=x!=null?nrF(x,1):'–'; if(c)tr.insertBefore(td2,c.nextSibling); });
+      }
+    }
+  }catch(e){}
+};
+// Hangar › Wochenbefehl: Ein/Aus und Uhrzeit
+var _waHgMehr_ms=waHgMehr;
+waHgMehr=function(){
+  var c=cfg('ms.auto')||{};
+  return _waHgMehr_ms()+'<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">MESSEN (BAUCHUMFANG)</div>'
+    +'<div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:13px">Jeden Morgen einen Block «Messen» einplanen</div><div class="lp-mu" style="font-size:11px">Direkt nach dem Wägen-Block, wenn es einen gibt, sonst zur Uhrzeit unten. Beim ✓ ist der Bauchumfang in cm Pflicht. Einen Tag löschen: der Block kommt an dem Tag nicht wieder.</div></div><button type="button" class="lp-sw'+(c.aktiv?' on':'')+'" data-ms="toggle" aria-label="Messen jeden Morgen"><i></i></button></div>'
+    +'<div class="hg-ln"><span style="font-size:13px">Uhrzeit (ohne Wägen-Block)</span><input class="lp-in lp-mono" type="time" data-ms-zeit="1" value="'+lpEsc(c.zeit||'07:00')+'" style="width:110px"/></div></div>';
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-ms]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-ms');
+  if(a==='toggle'){ var c=JSON.parse(JSON.stringify(cfg('ms.auto')||{})); c.aktiv=!c.aktiv; setCfg('ms.auto',c,'hangar'); if(c.aktiv&&msEnsure(today(),lpAdd(today(),6)))saveD(); try{ waHgRender(); }catch(e){} try{ wpRender(); }catch(e){} }
+  if(a==='block'){ trkBlock('messen','Messen',5); }
+});
+document.addEventListener('change',function(ev){
+  var el=ev.target; if(!el||!el.getAttribute||!el.getAttribute('data-ms-zeit'))return;
+  if(!/^\d\d:\d\d$/.test(el.value))return; var c=JSON.parse(JSON.stringify(cfg('ms.auto')||{})); c.zeit=el.value; setCfg('ms.auto',c,'hangar'); showToast('Messen: neue Blöcke um '+el.value,'ok');
+});
 
 // ═══════════════════════════════════════════════════════════
 // INIT
