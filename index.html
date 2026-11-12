@@ -22114,6 +22114,36 @@ wbBereich=function(b){
 };
 
 // ═══════════════════════════════════════════════════════════
+// SCHUTZ GEGEN KAPUTTE BLOCK-DARSTELLUNG IM WOCHENPLAN
+// Mehrere Module ergänzen das HTML eines Blocks. Stimmt dabei die Zahl der öffnenden und schliessenden <div> nicht, rutscht der
+// Rest der Spalte aus dem Raster (breite Blöcke unter dem Raster). Hier wird jede Block-HTML geprüft und repariert, und ein Befund
+// nach dem Zeichnen meldet, welcher Block betroffen ist.
+// ═══════════════════════════════════════════════════════════
+var WB22={bad:[]};
+var _wpBlockHTML_wb22=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_wb22(b,z,now); if(typeof h!=='string'||!h)return h;
+  var o=(h.match(/<div\b/g)||[]).length, c=(h.match(/<\/div>/g)||[]).length; if(o===c)return h;
+  try{ WB22.bad.push((b.titel||'?')+' ('+(b.tag||'')+' '+(b.start||'')+')'); }catch(e){}
+  if(c>o){ while(c>o&&/<\/div>\s*$/.test(h)){ h=h.replace(/<\/div>\s*$/,''); c--; } }
+  else { while(o>c){ h+='</div>'; c++; } }
+  return h;
+};
+var _wpRender_wb22=wpRender;
+wpRender=function(){
+  WB22.bad=[]; _wpRender_wb22.apply(this,arguments);
+  try{
+    var root=document.getElementById('wp-root'); if(!root)return;
+    var stray=[].slice.call(root.querySelectorAll('.wp-grid .wp-b')).filter(function(x){ return !x.closest('.wp-col'); });
+    if(WB22.bad.length||stray.length){
+      var txt=WB22.bad.length?'Block-Darstellung repariert: '+WB22.bad.slice(0,3).join(', '):'Wochenplan: '+stray.length+' Blöcke liegen ausserhalb ihrer Spalte';
+      console.warn('[Wochenplan]',txt,stray.slice(0,3).map(function(x){ return x.getAttribute('data-wpb'); }));
+      if(!WB22.msg||WB22.msg!==txt){ WB22.msg=txt; showToast(txt); }
+    }
+  }catch(e){}
+};
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
