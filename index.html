@@ -22053,7 +22053,7 @@ function wbfTermineHTML(from){
   sp.forEach(function(s){ h+='<div class="hg-ln"><span style="font-size:13px;min-width:0;flex:1"><i class="ti ti-calendar-event lp-mu"></i> '+lpEsc(s.titel||spTyp(s.typ)[1])+(wbSpModus(s)?' <span class="lp-mu" style="font-size:11px">· Modus '+lpEsc(wbModusName(wbSpModus(s)))+'</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(lpFmtShort(s.von)+(s.bis!==s.von?'–'+lpFmtShort(s.bis):''))+'</span></div>'; });
   byPrio.slice(0,max).forEach(function(b){
     var p=wbPrioText(b), hi=wbRank(b)>=6, ber=wbBereich(b), art=b.pruefDatum||b.kategorie==='pruefung'?'Prüfung':(ber==='ppl'&&wbUnter(b)==='flugstunde')?'Flugstunde':ber==='arbeit'?'Arbeit':ber==='militaer'?'Militär':'Termin';
-    h+='<div class="hg-ln" style="gap:6px"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(b.titel)+' <span class="lp-mu" style="font-size:10px">· '+art+'</span>'+(p?' <span style="font-size:10px;color:'+(hi?'var(--c-fun)':'var(--tx3)')+'">· '+lpEsc(p)+'</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px;white-space:nowrap">'+lpEsc(wbFmtT(b.tag)+' '+b.start)+'</span></div>';
+    h+='<div class="hg-ln" style="gap:6px"><span style="font-size:13px;min-width:0;flex:1">'+lpEsc(b.titel)+' <span class="lp-mu" style="font-size:10px">· '+art+'</span>'+(p?' <span style="font-size:10px;color:'+wbPrioColor(wbPrioEff(b))+'">· '+lpEsc(p)+'</span>':'')+'</span><span class="lp-mono lp-mu" style="font-size:11px;white-space:nowrap">'+lpEsc(wbFmtT(b.tag)+' '+b.start)+'</span></div>';
   });
   if(byPrio.length>max)h+='<div class="lp-mu" style="font-size:11px">… und '+(byPrio.length-max)+' weitere im Wochenplan.</div>';
   return h+'<div class="lp-mu" style="font-size:10px;margin-top:4px">Aus dem Wochenplan: Kategorie «Termin» (auch als Teil einer Mischung), Prüfungen, Flugstunden, Arbeits- und Militärblöcke, dazu die Zeitspannen. Sortiert nach Priorität, dann Datum.</div>';
@@ -22161,7 +22161,7 @@ function wbHeuteZuerstHTML(){
   var td=today(), h='<div class="lp-cap" style="margin-bottom:6px">HEUTE ZUERST</div>', note=wbMorgenZuerst(td), n=0;
   if(note){ h+='<div class="lp-mu" style="font-size:11px">Von gestern</div><div style="font-size:14px;font-weight:500;margin-bottom:8px">'+lpEsc(note)+'</div>'; n++; }
   var bl=ckBlocksToday().filter(function(b){ return b.status==='offen'&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0&&!wpIsRoutine(b); }).sort(function(a,b){ return (wbRank(b)-wbRank(a))||a.start.localeCompare(b.start); }).slice(0,3);
-  bl.forEach(function(b){ var hi=wbRank(b)>=6; h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px"><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(b.start)+'</span> '+lpEsc(b.titel)+' <span style="font-size:10px;color:'+(hi?'var(--c-fun)':'var(--tx3)')+'">· '+lpEsc(wbPrioText(b))+'</span></span><button type="button" class="wp-pill" data-ck="blk-done" data-id="'+lpEsc(b.id)+'">✓</button></div>'; n++; });
+  bl.forEach(function(b){ var hi=wbRank(b)>=6; h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px"><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(b.start)+'</span> '+lpEsc(b.titel)+' <span style="font-size:10px;color:'+wbPrioColor(wbPrioEff(b))+'">· '+lpEsc(wbPrioText(b))+'</span></span><button type="button" class="wp-pill" data-ck="blk-done" data-id="'+lpEsc(b.id)+'">✓</button></div>'; n++; });
   var opt=wpBlocksOn(td).filter(function(b){ return b.typ==='fenster'&&String(b.id).indexOf('md:')!==0&&b.dabei!=='nein'; }).sort(function(a,b){ return a.start.localeCompare(b.start); }).slice(0,3);
   if(opt.length){
     h+='<div class="lp-mu" style="font-size:10px;margin:8px 0 2px">OPTIONAL HEUTE</div>';
@@ -22213,6 +22213,56 @@ document.addEventListener('click',function(ev){
   var el=ev.target.closest&&ev.target.closest('[data-wb25]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
   var host=document.getElementById('wp-modal'), b=host&&wpFind(host.getAttribute('data-id')); if(!b)return;
   if(wbWiederOptional(b)){ saveD(); try{ wpEditorClose(); }catch(e){} try{ wpAfterChange([b.tag]); }catch(e){ wpRender(); } showToast('Wieder optional','ok'); }
+},true);
+
+// ═══════════════════════════════════════════════════════════
+// 1) CHECKLISTEN-VORLAGEN LÖSCHEN: jede Vorlage im Block-Editor hat ein ✕ (mit Rückgängig). Bereits eingeplante Blöcke behalten ihre Checkliste.
+// 2) PRIORITÄTSFARBEN: das Ausrufezeichen am Block (und die Stufen im Editor) tragen die Farbe der Priorität:
+//    Must do magenta-rot · Sehr hoch rot · Hoch orange · Mittel gelb · Tief blau · Wenn möglich türkis · Optional grün.
+// ═══════════════════════════════════════════════════════════
+var PZ_FARBE={must:'#e0245e',sehr:'#ff4d4d',hoch:'#ff9a3c',mittel:'#ffd23f',niedrig:'#4d9dff',moeglich:'#2fd6c8',optional:'#4cd964'};
+function wbPrioColor(p){ return PZ_FARBE[p||'']||'var(--tx3)'; }
+PZ_PRIO.forEach(function(p){ if(p[0]===''&&p[1]==='Mittel')p[0]='mittel'; });
+PZ_RANK.mittel=4;
+(function(){
+  var css='#wpm-prio button::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:var(--pc,transparent);vertical-align:0}';
+  Object.keys(PZ_FARBE).forEach(function(k){ css+='#wpm-prio button[data-val="'+k+'"]{--pc:'+PZ_FARBE[k]+'}'; });
+  css+='.wb26-chip{display:inline-flex;align-items:center;gap:2px}.wb26-chip .lp-x{padding:0 4px;font-size:12px;opacity:.7}.px-p{font-weight:700}';
+  var st=document.createElement('style'); st.textContent=css; document.head.appendChild(st);
+})();
+var _wpBlockHTML_wb26=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_wb26(b,z,now); if(!h||b.typ==='belohnung')return h;
+  h=h.replace(/<b class="px-p[^"]*">[^<]*<\/b> /g,'');
+  if(!b.prio)return h;
+  var mk='<b class="px-p" style="color:'+wbPrioColor(b.prio)+'">'+(b.prio==='must'?'!!':'!')+'</b> ';
+  return h.replace('<span class="wp-bt">','<span class="wp-bt">'+mk);
+};
+// Editor: ohne gesetzte Priorität ist «Mittel» sichtbar vorgewählt (gespeichert wird dann nichts)
+function wb26Prio(){
+  var g=document.getElementById('wpm-prio'); if(!g||g.getAttribute('data-val'))return;
+  var m=g.querySelector('button[data-val="mittel"]'); if(m&&!g.querySelector('button.on'))m.classList.add('on');
+}
+// Vorlagen-Chips mit ✕
+function wb26Chips(){
+  var host=document.getElementById('wp-modal'); if(!host)return;
+  [].slice.call(host.querySelectorAll('button[data-pk="tpl"],button[data-wp="tpl"]')).forEach(function(c){
+    if(c.parentNode.classList&&c.parentNode.classList.contains('wb26-chip'))return;
+    var w=document.createElement('span'); w.className='wb26-chip'; c.parentNode.insertBefore(w,c); w.appendChild(c);
+    w.insertAdjacentHTML('beforeend','<button type="button" class="lp-x" data-wb26="tpl-del" data-id="'+lpEsc(c.getAttribute('data-id'))+'" title="Vorlage löschen" aria-label="Vorlage löschen">✕</button>');
+  });
+}
+var _wpEditor_wb26=wpEditor;
+wpEditor=function(){ var r=_wpEditor_wb26.apply(this,arguments); try{ wb26Chips(); wb26Prio(); }catch(e){} return r; };
+document.addEventListener('click',function(ev){
+  if(ev.target.closest&&ev.target.closest('#wp-modal')&&!ev.target.closest('[data-wb26]'))setTimeout(function(){ try{ wb26Chips(); wb26Prio(); }catch(e){} },30);
+});
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb26="tpl-del"]'); if(!el)return; ev.preventDefault(); ev.stopPropagation();
+  var id=el.getAttribute('data-id'), W=wpEnsure(), t=W.routinen.find(function(x){return x.id===id;}); if(!t)return;
+  var snap=JSON.parse(JSON.stringify(t)); markDeleted(id); W.routinen=W.routinen.filter(function(x){return x.id!==id;}); saveD();
+  var w=el.closest('.wb26-chip'); if(w)w.remove();
+  pdUndoPush('Vorlage «'+snap.name+'» gelöscht',function(){ if(D.tombstones)delete D.tombstones[id]; if(!wpEnsure().routinen.some(function(x){return x.id===id;}))wpEnsure().routinen.push(snap); saveD(); });
 },true);
 
 // ═══════════════════════════════════════════════════════════
