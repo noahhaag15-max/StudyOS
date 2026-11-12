@@ -496,7 +496,7 @@ select.lp-v { width: auto; min-width: 74px; }
 .lp-two { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; }
 .lp-kzgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
 .lp-kz { background: var(--lp-bg); border-radius: 6px; padding: 8px; }
-/* ── Lernmodus ── */
+/* ── Fokusmodus ── */
 body.lp-lm-on { overflow: hidden; }
 #lp-lm.lm-host { position: fixed; inset: 0; z-index: 2000; overflow-y: auto; overscroll-behavior: contain; }
 #lp-lm.lm-lock { background: rgba(5, 8, 12, .94); padding: 16px; }
@@ -4270,7 +4270,7 @@ var PUNKTE_DEF=[
   ['block_nein','Block ✗ nicht gemacht','Meilen',-10,'Wochenplan'],
   ['etappe','Lern-Etappe abgeschlossen','XP',40,'Lernen'],
   ['etappe_bonus','Drill ✓ allein gelöst (Bonus)','XP',10,'Lernen'],
-  ['session','Lernmodus-Session abgeschlossen','XP',15,'Lernen'],
+  ['session','Fokusmodus-Session abgeschlossen','XP',15,'Lernen'],
   ['sport','Sport','XP',30,'Logbuch'],
   ['schlaf7','Schlaf ≥ 7 h','XP',20,'Logbuch'],
   ['schlaf75','Schlaf ≥ 7,5 h und Bettzeit vor 00:00','XP',35,'Logbuch'],
@@ -4491,7 +4491,7 @@ function spielTagesbilanz(date){
   var sess=lpSessionsOn(date), nEt=0, nAlleine=0;
   sess.forEach(function(s){ if(s.ergebnis==='ok'||s.ergebnis==='hilfe'||s.ergebnis==='erledigt')nEt++; if(s.ergebnis==='ok')nAlleine++; });
   add('etappen','Lern-Etappen ('+nEt+'×)',nEt*P.etappe+nAlleine*P.etappe_bonus,'XP','Lernen');
-  add('sessions','Lernmodus-Sessions ('+sess.length+'×)',sess.length*P.session,'XP','Lernen');
+  add('sessions','Fokusmodus-Sessions ('+sess.length+'×)',sess.length*P.session,'XP','Lernen');
   var tr=D.track&&D.track[date];
   if(tr&&tr.sports&&tr.sports.length)add('sport','Sport',P.sport,'XP','Logbuch');
   var sl=tr&&tr.sleep;
@@ -5710,12 +5710,12 @@ function ckJetztHTML(){
   if(!b){
     var it=lpHeuteItems()[0];
     if(it){ var e=it.e, cp=lpCpProg(e); h='<div class="lp-row" style="justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px"><div><div class="lp-cap">JETZT · VORSCHLAG</div><div style="font-size:19px;font-weight:500;margin-top:5px">'+lpEsc(e.titel)+'</div><div class="lp-mu" style="margin-top:3px">'+lpEsc(it.fach)+' · '+(e.dauerMin||45)+' Min'+(cp.total?' · '+cp.done+'/'+cp.total+' Checkpoints':'')+' · <span style="color:var(--c-ok)">+'+(P.etappe+P.session)+' XP</span></div></div>'
-      +'<button type="button" class="ck-go" data-lpa="lm-start" data-id="'+lpEsc(e.id)+'"><i class="ti ti-player-play"></i> Lernmodus starten</button></div>'; }
+      +'<button type="button" class="ck-go" data-lpa="lm-start" data-id="'+lpEsc(e.id)+'"><i class="ti ti-player-play"></i> Fokusmodus starten</button></div>'; }
     else h+='<div style="font-size:19px;font-weight:500;margin-top:5px">Alles erledigt</div><div class="lp-mu" style="margin-top:3px">Nichts Offenes mehr für heute — Pause gehört dazu.</div>';
   } else {
     var kat=wpKat(b.kategorie), lern=b.kategorie==='lernen', it2=lern?lpHeuteItems()[0]:null, titel=b.titel, sub, btn;
     if(it2){ var e2=it2.e, cp2=lpCpProg(e2); titel=e2.titel; sub=lpEsc(it2.fach)+' · '+(e2.dauerMin||45)+' Min'+(cp2.total?' · '+cp2.done+'/'+cp2.total+' Checkpoints':'')+' · <span style="color:var(--c-ok)">+'+(P.etappe+P.session)+' XP</span>';
-      btn='<button type="button" class="ck-go" data-lpa="lm-start" data-id="'+lpEsc(e2.id)+'"><i class="ti ti-player-play"></i> Lernmodus starten</button>'; }
+      btn='<button type="button" class="ck-go" data-lpa="lm-start" data-id="'+lpEsc(e2.id)+'"><i class="ti ti-player-play"></i> Fokusmodus starten</button>'; }
     else {
       sub=lpEsc(kat.name)+' · '+b.start+'–'+b.ende+' · <span style="color:var(--c-ok)">+'+P.block_ok+' XP</span>'+(c.laufend?'':' · <span class="lp-mono">'+(lpT2M(b.ende)<=ckNowMin()?'geplant ':'startet ')+b.start+'</span>');
       var isR=wpIsRoutine(b), bid=lpEsc(b.id), started=!!b.gestartet, gs=started?new Date(b.gestartet):null;
@@ -6921,7 +6921,7 @@ function loBucketOpen(){
 
 // ── Wochenmission ──
 var MO_STATIC=[
-  {id:'schlaf',name:'Schlaf Ø ≥ 7 h',ziel:7,einheit:'h'},{id:'sessions',name:'5 Lernmodus-Sessions',ziel:5,einheit:'Sessions'},
+  {id:'schlaf',name:'Schlaf Ø ≥ 7 h',ziel:7,einheit:'h'},{id:'sessions',name:'5 Fokusmodus-Sessions',ziel:5,einheit:'Sessions'},
   {id:'bloecke',name:'20 Wochenplan-Blöcke ✓',ziel:20,einheit:'Blöcke'},{id:'sport',name:'3× Sport',ziel:3,einheit:'×'},
   {id:'lernen',name:'10 h Lernen',ziel:10,einheit:'h'},{id:'abschluss',name:'6 Tage sauber abschliessen',ziel:6,einheit:'Tage'}
 ];
@@ -7203,7 +7203,7 @@ function cpHighlight(mon){
   for(i=1;i<=12;i++){ var pm=lpAdd(mon,-7*i); if(pm<lpMonday(S.startDatum))break; n++; if(ckWeekStats(pm).lernen>=cur)best=false; }
   var sess=0, end=lpAdd(mon,6); lpEnsure().sessions.forEach(function(x){ var d=lpSessDate(x); if(x.status==='abgeschlossen'&&d>=mon&&d<=end)sess++; });
   if(cur>=1&&n>=1&&best)return 'Beste Lernwoche seit Semesterstart: '+lpDec(cur)+' h';
-  if(sess>=3)return sess+' Lernmodus-Sessions — du bist drangeblieben';
+  if(sess>=3)return sess+' Fokusmodus-Sessions — du bist drangeblieben';
   var st=spielStreak(); if(st>=7)return 'Streak: '+st+' Tage in Folge';
   return 'Woche geschafft — jede Woche zählt, auch die ruhigen';
 }
@@ -7510,7 +7510,7 @@ ckAgenda=function(){
 // ── Freizeit: Matchday-Einstellungen, Spoiler-Schutz, Tippspiel, Fenster im Wochenplan ──
 CFG_DEFAULTS['matchday.nurFavoriten']=true; CFG_DEFAULTS['matchday.spoiler']=true; CFG_DEFAULTS['matchday.countdown']=true; CFG_DEFAULTS['matchday.lernmodusAus']=true;
 CFG_META['matchday.nurFavoriten']={gruppe:'Matchday',label:'Nur Favoriten (Cockpit, Wochenplan)'}; CFG_META['matchday.spoiler']={gruppe:'Matchday',label:'Spoiler-Schutz'};
-CFG_META['matchday.countdown']={gruppe:'Matchday',label:'Anpfiff-Countdown'}; CFG_META['matchday.lernmodusAus']={gruppe:'Matchday',label:'Im Lernmodus ausblenden'};
+CFG_META['matchday.countdown']={gruppe:'Matchday',label:'Anpfiff-Countdown'}; CFG_META['matchday.lernmodusAus']={gruppe:'Matchday',label:'Im Fokusmodus ausblenden'};
 function mdMask(txt){
   if(txt==null)return ''; var s=String(txt); if(!cfg('matchday.spoiler'))return s;
   var keep=[]; s=s.replace(/Tipp:\s*\d+\s*[:\-–]\s*\d+/gi,function(m){ keep.push(m); return ''+(keep.length-1)+''; });
@@ -7577,7 +7577,7 @@ hgSectionHTML=function(){
     +row('nurFavoriten','Nur Favoriten','Cockpit, Agenda und Wochenplan zeigen nur markierte Spiele (🔥). Aus: alle eingetragenen Spiele.')
     +row('spoiler','Spoiler-Schutz','Resultate in Titeln oder Ortsangaben werden überall maskiert; nur dein eigener Tipp und das von dir bestätigte Resultat sind sichtbar.')
     +row('countdown','Anpfiff-Countdown','Zeile «Noch … bis Anpfiff» in der Jetzt-Karte.')
-    +row('lernmodusAus','Im Lernmodus ausblenden','Matches erscheinen im Lernmodus nie — der Lernmodus zeigt ohnehin nur Etappe, Timer und Checkpoints.')+'</div>';
+    +row('lernmodusAus','Im Fokusmodus ausblenden','Matches erscheinen im Fokusmodus nie — der Fokusmodus zeigt ohnehin nur Etappe, Timer und Checkpoints.')+'</div>';
 };
 document.addEventListener('click',function(ev){
   var el=ev.target.closest&&ev.target.closest('[data-mdset]'); if(!el)return; var k=el.getAttribute('data-mdset');
@@ -7817,11 +7817,11 @@ var TR_DEFAULT=[
   {id:'xp25000',kat:'xp',tier:3,name:'Über den Wolken',icon:'sun-high',beschr:'25\'000 XP gesammelt',bed:{typ:'xp',wert:25000}},
   {id:'meilen5000',kat:'xp',tier:2,name:'Vielflieger',icon:'plane',beschr:'5\'000 Meilen verdient',bed:{typ:'meilenVerdient',wert:5000}},
   {id:'meilen20000',kat:'xp',tier:3,name:'Platin-Status',icon:'crown',beschr:'20\'000 Meilen verdient',bed:{typ:'meilenVerdient',wert:20000}},
-  {id:'sess10',kat:'lernen',tier:1,name:'Warm-up',icon:'player-play',beschr:'10 Lernmodus-Sessions',bed:{typ:'sessions',wert:10}},
-  {id:'sess50',kat:'lernen',tier:2,name:'Stammgast',icon:'player-play',beschr:'50 Lernmodus-Sessions',bed:{typ:'sessions',wert:50}},
-  {id:'sess100',kat:'lernen',tier:3,name:'Centurion',icon:'shield-check',beschr:'100 Lernmodus-Sessions',bed:{typ:'sessions',wert:100}},
-  {id:'sess250',kat:'lernen',tier:3,name:'Dauerlerner',icon:'infinity',beschr:'250 Lernmodus-Sessions',bed:{typ:'sessions',wert:250}},
-  {id:'lernh10',kat:'lernen',tier:1,name:'10 Stunden Flugzeit',icon:'clock',beschr:'10 h Lernzeit im Lernmodus',bed:{typ:'lernh',wert:10}},
+  {id:'sess10',kat:'lernen',tier:1,name:'Warm-up',icon:'player-play',beschr:'10 Fokusmodus-Sessions',bed:{typ:'sessions',wert:10}},
+  {id:'sess50',kat:'lernen',tier:2,name:'Stammgast',icon:'player-play',beschr:'50 Fokusmodus-Sessions',bed:{typ:'sessions',wert:50}},
+  {id:'sess100',kat:'lernen',tier:3,name:'Centurion',icon:'shield-check',beschr:'100 Fokusmodus-Sessions',bed:{typ:'sessions',wert:100}},
+  {id:'sess250',kat:'lernen',tier:3,name:'Dauerlerner',icon:'infinity',beschr:'250 Fokusmodus-Sessions',bed:{typ:'sessions',wert:250}},
+  {id:'lernh10',kat:'lernen',tier:1,name:'10 Stunden Flugzeit',icon:'clock',beschr:'10 h Lernzeit im Fokusmodus',bed:{typ:'lernh',wert:10}},
   {id:'lernh50',kat:'lernen',tier:2,name:'Fünfzig Stunden',icon:'clock',beschr:'50 h Lernzeit',bed:{typ:'lernh',wert:50}},
   {id:'lernh100',kat:'lernen',tier:3,name:'Hundert Stunden',icon:'clock-hour-4',beschr:'100 h Lernzeit',bed:{typ:'lernh',wert:100}},
   {id:'lernh250',kat:'lernen',tier:3,name:'Logbuch voll',icon:'books',beschr:'250 h Lernzeit',bed:{typ:'lernh',wert:250}},
@@ -8327,12 +8327,12 @@ TR_DEFAULT.push(
   {id:'r_streak3',kat:'rhythmus',tier:1,name:'Dreier-Serie',icon:'flame',beschr:'3 Tage Streak',bed:{typ:'streak',wert:3}},
   {id:'r_tag1',kat:'rhythmus',tier:1,name:'Tag abgeschlossen',icon:'flag-check',beschr:'Ersten Tagesabschluss gemacht',bed:{typ:'tage',wert:1}},
   {id:'r_tage7',kat:'rhythmus',tier:1,name:'Eine Woche Bordbuch',icon:'notebook',beschr:'7 Tage abgeschlossen',bed:{typ:'tage',wert:7}},
-  {id:'r_sess1',kat:'lernen',tier:1,name:'Erster Lernflug',icon:'player-play',beschr:'Erste Lernmodus-Session abgeschlossen',bed:{typ:'sessions',wert:1}},
+  {id:'r_sess1',kat:'lernen',tier:1,name:'Erster Lernflug',icon:'player-play',beschr:'Erste Fokusmodus-Session abgeschlossen',bed:{typ:'sessions',wert:1}},
   {id:'r_etappe1',kat:'lernen',tier:1,name:'Erste Etappe',icon:'route',beschr:'Erste Etappe abgeschlossen',bed:{typ:'etappen',wert:1}},
   {id:'r_etappe10',kat:'lernen',tier:1,name:'Streckenflieger',icon:'map-route',beschr:'10 Etappen abgeschlossen',bed:{typ:'etappen',wert:10}},
   {id:'r_thema',kat:'lernen',tier:1,name:'Themenstart',icon:'book',beschr:'Erstes Thema im Lernplan angelegt',bed:{typ:'themen',wert:1}},
   {id:'r_thema5',kat:'lernen',tier:2,name:'Lernplaner',icon:'books',beschr:'5 Themen angelegt',bed:{typ:'themen',wert:5}},
-  {id:'r_lernh1',kat:'lernen',tier:1,name:'Erste Stunde',icon:'clock',beschr:'1 h Lernzeit im Lernmodus',bed:{typ:'lernh',wert:1}},
+  {id:'r_lernh1',kat:'lernen',tier:1,name:'Erste Stunde',icon:'clock',beschr:'1 h Lernzeit im Fokusmodus',bed:{typ:'lernh',wert:1}},
   {id:'r_lab',kat:'lernen',tier:1,name:'Erstes Lab',icon:'flask',beschr:'Erste Lab-Punkte eingetragen',bed:{typ:'labs',wert:1}},
   {id:'r_lab10',kat:'lernen',tier:2,name:'Labor-Profi',icon:'flask-2',beschr:'10 Labs eingetragen',bed:{typ:'labs',wert:10}},
   {id:'r_note',kat:'lernen',tier:1,name:'Note im Buch',icon:'certificate',beschr:'Erste Note oder Teilnote im Notenrechner erfasst',bed:{typ:'notenErfasst',wert:1}},
@@ -11232,7 +11232,7 @@ hgAnsichtHTML=function(){ var h=_hgAnsichtHTML_px(); return h.replace(/<\/div>$/
 // Der Timer-Status liegt bewusst NICHT in D, sondern in localStorage 'sos_lp_timer': ein laufender
 // Timer darf nie per Cloud-Sync auf ein anderes Gerät gelangen. Jede änderbare Entität trägt ein
 // Änderungs-Timestamp `ts` — der Merge nimmt pro Eintrag den neueren Stand (kein blindes "incoming gewinnt").
-// Optik: Mockups «Lernplan + Lernmodus», Farben ausschliesslich über die --lp-* Tokens (siehe CSS).
+// Optik: Mockups «Lernplan + Fokusmodus», Farben ausschliesslich über die --lp-* Tokens (siehe CSS).
 // ═══════════════════════════════════════════════════════════
 var LP_STUFEN=['Neu','Falsch beantwortet','Einmal richtig','Zweimal richtig','Prüfungsfest'];
 var LP_STUFE_CLS=['t-new','t-danger','t-review','t-ok','t-master'];
@@ -11410,8 +11410,8 @@ function lpLegendHTML(modus){
 
 function lpLmButtonHTML(e,modus){
   var id=lpEsc(e.id), h;
-  if(LM&&LM.mode==='run'&&LM.etappeId===e.id)h='<button type="button" class="lp-btn fill" data-lpa="lm-start" data-id="'+id+'">▶ Zurück zum Lernmodus</button>';
-  else h='<button type="button" class="lp-btn" data-lpa="lm-start" data-id="'+id+'">▶ Lernmodus</button>';
+  if(LM&&LM.mode==='run'&&LM.etappeId===e.id)h='<button type="button" class="lp-btn fill" data-lpa="lm-start" data-id="'+id+'">▶ Zurück zum Fokusmodus</button>';
+  else h='<button type="button" class="lp-btn" data-lpa="lm-start" data-id="'+id+'">▶ Fokusmodus</button>';
   if(modus==='konzept'&&lpReviewDue(e,'konzept',today()))h+='<button type="button" class="lp-btn ok" data-lpa="kw-done" data-id="'+id+'">✓ Wiederholt</button>';
   return h;
 }
@@ -12113,7 +12113,7 @@ function lpItemHTML(c){
     +'<div class="lp-row" style="justify-content:space-between;align-items:flex-start"><div style="min-width:0"><span class="lp-tag '+(wdh?'t-review':'t-accent')+'">'+(wdh?'Wiederholung':'Neu')+'</span> '
     +'<span class="lp-mu">'+lpEsc(lpCut(c.fach,24))+' · '+(c.modus==='drill'?'Drill':'Konzept')+'</span>'
     +'<div style="font-size:13px;margin-top:4px">'+lpEsc(e.titel)+'</div></div>'
-    +'<button type="button" class="lp-btn lp-heute-btn" data-lpa="lm-start" data-id="'+id+'">▶ Lernmodus</button></div>'
+    +'<button type="button" class="lp-btn lp-heute-btn" data-lpa="lm-start" data-id="'+id+'">▶ Fokusmodus</button></div>'
     +'<div class="lp-mu" style="margin-top:4px">'+lpEsc(meta)+'</div>'+bar+'</div>';
 }
 function lpDashHTML(){
@@ -12344,7 +12344,7 @@ function lpLmWake(on){
   }catch(e){}
 }
 document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible'&&LM&&LM.mode==='run')lpLmWake(true); });
-// Tastatur-Sperre: solange der Lernmodus läuft, erreichen Study-OS-Kürzel nichts ausserhalb des Overlays
+// Tastatur-Sperre: solange der Fokusmodus läuft, erreichen Study-OS-Kürzel nichts ausserhalb des Overlays
 document.addEventListener('keydown',function(ev){
   if(!LM||LM.mode==='start'||LM.mode==='break')return;
   var t=ev.target;
@@ -12478,7 +12478,7 @@ function lpLmBreakHTML(){
 }
 function lpLmStartHTML(){
   var e=lpEtappe(LM.etappeId), t=lpThema(e.themaId);
-  return '<div class="lm-dlgwrap soft"><div class="lp-cd lm-dlg"><div style="font-size:14px;font-weight:500;margin-bottom:2px">Lernmodus starten</div>'
+  return '<div class="lm-dlgwrap soft"><div class="lp-cd lm-dlg"><div style="font-size:14px;font-weight:500;margin-bottom:2px">Fokusmodus starten</div>'
     +'<div class="lp-mu">'+lpEsc(t.name+' › '+e.titel)+'</div>'
     +'<div class="lp-mu" style="margin:10px 0 6px">Während der Session ist Study OS gesperrt: nur Timer und Checkpoints.</div>'
     +'<div class="lp-fld"><label>Session</label><div class="lp-seg"><button type="button" class="'+(LM.sessMin===25?'on':'')+'" data-lpa="lm-seg" data-val="25">25 / 5</button><button type="button" class="'+(LM.sessMin===50?'on':'')+'" data-lpa="lm-seg" data-val="50">50 / 10</button></div></div>'
@@ -16579,7 +16579,7 @@ function bindAll(){
 
 // ═══════════════════════════════════════════════════════════
 // LAGEBERICHT — Weltlage: Karte, Länder-Dossier, Zeitstrahl, manuelles Erfassen.
-// Kein XP, keine Meilen, im Lernmodus nicht erreichbar, nicht privat (läuft im Gist-Sync mit).
+// Kein XP, keine Meilen, im Fokusmodus nicht erreichbar, nicht privat (läuft im Gist-Sync mit).
 // ═══════════════════════════════════════════════════════════
 var LB_KAT=[['beschaffung','Beschaffung'],['entwicklung','Entwicklung & Test'],['einsatz','Einsatz'],['uebung','Übung'],['stationierung','Stationierung'],['politik','Politik'],['abkommen','Abkommen'],['export','Export'],['krise','Krise'],['industrie','Industrie'],['cyber','Cyber & Spionage'],['unfall','Unfall'],['sonstiges','Sonstiges']];
 var LB_KAT_COL={beschaffung:'#4d7cff',entwicklung:'#2ec4b6',einsatz:'#a32f3c',uebung:'#2e6b4c',stationierung:'#9bc53d',politik:'#8a6a1f',abkommen:'#00cfff',export:'#e07be0',krise:'#ff6b6b',industrie:'#a66bff',cyber:'#8d99ae',unfall:'#ffb020',sonstiges:'#6b7f8c'};
@@ -18110,7 +18110,7 @@ document.addEventListener('click',function(ev){
 
 // ═══════════════════════════════════════════════════════════
 // AUFGABEN-POOL (Analysis) & LABS (Programming) — Paket 1: Datenmodell, Erfassen, 4-Ergebnis-Logik,
-// Themen-Balken, Lab-Phasen. Noch NICHT dabei: Lernmodus-Timer-Einbindung, Freies Üben,
+// Themen-Balken, Lab-Phasen. Noch NICHT dabei: Fokusmodus-Timer-Einbindung, Freies Üben,
 // Prüfungssimulation, automatische Wochenplan-Blöcke, Tempo-Rechnung für Pool-Fächer.
 // ═══════════════════════════════════════════════════════════
 // Eigene Lernplan-Einstellungen (L.settings), nicht die allgemeine Hangar-cfg — gleiche Ecke wie die
@@ -21016,7 +21016,7 @@ function wbHeuteZuerstHTML(){
   var td=today(), h='<div class="lp-cap" style="margin-bottom:6px">HEUTE ZUERST</div>', note=wbMorgenZuerst(td), n=0;
   if(note){ h+='<div class="lp-mu" style="font-size:11px">Von gestern</div><div style="font-size:14px;font-weight:500;margin-bottom:8px">'+lpEsc(note)+'</div>'; n++; }
   var bl=ckBlocksToday().filter(function(b){ return b.status==='offen'&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0&&!wpIsRoutine(b); }).sort(function(a,b){ return (pzRank(b.prio)-pzRank(a.prio))||a.start.localeCompare(b.start); }).slice(0,3);
-  bl.forEach(function(b){ h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px"><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(b.start)+'</span> '+lpEsc(b.titel)+'</span><button type="button" class="wp-pill" data-ck="blk-done" data-id="'+lpEsc(b.id)+'">✓</button></div>'; n++; });
+  bl.forEach(function(b){ h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px"><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(b.start)+'</span> '+lpEsc(b.titel)+'</span>'+(wbIstLernBlock(b)?'<button type="button" class="wp-pill" data-wb29="fokus" data-id="'+lpEsc(b.id)+'" title="Fokusmodus starten">▶</button> ':'')+'<button type="button" class="wp-pill" data-ck="blk-done" data-id="'+lpEsc(b.id)+'">✓</button></div>'; n++; });
   if(!n)h+='<div class="lp-mu" style="font-size:12px">Heute ist nichts Wichtiges offen.</div>';
   var rh=wbRegelTreffer(lpMonday(td)).filter(function(x){return x.tag===td;});
   rh.slice(0,2).forEach(function(x){ h+='<div class="lp-mu" style="font-size:11px;margin-top:6px;color:var(--c-fun)"><i class="ti ti-alert-triangle"></i> '+lpEsc(x.text)+'</div>'; });
@@ -21861,7 +21861,7 @@ function wbfLage(mon){
       +(c.offen?line('nicht bewertet',c.offen,'Status wurde im Tagesabschluss nicht gesetzt'):'');
   }
   var ses=0, et={}; for(var i=0;i<7;i++){ lpSessionsOn(lpAdd(prev,i)).forEach(function(s){ ses++; if(s.etappeId)et[s.etappeId]=1; }); }
-  if(ses)h+=line('Lern-Sessions',ses+' (an '+Object.keys(et).length+' Etappen)','aus den abgeschlossenen Lernmodus-Sessions');
+  if(ses)h+=line('Lern-Sessions',ses+' (an '+Object.keys(et).length+' Etappen)','aus den abgeschlossenen Fokusmodus-Sessions');
   if(st!=null)h+=line('Plan-Stabilität',st+' %','Anteil der freigegebenen Blöcke, die unverändert blieben');
   if(an.length)h+=line('Änderungsanträge',an.length,'aus den gestellten Anträgen');
   if(ret)h+=line('Rettungsmodus',ret+'×');
@@ -22161,7 +22161,7 @@ function wbHeuteZuerstHTML(){
   var td=today(), h='<div class="lp-cap" style="margin-bottom:6px">HEUTE ZUERST</div>', note=wbMorgenZuerst(td), n=0;
   if(note){ h+='<div class="lp-mu" style="font-size:11px">Von gestern</div><div style="font-size:14px;font-weight:500;margin-bottom:8px">'+lpEsc(note)+'</div>'; n++; }
   var bl=ckBlocksToday().filter(function(b){ return b.status==='offen'&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0&&!wpIsRoutine(b); }).sort(function(a,b){ return (wbRank(b)-wbRank(a))||a.start.localeCompare(b.start); }).slice(0,3);
-  bl.forEach(function(b){ var hi=wbRank(b)>=6; h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px"><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(b.start)+'</span> '+lpEsc(b.titel)+' <span style="font-size:10px;color:'+wbPrioColor(wbPrioEff(b))+'">· '+lpEsc(wbPrioText(b))+'</span></span><button type="button" class="wp-pill" data-ck="blk-done" data-id="'+lpEsc(b.id)+'">✓</button></div>'; n++; });
+  bl.forEach(function(b){ var hi=wbRank(b)>=6; h+='<div class="hg-ln"><span style="min-width:0;flex:1;font-size:13px"><span class="lp-mono lp-mu" style="font-size:11px">'+lpEsc(b.start)+'</span> '+lpEsc(b.titel)+' <span style="font-size:10px;color:'+wbPrioColor(wbPrioEff(b))+'">· '+lpEsc(wbPrioText(b))+'</span></span>'+(wbIstLernBlock(b)?'<button type="button" class="wp-pill" data-wb29="fokus" data-id="'+lpEsc(b.id)+'" title="Fokusmodus starten">▶</button> ':'')+'<button type="button" class="wp-pill" data-ck="blk-done" data-id="'+lpEsc(b.id)+'">✓</button></div>'; n++; });
   var opt=wpBlocksOn(td).filter(function(b){ return b.typ==='fenster'&&String(b.id).indexOf('md:')!==0&&b.dabei!=='nein'; }).sort(function(a,b){ return a.start.localeCompare(b.start); }).slice(0,3);
   if(opt.length){
     h+='<div class="lp-mu" style="font-size:10px;margin:8px 0 2px">OPTIONAL HEUTE</div>';
@@ -22293,6 +22293,96 @@ var _wpRender_wb28=wpRender;
 wpRender=function(){ try{ wbDabeiMigrate(WP_UI&&WP_UI.week); }catch(e){} return _wpRender_wb28.apply(this,arguments); };
 var _waInit_wb28=waInit;
 waInit=function(){ _waInit_wb28(); try{ if(wbDabeiMigrate())wpRender(); }catch(e){} };
+
+// ═══════════════════════════════════════════════════════════
+// FOKUSMODUS (früher Fokusmodus) STARTET AUS DEM WOCHENPLAN-BLOCK
+// • Die Karte «Jetzt» zeigt den laufenden/nächsten Lernblock des Wochenplans selbst (nicht mehr einen Vorschlag aus dem Lernplan).
+// • «Fokusmodus starten» nimmt: 1) die Checkliste des Blocks, wenn er eine hat; sonst 2) die passende Etappe im Lernplan
+//   (über die Verknüpfung des Blocks oder den ähnlichsten Titel); sonst 3) den Block allein (Timer ohne Checkpoints).
+// • Abgehakte Checkpoints und das Ergebnis der Session werden in den Block zurückgeschrieben (✓ oder ◐).
+// Fokus-Etappen für Blöcke liegen unter dem Fach «Fokus-Blöcke» (erscheint in keiner Fächerliste).
+// ═══════════════════════════════════════════════════════════
+function wbIstLernBlock(b){ return !!b&&(b.typ==='aufgabe'||b.typ==='fix')&&(b.kategorie==='lernen'||pxMix(b).indexOf('lernen')>=0); }
+var WB_STOP={und:1,mit:1,bis:1,der:1,die:1,das:1,von:1,zu:1,low:1,life:1,aufgabe:1,fertig:1,lernen:1,block:1};
+function wbTok(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9äöüéèà ]+/g,' ').split(/\s+/).filter(function(w){ return w.length>2&&!WB_STOP[w]; }); }
+function wbFokusMatch(b){
+  var q=String(b.quelle||''); if(q.indexOf('etappe:')===0){ var e0=lpEtappe(q.slice(7)); if(e0)return e0; }
+  var tb=wbTok(b.titel), best=null, bs=0; if(!tb.length)return null;
+  lpEnsure().etappen.forEach(function(e){
+    if(e.blockId)return; var te=wbTok(e.titel); if(!te.length)return;
+    var common=te.filter(function(w){ return tb.indexOf(w)>=0; }).length, sc=common/Math.max(te.length,tb.length);
+    if(sc>bs){ bs=sc; best=e; }
+  });
+  return bs>=0.6?best:null;
+}
+function wbFokusFach(){
+  var f=lpFach('Fokus-Blöcke',true), L=lpEnsure(), t=L.themen.find(function(x){return x.id==='fokus-th';});
+  if(!t){ t={id:'fokus-th',fachId:f.id,name:'Wochenplan-Blöcke',reihenfolge:0,modus:'konzept',ts:Date.now()}; L.themen.push(t); }
+  return t;
+}
+function wbFokusMake(b){
+  var t=wbFokusFach(), L=lpEnsure(), id='fk:'+b.id, e=L.etappen.find(function(x){return x.id===id;}), items=(b.checkliste||[]).filter(function(c){return c&&c.text;});
+  var dur=Math.max(15,Math.min(180,lpT2M(b.ende)-lpT2M(b.start)||45));
+  if(!e){ e={id:id,themaId:t.id,titel:b.titel,dauerMin:dur,stufe:0,okInFolge:0,erledigt:false,checkpoints:[],log:[],naechsteWiederholung:null,gesperrtBis:0,srIndex:0,geplantAm:'',deadline:'',reihenfolge:L.etappen.length+1,blockId:b.id,ts:Date.now()}; L.etappen.push(e); }
+  e.titel=b.titel; e.dauerMin=dur;
+  e.checkpoints=items.map(function(c){ var old=(e.checkpoints||[]).find(function(x){return x.id===c.id;}); return {id:c.id,text:c.text,erledigt:!!c.done,erledigtAm:c.done?((old&&old.erledigtAm)||Date.now()):null,ts:Date.now()}; });
+  e.erledigt=false; lpTouch(e); return e;
+}
+function wbFokusStart(blockId){
+  var b=wpFind(blockId); if(!b)return;
+  var hat=(b.checkliste||[]).some(function(c){return c&&c.text;}), e=hat?wbFokusMake(b):(wbFokusMatch(b)||wbFokusMake(b));
+  saveD(); lpLmOpenStart(e.id); if(LM&&LM.mode==='start')LM.blockId=b.id;
+}
+function wbFokusMirror(){
+  if(!LM||!LM.blockId)return; var b=wpFind(LM.blockId), e=lpEtappe(LM.etappeId); if(!b||!e||e.blockId!==b.id)return;
+  var ch=false; (e.checkpoints||[]).forEach(function(cp){ var it=(b.checkliste||[]).find(function(x){return x.id===cp.id;}); if(it&&!!it.done!==!!cp.erledigt){ it.done=!!cp.erledigt; ch=true; } });
+  if(ch){ lpTouch(b); saveD(); }
+}
+var _lpLmRender_wb29=lpLmRender;
+lpLmRender=function(){ try{ wbFokusMirror(); }catch(e){} return _lpLmRender_wb29.apply(this,arguments); };
+var _lpLmFinishSave_wb29=lpLmFinishSave;
+lpLmFinishSave=function(){
+  var bid=LM&&LM.blockId, sel=LM&&LM.sel, e=LM&&lpEtappe(LM.etappeId);
+  var r=_lpLmFinishSave_wb29.apply(this,arguments);
+  try{
+    var b=bid&&wpFind(bid);
+    if(b&&LM&&LM.mode==='break'){
+      wbFokusMirror();
+      var cps=(e&&e.checkpoints)||[], done=cps.filter(function(c){return c.erledigt;}).length, alle=cps.length&&done===cps.length;
+      var st=(sel==='erledigt'||sel==='ok'||sel==='hilfe'||alle)?'ok':(done>0?'teil':null);
+      if(st&&b.status==='offen'){ b.daten=Object.assign({},b.daten||{},{fertig:true}); wpSetStatus(b,st); }
+      try{ wpRender(); ckRender(); }catch(x){}
+    }
+  }catch(x){}
+  return r;
+};
+// ── Jetzt-Karte: eigenen Block zeigen ──
+var _ckJetztHTML_wb29=ckJetztHTML;
+ckJetztHTML=function(){
+  var c=ckCurrent(), b=c.main, lern=wbIstLernBlock(b), saved=lpHeuteItems, h;
+  if(lern)lpHeuteItems=function(){ return []; };
+  try{ h=_ckJetztHTML_wb29.apply(this,arguments); }finally{ lpHeuteItems=saved; }
+  if(!lern||!h)return h;
+  var cl=(b.checkliste||[]).filter(function(x){return x&&x.text;}), n=cl.filter(function(x){return x.done;}).length;
+  var info=cl.length?' · <span class="lp-mono">'+n+'/'+cl.length+' Checkliste</span>':(wbFokusMatch(b)?' · Etappe im Lernplan verknüpft':'');
+  if(info)h=h.replace(/(<div class="lp-mu" style="margin-top:3px">)([\s\S]*?)(<\/div>)/,function(m,a,b2,c2){ return a+b2+info+c2; });
+  return h.replace('<div style="text-align:right">','<div style="text-align:right"><button type="button" class="ck-go" data-wb29="fokus" data-id="'+lpEsc(b.id)+'"><i class="ti ti-player-play"></i> Fokusmodus starten</button><div style="height:6px"></div>');
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wb29="fokus"]'); if(!el)return; ev.preventDefault(); ev.stopPropagation(); wbFokusStart(el.getAttribute('data-id'));
+},true);
+// Block-Editor: Fokusmodus direkt aus dem Block
+var _wpEditor_wb29=wpEditor;
+wpEditor=function(id,pre){
+  var r=_wpEditor_wb29(id,pre);
+  try{
+    var b=id?wpFind(id):null, host=document.getElementById('wp-modal'); if(!b||!host||!wbIstLernBlock(b)||document.getElementById('wb29-row'))return r;
+    var g=document.getElementById('wpm-kat'); if(!g)return r; var anchor=g.closest('.lp-fld');
+    var row=document.createElement('div'); row.className='lp-fld'; row.id='wb29-row'; row.innerHTML='<label>Fokusmodus</label><button type="button" class="wp-pill" data-wb29="fokus" data-id="'+lpEsc(b.id)+'"><i class="ti ti-player-play"></i> mit diesem Block starten</button>';
+    anchor.parentNode.insertBefore(row,anchor);
+  }catch(e){}
+  return r;
+};
 
 // ═══════════════════════════════════════════════════════════
 // INIT
