@@ -19691,8 +19691,8 @@ var WB_BEREICHE=[['flug','Fliegerei-Beruf'],['ppl','PPL'],['studium','Studium'],
 var WB_UNTER={
   flug:[['abfrage','Abfragen'],['dlr','DLR-Block']],
   ppl:[['flugstunde','Flugstunde'],['briefing','Briefing'],['theorie','Theorie']],
-  studium:[['pflicht','Vorlesung / Pflichttermin'],['lerntermin','Fester Lerntermin'],['ausserhaus','Lernen ausser Haus'],['zuhause','Lernen zuhause']],
-  militaer:[['wk','WK / Dienst'],['theorie','Theorie im WK']],
+  studium:[['pflicht','Vorlesung / Pflichttermin'],['lerntermin','Fester Lerntermin'],['ausserhaus','Lernen ausser Haus'],['zuhause','Lernen zuhause'],['pruefung','Prüfung'],['praesentation','Präsentation']],
+  militaer:[['wk','WK / Dienst'],['theorie','Theorie im WK'],['theorie_allg','Theorie (allgemein)'],['uebung','Übung'],['briefing','Briefing'],['vorbereitung','Vorbereitung'],['nachbereitung','Nachbereitung'],['praesentation','Präsentation']],
   arbeit:[],
   koerper:[['conditioning','Conditioning'],['kraft','Kraft'],['draussen','Draussen']],
   erleben:[['erlebnis','Erlebnis']],
@@ -20112,7 +20112,7 @@ function wbMatch(b,ber,unters){
   if(ber&&wbBereich(b)!==ber)return false;
   if(!unters||!unters.length)return true;
   var u=wbUnter(b);
-  return unters.some(function(x){ return x==='lern*'?u!=='pflicht':x===u; });
+  return unters.some(function(x){ return x==='lern*'?(u!=='pflicht'&&u!=='pruefung'&&u!=='praesentation'):x===u; });
 }
 function wbTrigger(r,b){
   var w=r.wenn||{}; if(b.typ!=='aufgabe'&&b.typ!=='fix')return false; if(b.status==='verschoben')return false;
@@ -20262,7 +20262,7 @@ function waHgMehr(){
 }
 var WA_RG={id:null};
 function waUnterOpts(ber,sel,mitLern){
-  var l=(WB_UNTER[ber]||[]).slice(); if(mitLern&&ber==='studium')l.unshift(['lern*','Lernblöcke (alle ausser Vorlesung)']);
+  var l=(WB_UNTER[ber]||[]).slice(); if(mitLern&&ber==='studium')l.unshift(['lern*','Lernblöcke (alle ausser Vorlesung, Prüfung, Präsentation)']);
   return '<option value="">alle</option>'+l.map(function(u){ return '<option value="'+u[0]+'"'+(sel===u[0]?' selected':'')+'>'+u[1]+'</option>'; }).join('');
 }
 function waBerOpts(sel,leer){ return (leer?'<option value="">'+leer+'</option>':'')+WB_BEREICHE.map(function(b){ return '<option value="'+b[0]+'"'+(sel===b[0]?' selected':'')+'>'+b[1]+'</option>'; }).join(''); }
@@ -22043,6 +22043,7 @@ function wbIstTermin(b){
   if(alle.some(function(k){ return tk.indexOf(k)>=0; })||alle.some(function(k){ return pk.indexOf(k)>=0; }))return true;
   var ber=wbBereich(b); if(ber==='arbeit'||ber==='militaer')return true;
   if(ber==='ppl'&&wbUnter(b)==='flugstunde')return true;
+  if(ber==='studium'&&(wbUnter(b)==='pruefung'||wbUnter(b)==='praesentation'))return true;
   return false;
 }
 function wbTermineVor(from,tage){
