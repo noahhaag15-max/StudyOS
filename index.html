@@ -22629,11 +22629,13 @@ function kcLoad(){ if(KC.msgs)return KC.msgs; try{ KC.msgs=JSON.parse(localStora
 function kcStore(){ try{ localStorage.setItem('sos_ki_chat',JSON.stringify(kcLoad().slice(-60))); }catch(e){} }
 
 // ── Datenpaket: kompakter Text aus dem, was in der App steht ──
-var KC_ALLTAG=['mahlzeit','schlaf','routine','waegen','messen','pushups'];
+var KC_ALLTAG=['mahlzeit','routine','waegen','messen','pushups'];
+function kcKatName(id){ var k=wpKats().find(function(x){ return x.id===id; }); return k?k.name:''; }
+var KC_STLBL={offen:'offen',ok:'✓ erledigt',teil:'◐ teilweise',nein:'✗ nicht gemacht'};
 function kcBlockLine(b,dat){
   var ber=wbBereich(b), u=wbUnter(b), priv=(ber==='liv'&&!dat.liv);
   var st={ok:'erledigt',teil:'teilweise',nein:'nicht gemacht',verschoben:'verschoben',offen:''}[b.status]||'';
-  return '  '+b.start+'–'+b.ende+(wpIsMulti(b)?' (endet '+lpDayLbl(b.endTag)+' '+lpFmtShort(b.endTag)+')':'')+' '+(priv?'privat (belegt)':String(b.titel||'').slice(0,80))+' ['+(priv?'privat':wbBerName(ber)+(u&&wbUnterName(ber,u)?' / '+wbUnterName(ber,u):''))+']'+(b.typ==='fenster'?' (optional)':'')+(b.typ==='fix'?' (fix)':'')+(wbPrioText(b)&&b.prio?' Prio '+wbPrioText(b):'')+(st?' — '+st:'')+(kcAend()?' #'+b.id:'');
+  return '  '+b.start+'–'+b.ende+(wpIsMulti(b)?' (endet '+lpDayLbl(b.endTag)+' '+lpFmtShort(b.endTag)+')':'')+' '+(priv?'privat (belegt)':String(b.titel||'').slice(0,80))+' ['+(priv?'privat':wbBerName(ber)+(u&&wbUnterName(ber,u)?' / '+wbUnterName(ber,u):'')+(kcAend()&&kcKatName(b.kategorie)?'; Kategorie '+kcKatName(b.kategorie):''))+']'+(b.typ==='fenster'?' (optional)':'')+(b.typ==='fix'?' (fix)':'')+(wbPrioText(b)&&b.prio?' Prio '+wbPrioText(b):'')+(st?' — '+st:'')+(kcAend()?' #'+b.id:'');
 }
 function kcAend(){ return cfg('ki.aendern')!==false; }
 // Offene Etappen (überfällig oder in den nächsten 14 Tagen geplant) und offene Pool-Aufgaben, mit Kennung — nur wenn Claude Änderungen vorbereiten darf
@@ -22953,12 +22955,13 @@ function kcAendPrompt(){
   return 'Du kannst Änderungen in der App vorbereiten. Du führst nie selbst etwas aus: Die App zeigt deinen Vorschlag als Karte, und der Nutzer entscheidet pro Zeile. Schlage Änderungen nur vor, wenn er darum bittet oder klar zustimmt; auf eine blosse Frage antwortest du nur mit Text.\n\n'
     +'So geht es: Schreibe ein bis drei Sätze, was du vorschlägst, und hänge ganz am Ende genau einen Block in dieser Form an (gültiges JSON, höchstens 15 Aktionen):\n```aenderungen\n{"aktionen":[{"typ":"block_neu","tag":"2026-01-14","start":"09:00","ende":"10:30","titel":"Beispiel","bereich":"studium","unterart":"zuhause","optional":false,"grund":"kurzer Satz"}]}\n```\n'
     +'Aktionen und ihre Felder («grund» ist überall ein kurzer Satz und freiwillig):\n'
-    +'- block_neu: tag (JJJJ-MM-TT), start und ende (HH:MM), titel, bereich; freiwillig unterart, optional (true = unverbindliches Fenster) und endtag (JJJJ-MM-TT, wenn der Block nach Mitternacht oder an einem späteren Tag endet, höchstens 7 Tage; z. B. Schlaf 23:00 bis 06:00 mit endtag = Folgetag)\n'
-    +'- block_aendern: id, dazu nur die Felder, die sich ändern: tag, start, ende, endtag, titel, bereich, unterart, prio (must, sehr, hoch, mittel, niedrig, moeglich, optional)\n'
+    +'- block_neu: tag (JJJJ-MM-TT), start und ende (HH:MM), titel, bereich; freiwillig unterart, optional (true = unverbindliches Fenster) kategorie und endtag (JJJJ-MM-TT, wenn der Block nach Mitternacht oder an einem späteren Tag endet, höchstens 7 Tage; z. B. Schlaf 23:00 bis 06:00 mit endtag = Folgetag)\n'
+    +'- block_aendern: id, dazu nur die Felder, die sich ändern: tag, start, ende, endtag, titel, kategorie, bereich, unterart, prio (must, sehr, hoch, mittel, niedrig, moeglich, optional), status (offen, ok, teil, nein)\n'
     +'- block_loeschen: id\n- aufgabe_neu: name; freiwillig faellig (JJJJ-MM-TT)\n- aufgabe_erledigt: id\n- aufgabe_aendern: id, name und/oder faellig\n- aufgabe_loeschen: id\n'
     +'- etappe_planen: id, datum (JJJJ-MM-TT, ab heute)\n- etappe_erledigt: id; bei Drill-Etappen zusätzlich ergebnis (ok = allein gelöst, hilfe, falsch)\n- pool_bewerten: id, ergebnis (sicher, zaeh, hilfe, falsch); freiwillig nachholen (JJJJ-MM-TT, oder null für «nicht nachholen»)\n\n'
     +'Die Kennung (id) steht in den Daten hinter dem Eintrag als «#…». Verwende sie exakt und ohne das Zeichen #, und erfinde keine: Fehlt sie für das, was der Nutzer meint, frag nach. Im Fliesstext nennst du keine Kennungen. Als erledigt markierst oder bewertest du nur, was der Nutzer dir ausdrücklich so gesagt hat, und Löschen schlägst du nur vor, wenn er es verlangt. Blöcke einer freigegebenen Woche darfst du zum Verschieben oder Löschen vorschlagen; die App verlangt dann von ihm einen Änderungsantrag. Vor der nächsten Nachricht meldet dir die App in eckigen Klammern, was aus deiner Karte wurde.\n\n'
-    +'Bereiche (Id = Name, in Klammern die Unterart-Ids): '+ber+'.';
+    +'Bereiche (Id = Name, in Klammern die Unterart-Ids): '+ber+'.\n\n'
+    +'Jeder Block hat zusätzlich eine Kategorie (Farbe und Art des Blocks; sie steht in den Daten hinter «Kategorie»). Kategorien (Id = Name): '+wpKats().map(function(k){ return k.id+' = '+k.name; }).join('; ')+'. Die Kategorie bestimmt den Bereich, solange am Block kein eigener Bereich gesetzt ist. Den Status setzt du nur, wenn der Nutzer es verlangt; Blöcke, die beim Abhaken eine Angabe brauchen (Mahlzeit, Sport, Schlaf, Lernen, Wägen, Messen, Pushups), kann nur er selbst auf erledigt setzen.';
 }
 function kcSichtbar(t){ t=String(t||''); var i=t.indexOf('```aenderungen'); if(i<0)return t; var j=t.indexOf('```',i+14); return (t.slice(0,i)+(j>=0?t.slice(j+3):'')).trim(); }
 function kcIsD(s){ return /^\d{4}-\d\d-\d\d$/.test(String(s||'')); }
@@ -22975,9 +22978,10 @@ function kcAktInfo(a){
   if(!a||typeof a!=='object'){ o.text='Unlesbare Aktion'; o.problem='ungültige Angaben'; return o; }
   switch(a.typ){
     case 'block_neu':
-      o.text='Neuer Block: '+String(a.titel||'')+(kcIsD(a.tag)&&kcIsT(a.start)&&kcIsT(a.ende)?' · '+kcBFmt(a.tag,a.start,a.ende)+(kcEt(a.tag,a.start,a.ende,a.endtag)?' (endet '+lpDayLbl(kcEt(a.tag,a.start,a.ende,a.endtag))+' '+lpFmtShort(kcEt(a.tag,a.start,a.ende,a.endtag))+')':''):'')+(a.bereich?' · '+wbBerName(a.bereich):'')+(a.optional?' · optional':'');
+      o.text='Neuer Block: '+String(a.titel||'')+(kcIsD(a.tag)&&kcIsT(a.start)&&kcIsT(a.ende)?' · '+kcBFmt(a.tag,a.start,a.ende)+(kcEt(a.tag,a.start,a.ende,a.endtag)?' (endet '+lpDayLbl(kcEt(a.tag,a.start,a.ende,a.endtag))+' '+lpFmtShort(kcEt(a.tag,a.start,a.ende,a.endtag))+')':''):'')+(a.bereich?' · '+wbBerName(a.bereich):'')+(a.kategorie&&kcKatName(a.kategorie)?' · Kategorie '+kcKatName(a.kategorie):'')+(a.optional?' · optional':'');
       if(!String(a.titel||'').trim()||!kcIsD(a.tag)||!kcIsT(a.start)||!kcIsT(a.ende))o.problem='Angaben unvollständig';
       else if(ids.indexOf(a.bereich)<0)o.problem='unbekannter Bereich';
+      else if(a.kategorie&&!kcKatName(a.kategorie))o.problem='unbekannte Kategorie';
       else if(kcEt(a.tag,a.start,a.ende,a.endtag)===null)o.problem='Enddatum ungültig (vor dem Start oder mehr als 7 Tage später)';
       else if(a.tag<td)o.problem='liegt in der Vergangenheit';
       else if(!a.optional&&(k=kcUeberschn(a.tag,a.start,kcEt(a.tag,a.start,a.ende,a.endtag)?'24:00':a.ende,null)))o.problem='überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')';
@@ -22986,7 +22990,7 @@ function kcAktInfo(a){
       b=wpFind(a.id); if(!b){ o.text='Block ändern'; o.problem='Block nicht gefunden'; break; }
       var nt=a.tag||b.tag, ns=a.start||b.start, ne=a.ende||b.ende, zeit=(nt!==b.tag||ns!==b.start||ne!==b.ende||(!!a.endtag&&a.endtag!==wpEndTag(b))), teile=[], multiNeu=wpIsMulti(b)||!!a.endtag;
       if(zeit)teile.push(kcBFmt(b.tag,b.start,b.ende)+(wpIsMulti(b)?' (endet '+lpDayLbl(b.endTag)+')':'')+' → '+(kcIsD(nt)&&kcIsT(ns)&&kcIsT(ne)?kcBFmt(nt,ns,ne)+(a.endtag&&kcIsD(a.endtag)&&a.endtag>nt?' (endet '+lpDayLbl(a.endtag)+' '+lpFmtShort(a.endtag)+')':''):'?'));
-      if(a.titel&&a.titel!==b.titel)teile.push('Titel «'+a.titel+'»'); if(a.bereich&&a.bereich!==wbBereich(b))teile.push('Bereich '+wbBerName(a.bereich)); if(a.unterart!=null&&a.unterart!==(b.unter||''))teile.push('Unterart '+(wbUnterName(a.bereich||wbBereich(b),a.unterart)||'keine')); if(a.prio!=null&&KC_PRIO[a.prio]!=null&&KC_PRIO[a.prio]!==(b.prio||''))teile.push('Priorität '+pzPrioLbl(KC_PRIO[a.prio]));
+      if(a.titel&&a.titel!==b.titel)teile.push('Titel «'+a.titel+'»'); if(a.kategorie&&a.kategorie!==b.kategorie)teile.push('Kategorie '+(kcKatName(a.kategorie)||'?')); if(a.status&&a.status!==b.status)teile.push('Status '+(KC_STLBL[a.status]||'?')); if(a.bereich&&a.bereich!==wbBereich(b))teile.push('Bereich '+wbBerName(a.bereich)); if(a.unterart!=null&&a.unterart!==(b.unter||''))teile.push('Unterart '+(wbUnterName(a.bereich||wbBereich(b),a.unterart)||'keine')); if(a.prio!=null&&KC_PRIO[a.prio]!=null&&KC_PRIO[a.prio]!==(b.prio||''))teile.push('Priorität '+pzPrioLbl(KC_PRIO[a.prio]));
       o.text='«'+b.titel+'»: '+(teile.join(' · ')||'keine Änderung');
       if(!teile.length)o.problem='ändert nichts';
       else if(!kcIsD(nt)||!kcIsT(ns)||!kcIsT(ne))o.problem='Datum oder Zeit ungültig';
@@ -22995,6 +22999,11 @@ function kcAktInfo(a){
       else if(zeit&&nt<td)o.problem='liegt in der Vergangenheit';
       else if(a.bereich&&ids.indexOf(a.bereich)<0)o.problem='unbekannter Bereich';
       else if(a.prio!=null&&KC_PRIO[a.prio]==null)o.problem='unbekannte Priorität';
+      else if(a.kategorie&&!kcKatName(a.kategorie))o.problem='unbekannte Kategorie';
+      else if(a.status&&!KC_STLBL[a.status])o.problem='unbekannter Status';
+      else if(a.status&&a.status!==b.status&&(b.typ!=='aufgabe'&&b.typ!=='fix'))o.problem='dieser Block hat keinen Status';
+      else if(a.status&&a.status!==b.status&&b.status==='verschoben')o.problem='Block wurde verschoben';
+      else if((a.status==='ok'||a.status==='teil')&&a.status!==b.status&&wpNeedsData(a.kategorie&&kcKatName(a.kategorie)?{kategorie:a.kategorie,typ:b.typ}:b)&&!(b.daten&&b.daten.fertig))o.problem='braucht beim Abhaken eine Angabe: bitte in der App selbst abhaken';
       else if(zeit&&b.status!=='offen')o.problem='Block ist schon bewertet';
       else { if(zeit&&b.typ!=='fenster'&&(k=kcUeberschn(nt,ns,(multiNeu&&lpT2M(ne)<=lpT2M(ns))?'24:00':ne,b.id)))o.sub=(o.sub?o.sub+' · ':'')+'Achtung: überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')'; if(zeit&&kcGeschuetzt(b))o.sub=(o.sub?o.sub+' · ':'')+'freigegeben: braucht einen Änderungsantrag'; }
       break;
@@ -23045,13 +23054,15 @@ function kcAktRun(a,days){
   var b, t, e, p, snap, r;
   switch(a.typ){
     case 'block_neu':
-      b=wpNew({tag:a.tag,start:a.start,ende:a.ende,titel:String(a.titel).slice(0,120),kategorie:a.bereich==='studium'?'lernen':a.bereich==='koerper'?'sport':'aufgabe',typ:a.optional?'fenster':'aufgabe',quelle:'ki'});
+      b=wpNew({tag:a.tag,start:a.start,ende:a.ende,titel:String(a.titel).slice(0,120),kategorie:(a.kategorie&&kcKatName(a.kategorie))?a.kategorie:(a.bereich==='studium'?'lernen':a.bereich==='koerper'?'sport':'aufgabe'),typ:a.optional?'fenster':'aufgabe',quelle:'ki'});
       b.bereich=a.bereich; if(a.unterart&&(WB_UNTER[a.bereich]||[]).some(function(u){return u[0]===a.unterart;}))b.unter=a.unterart;
       var et0=kcEt(a.tag,a.start,a.ende,a.endtag); if(et0)b.endTag=et0;
       wpAdd(b); days[a.tag]=1; return {undo:{typ:'block_weg',id:b.id}};
     case 'block_aendern':
       b=wpFind(a.id); snap=JSON.parse(JSON.stringify(b)); days[b.tag]=1;
       if(a.titel)b.titel=String(a.titel).slice(0,120);
+      if(a.kategorie&&kcKatName(a.kategorie))b.kategorie=a.kategorie;
+      var stNeu=(a.status&&KC_STLBL[a.status]&&a.status!==b.status)?a.status:null;
       if(a.bereich&&a.bereich!==wbBereich(b)){ b.bereich=a.bereich; if(a.unterart==null)delete b.unter; }
       if(a.unterart!=null){ if(a.unterart&&(WB_UNTER[a.bereich||wbBereich(b)]||[]).some(function(u){return u[0]===a.unterart;}))b.unter=a.unterart; else delete b.unter; }
       if(a.prio!=null&&KC_PRIO[a.prio]!=null){ if(KC_PRIO[a.prio])b.prio=KC_PRIO[a.prio]; else delete b.prio; }
@@ -23059,12 +23070,14 @@ function kcAktRun(a,days){
       var nt=a.tag||b.tag, ns=a.start||b.start, ne=a.ende||b.ende;
       var etN=a.endtag?kcEt(nt,ns,ne,a.endtag):undefined;
       if(nt!==b.tag||ns!==b.start||ne!==b.ende||(etN!==undefined&&(etN||'')!==(b.endTag||''))){
-        if(etN!==undefined&&nt===b.tag&&ns===b.start&&ne===b.ende){ if(etN)b.endTag=etN; else delete b.endTag; lpTouch(b); return {undo:{typ:'block_restore',snap:snap}}; }
+        if(etN!==undefined&&nt===b.tag&&ns===b.start&&ne===b.ende){ if(etN)b.endTag=etN; else delete b.endTag; lpTouch(b); if(stNeu)wpSetStatus(b,stNeu); return {undo:{typ:'block_restore',snap:snap}}; }
         days[nt]=1; WB4.ui=true; try{ r=wpMoveBlock(b,nt,ns,ne); }finally{ WB4.ui=false; }
         if(WBA.ctx)return {pending:true,check:function(){ var c=wpFind(a.id); return !!c&&((c.tag===nt&&c.start===ns&&c.ende===ne)||c.status==='verschoben'); }};
         if(etN!==undefined&&r){ if(etN)r.endTag=etN; else delete r.endTag; lpTouch(r); }
+        if(stNeu&&r)wpSetStatus(r,stNeu);
         return {undo:{typ:'block_restore',snap:snap,extra:(r&&r.id!==snap.id)?r.id:null}};
       }
+      if(stNeu)wpSetStatus(b,stNeu);
       return {undo:{typ:'block_restore',snap:snap}};
     case 'block_loeschen':
       b=wpFind(a.id); snap=JSON.parse(JSON.stringify(b)); days[b.tag]=1;
