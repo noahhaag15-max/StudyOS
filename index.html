@@ -22607,6 +22607,318 @@ apThemaBalken=function(themaId){
 };
 
 // ═══════════════════════════════════════════════════════════
+// CLAUDE IN DER APP (Modul kc) — Stufe 1: Chat, der den Plan kennt (nur lesen). Stufe 2: Vorschlag und Einschätzung im Wochenbefehl.
+// Direkt aus dem Browser an die Anthropic-API, Schlüssel nur lokal (localStorage «sos-anth», wie im Lagebericht).
+// Was mitgeht, steht in cfg('ki.daten') und unter jeder Antwort. Nie mitgeschickt: Konsum, Journal, Check-in.
+// Der Chat-Verlauf liegt nur auf dem Gerät (localStorage «sos_ki_chat»), nicht im Sync.
+// ═══════════════════════════════════════════════════════════
+var KC_MODELLE=[['claude-opus-5-5','Claude Opus 5.5 (stark, Standard)'],['claude-sonnet-5-5','Claude Sonnet 5.5 (schnell, günstiger)'],['claude-haiku-5-5','Claude Haiku 5.5 (am günstigsten)']];
+var KC_DATEN=[['plan','Wochenplan (diese und nächste Woche)'],['ampel','Bereichs-Ampel und Regeln'],['termine','Termine und Zeitspannen (14 Tage)'],['pendenzen','Pendenzen und Monatsziele'],['lernplan','Lernplan (Stand je Fach, Prüfungsdaten)'],['profil','Leitsatz, Werte, Nicht-Verhandelbares'],['liv','Titel der Liv-Blöcke (sonst nur «privat, belegt»)'],['koerper','Gewicht, Bauchumfang, Schlaf (14 Tage)']];
+CFG_DEFAULTS['ki.modell']='claude-opus-5-5'; CFG_META['ki.modell']={gruppe:'Claude',label:'Modell'};
+CFG_VALIDATE['ki.modell']=function(v){ return KC_MODELLE.some(function(m){return m[0]===v;})?null:'Unbekanntes Modell.'; };
+CFG_DEFAULTS['ki.daten']={plan:true,ampel:true,termine:true,pendenzen:true,lernplan:true,profil:true,liv:false,koerper:false}; CFG_META['ki.daten']={gruppe:'Claude',label:'Daten, die Claude sehen darf'};
+CFG_VALIDATE['ki.daten']=function(v){ return (v&&typeof v==='object')?null:'Ungültig.'; };
+var KC={open:false,busy:false,msgs:null,err:'',abort:null};
+function kcDaten(){ var d=cfg('ki.daten')||{}, o={}; KC_DATEN.forEach(function(k){ o[k[0]]=d[k[0]]==null?!!CFG_DEFAULTS['ki.daten'][k[0]]:!!d[k[0]]; }); return o; }
+function kcModell(){ var m=cfg('ki.modell'); return KC_MODELLE.some(function(x){return x[0]===m;})?m:'claude-opus-5-5'; }
+function kcModellName(){ var m=kcModell(), x=KC_MODELLE.find(function(y){return y[0]===m;}); return x?x[1].replace(/ \(.*/,''):m; }
+function kcLoad(){ if(KC.msgs)return KC.msgs; try{ KC.msgs=JSON.parse(localStorage.getItem('sos_ki_chat')||'[]'); }catch(e){ KC.msgs=[]; } if(!Array.isArray(KC.msgs))KC.msgs=[]; return KC.msgs; }
+function kcStore(){ try{ localStorage.setItem('sos_ki_chat',JSON.stringify(kcLoad().slice(-60))); }catch(e){} }
+
+// ── Datenpaket: kompakter Text aus dem, was in der App steht ──
+var KC_ALLTAG=['mahlzeit','schlaf','routine','waegen','messen','pushups'];
+function kcBlockLine(b,dat){
+  var ber=wbBereich(b), u=wbUnter(b), priv=(ber==='liv'&&!dat.liv);
+  var st={ok:'erledigt',teil:'teilweise',nein:'nicht gemacht',verschoben:'verschoben',offen:''}[b.status]||'';
+  return '  '+b.start+'–'+b.ende+' '+(priv?'privat (belegt)':String(b.titel||'').slice(0,80))+' ['+(priv?'privat':wbBerName(ber)+(u&&wbUnterName(ber,u)?' / '+wbUnterName(ber,u):''))+']'+(b.typ==='fenster'?' (optional)':'')+(b.typ==='fix'?' (fix)':'')+(wbPrioText(b)&&b.prio?' Prio '+wbPrioText(b):'')+(st?' — '+st:'');
+}
+function kcWocheText(mon,dat){
+  var out=['Woche KW '+wbKW(mon)+' ('+lpFmtShort(mon)+'–'+lpFmtShort(lpAdd(mon,6))+'), Modus '+wbModusName(wbModus(mon))+(wbFreigabe(mon)?', freigegeben':', nicht freigegeben')+':'];
+  for(var i=0;i<7;i++){
+    var d=lpAdd(mon,i), bl=wpBlocksOn(d).filter(function(b){ return b.typ!=='belohnung'&&KC_ALLTAG.indexOf(b.kategorie)<0; }).sort(function(a,b){ return a.start.localeCompare(b.start); });
+    out.push(' '+lpDayLbl(d)+' '+lpFmtShort(d)+' ('+d+')'+(bl.length?':':': keine Blöcke')); bl.forEach(function(b){ out.push(kcBlockLine(b,dat)); });
+  }
+  return out.join('\n');
+}
+function kcAmpelText(mon){
+  var A=wbAmpel(mon), out=['Bereichs-Ampel KW '+wbKW(mon)+' (geplant gegen Minimum/Standard/Maximum):'];
+  A.rows.forEach(function(r){ out.push(' '+r.name+': '+r.n+(r.einheit?' '+r.einheit:'')+' ('+(wbSoll(r.w)||'kein Soll')+') → '+WB_ST[r.status][0]); });
+  var T=[]; try{ T=wbRegelTreffer(mon).filter(function(x){return x.typ==='bruch';}); }catch(e){}
+  if(T.length){ out.push('Regelverstösse im Plan:'); T.forEach(function(x){ out.push(' '+x.text); }); }
+  return out.join('\n');
+}
+function kcTermineText(dat){
+  var td=today(), out=['Termine der nächsten 14 Tage:'], bl=wbTermineVor(td,14), sp=spList().filter(function(s){ return s.von&&s.bis&&s.von<=lpAdd(td,14)&&s.bis>=td; });
+  sp.forEach(function(s){ out.push(' Zeitspanne '+lpFmtShort(s.von)+(s.bis!==s.von?'–'+lpFmtShort(s.bis):'')+': '+(s.titel||spTyp(s.typ)[1])); });
+  bl.slice(0,40).forEach(function(b){ var priv=(wbBereich(b)==='liv'&&!dat.liv); out.push(' '+lpDayLbl(b.tag)+' '+lpFmtShort(b.tag)+' '+b.start+' '+(priv?'privat':String(b.titel||'').slice(0,80))); });
+  if(!bl.length&&!sp.length)out.push(' keine');
+  return out.join('\n');
+}
+function kcPendenzenText(){
+  var td=today(), out=['Pendenzen:'];
+  var tasks=clTasks().filter(function(t){ return !ckTaskDone(t)&&clDate(t)&&clDate(t)<=lpAdd(td,14)&&clDate(t)>=lpAdd(td,-21); }).sort(function(a,b){ return clDate(a)<clDate(b)?-1:1; });
+  tasks.slice(0,20).forEach(function(t){ out.push(' Aufgabe: '+String(t.name||'').slice(0,90)+' (fällig '+lpFmtShort(clDate(t))+(clDate(t)<td?', überfällig':'')+')'); });
+  (D.monatsziele||[]).filter(function(z){ return !z.erledigt&&(!z.monat||z.monat===td.slice(0,7)); }).slice(0,10).forEach(function(z){ out.push(' Monatsziel: '+String(z.name||'').slice(0,90)+(z.ziel>0?' ('+(z.stand||0)+'/'+z.ziel+')':'')); });
+  if(out.length===1)out.push(' keine offenen Aufgaben (14 Tage) und keine offenen Monatsziele');
+  return out.join('\n');
+}
+function kcLernplanText(){
+  var td=today(), out=['Lernplan (aktive Fächer):'];
+  lpAktiveFaecher().forEach(function(name){
+    var f=lpFach(name,false); if(!f||name==='Fokus-Blöcke')return; var st=null, vz=null; try{ st=lpFachStats(name); }catch(e){} try{ vz=wbVerzug(name); }catch(e){}
+    var ue=[]; try{ wbEtappenFach(f).forEach(function(x){ if(!x.done&&((x.e.geplantAm&&x.e.geplantAm<td)||(x.e.deadline&&x.e.deadline<td)))ue.push(x.e.titel); }); }catch(e){}
+    out.push(' '+name+': '+(st?st.done+' von '+st.total+' Posten erledigt':'kein Stand')+(f.pruefung?', Prüfung am '+lpFmtShort(String(f.pruefung).slice(0,10))+' (in '+lpDayDiff(td,String(f.pruefung).slice(0,10))+' Tagen)':', kein Prüfungsdatum')+(st&&st.rueck>0?', Rückstand '+st.rueck+' Posten':'')+(vz&&vz.oldest>0?', ältester Verzug '+vz.oldest+' Tage':'')+(ue.length?', überfällige Etappen: '+ue.slice(0,5).join('; ')+(ue.length>5?' (+'+(ue.length-5)+')':''):''));
+  });
+  if(out.length===1)out.push(' keine Fächer erfasst');
+  return out.join('\n');
+}
+function kcProfilText(){
+  var P=kpEnsure().profil, out=[];
+  if(P.leitsatz)out.push('Leitsatz: «'+P.leitsatz+'»'); if(P.werte.length)out.push('Werte (Rangfolge): '+P.werte.join(', ')); if(P.fix.length)out.push('Nicht verhandelbar: '+P.fix.join(' · ')); if(P.zielbild.length)out.push('Zielbild: '+P.zielbild.join(' · '));
+  return out.length?'Kompass des Nutzers:\n '+out.join('\n '):'';
+}
+function kcKoerperText(){
+  var td=today(), out=[]; for(var i=13;i>=0;i--){ var d=lpAdd(td,-i), p=[], w=trkWeight(d), c=msCm(d), s=trkSleepH(d); if(w!=null)p.push(nrF(w,1)+' kg'); if(c!=null)p.push(nrF(c,1)+' cm Bauch'); if(s!=null)p.push(lpDec(s)+' h Schlaf'); if(p.length)out.push(' '+lpFmtShort(d)+': '+p.join(', ')); }
+  return out.length?'Körperwerte (14 Tage):\n'+out.join('\n'):'';
+}
+function kcRueckblickText(mon){ var c=wbfBlockStatus(mon); return c.total?'Rückblick KW '+wbKW(mon)+': '+c.total+' Blöcke im Plan, '+(c.ok+c.teil)+' erledigt, '+(c.nein||0)+' nicht gemacht, '+(c.verschoben||0)+' verschoben, '+(c.offen||0)+' nicht bewertet.':''; }
+// liefert {text, teile:[Namen dessen, was drin ist]}
+function kcContext(fokusMon){
+  var dat=kcDaten(), td=today(), cur=lpMonday(td), mon=fokusMon||cur, parts=[], teile=[];
+  var add=function(name,fn){ try{ var t=fn(); if(t){ parts.push(t); if(teile.indexOf(name)<0)teile.push(name); } }catch(e){} };
+  if(dat.plan){ var ws=[mon]; if(mon===cur)ws.push(lpAdd(cur,7)); else if(mon>cur)ws.unshift(cur); ws.forEach(function(m){ add('Wochenplan',function(){ return kcWocheText(m,dat); }); }); add('Wochenplan',function(){ return kcRueckblickText(lpAdd(mon,-7)); }); }
+  if(dat.ampel)add('Ampel und Regeln',function(){ return kcAmpelText(mon); });
+  if(dat.termine)add('Termine',function(){ return kcTermineText(dat); });
+  if(dat.pendenzen)add('Pendenzen',kcPendenzenText);
+  if(dat.lernplan)add('Lernplan',kcLernplanText);
+  if(dat.profil)add('Kompass',kcProfilText);
+  if(dat.koerper)add('Körperwerte',kcKoerperText);
+  return {text:parts.join('\n\n'),teile:teile};
+}
+var KC_SYSTEM='Du bist Claude, eingebaut in «Study OS», die persönliche Planungs-App eines Studenten (Aviation, Schweiz). Du hilfst ihm, seine Woche zu planen und den Überblick zu behalten.\n\n'
+  +'So arbeitet die App: Der Wochenplan ist die einzige Wahrheit. Jeder Block gehört zu einem Bereich (z. B. Studium, PPL, Arbeit, Körper, Erholung). Normale Blöcke sind «befohlen», Blöcke mit «(optional)» sind unverbindliche Fenster, «(fix)» sind feste Termine. Die Bereichs-Ampel vergleicht die geplante Menge je Bereich mit Minimum, Standard und Maximum; der Modus der Woche (Normal, Lernphase, Unterwegs, Militär) bestimmt diese Werte. Eine freigegebene Woche ist festgehalten, Änderungen daran brauchen in der App einen Änderungsantrag.\n\n'
+  +'Unten stehen die Daten, die der Nutzer für dich freigegeben hat. Stütze dich nur darauf und auf das, was er im Chat schreibt. Wenn etwas nicht in den Daten steht, sag das offen, statt zu raten; nenne bei Aussagen kurz, worauf sie beruhen (z. B. «laut Ampel», «im Wochenplan am Mittwoch»). Als «privat (belegt)» markierte Zeiten sind verplant, den Inhalt kennst du nicht.\n\n'
+  +'Im Chat kannst du nichts in der App ändern. Formuliere Vorschläge deshalb so konkret (Tag, Uhrzeit, Dauer, Bereich), dass er sie selbst eintragen kann.\n\n'
+  +'Ton: Der Nutzer hat ADHS. Antworte kurz, konkret und ohne Vorwurf; Rückstände neutral benennen und den nächsten machbaren Schritt zeigen. Deutsch mit Schweizer Orthografie (kein Eszett, Datum TT.MM.). Schlichter Text mit kurzen Absätzen oder Listen mit «- », keine Tabellen und keine Überschriften.';
+
+// ── API-Aufruf (Streaming) ──
+function kcFehler(status,body){
+  var t=''; try{ t=String((body&&body.error&&body.error.message)||''); }catch(e){}
+  if(status===401||status===403)return 'Der API-Schlüssel wird abgelehnt. Im Hangar › Wochenbefehl › Claude entfernen und neu eintragen.';
+  if(status===400&&/credit|balance/i.test(t))return 'Kein Guthaben mehr beim Anthropic-Konto (console.anthropic.com › Billing).';
+  if(status===404)return 'Das gewählte Modell ist für diesen Schlüssel nicht verfügbar. Im Hangar ein anderes Modell wählen.';
+  if(status===413)return 'Die Anfrage ist zu gross. Im Hangar weniger Daten freigeben oder einen neuen Chat beginnen.';
+  if(status===429||status===529||status>=500)return 'Claude ist gerade überlastet. In einer Minute nochmals versuchen.';
+  if(!status)return 'Keine Verbindung zu Claude (offline?).';
+  return 'Fehler '+status+(t?': '+t.slice(0,200):'');
+}
+// opts: {system:[blocks], messages, schema?, maxTokens?, onText?(ganzerText)} → cb(err, text, info)
+function kcCall(opts,cb){
+  var key=lbKiKey(); if(!key)return cb('Kein API-Schlüssel auf diesem Gerät. Im Hangar › Wochenbefehl › Claude eintragen.');
+  var model=kcModell(), mitFallback=(model!=='claude-haiku-5-5'), done=false, ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var fin=function(e,t,i){ if(done)return; done=true; KC.abort=null; cb(e,t,i); };
+  var run=function(fb){
+    var body={model:model,max_tokens:opts.maxTokens||16000,stream:true,system:opts.system,messages:opts.messages,output_config:{effort:'medium'}};
+    if(opts.schema)body.output_config.format={type:'json_schema',schema:opts.schema};
+    var headers={'x-api-key':key,'anthropic-version':'2026-10-21','content-type':'application/json','anthropic-dangerous-direct-browser-access':'true'};
+    if(fb){ body.fallbacks='default'; headers['anthropic-beta']='server-side-fallback-2026-07-01'; }
+    fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:headers,body:JSON.stringify(body),signal:ctrl?ctrl.signal:undefined}).then(function(res){
+      if(!res.ok)return res.json().catch(function(){ return {}; }).then(function(j){
+        var m=String((j&&j.error&&j.error.message)||'');
+        if(fb&&res.status===400&&/fallback|beta/i.test(m))return run(false);   // Konto ohne Fallback-Funktion: ohne erneut senden
+        fin(kcFehler(res.status,j));
+      });
+      var text='', stop='', buf='', dec=new TextDecoder(), usedModel=model;
+      var feed=function(chunk){
+        buf+=chunk; var lines=buf.split('\n'); buf=lines.pop();
+        lines.forEach(function(ln){
+          if(ln.indexOf('data:')!==0)return; var ev; try{ ev=JSON.parse(ln.slice(5)); }catch(e){ return; }
+          if(ev.type==='message_start'&&ev.message&&ev.message.model)usedModel=ev.message.model;
+          else if(ev.type==='content_block_delta'&&ev.delta&&ev.delta.type==='text_delta'){ text+=ev.delta.text; if(opts.onText)opts.onText(text); }
+          else if(ev.type==='message_delta'&&ev.delta&&ev.delta.stop_reason)stop=ev.delta.stop_reason;
+          else if(ev.type==='error')stop='error:'+((ev.error&&ev.error.type)||'');
+        });
+      };
+      var ende=function(){
+        if(stop==='refusal')return fin('Claude hat diese Anfrage abgelehnt. Formuliere sie anders oder beginne einen neuen Chat.');
+        if(stop.indexOf('error:')===0)return fin(/overloaded/.test(stop)?'Claude ist gerade überlastet. In einer Minute nochmals versuchen.':'Die Antwort wurde unterbrochen ('+stop.slice(6)+').',text);
+        fin(null,text,{stop:stop,model:usedModel,gekuerzt:stop==='max_tokens'});
+      };
+      if(!res.body||!res.body.getReader)return res.text().then(function(t){ feed(t+'\n'); ende(); });
+      var rd=res.body.getReader();
+      var pump=function(){ return rd.read().then(function(r){ if(r.done){ feed(dec.decode()+'\n'); return ende(); } feed(dec.decode(r.value,{stream:true})); return pump(); }); };
+      return pump();
+    }).catch(function(e){ fin(e&&e.name==='AbortError'?'Abgebrochen.':kcFehler(0)); });
+  };
+  KC.abort=function(){ if(ctrl)ctrl.abort(); };
+  run(mitFallback);
+}
+function kcSystem(fokusMon){
+  var c=kcContext(fokusMon), n=new Date(), hm=(n.getHours()<10?'0':'')+n.getHours()+':'+(n.getMinutes()<10?'0':'')+n.getMinutes();
+  return {teile:c.teile,blocks:[{type:'text',text:KC_SYSTEM},{type:'text',text:'DATEN AUS DER APP (Stand '+lpFmt(today())+')\n\n'+(c.text||'Der Nutzer hat keine Daten freigegeben.'),cache_control:{type:'ephemeral'}},{type:'text',text:'Jetzt: '+lpDayLbl(today())+' '+lpFmt(today())+', '+hm+' Uhr.'}]};
+}
+
+// ── Chat-Fenster ──
+function kcMd(t){
+  var h=lpEsc(t).replace(/\*\*([^*\n]+)\*\*/g,'<b style="font-weight:600">$1</b>').replace(/`([^`\n]+)`/g,'<span class="lp-mono">$1</span>');
+  return h.split('\n').map(function(l){ var m=/^\s*(?:[-•*]|\d+[.)])\s+(.*)$/.exec(l); return m?'<div style="padding-left:14px;text-indent:-10px">· '+m[1]+'</div>':(l.trim()?'<div>'+l+'</div>':'<div style="height:8px"></div>'); }).join('');
+}
+function kcHost(){ var h=document.getElementById('kc-host'); if(!h){ h=document.createElement('div'); h.id='kc-host'; h.className='lp'; h.style.cssText='position:fixed;inset:0;z-index:1950;background:rgba(0,0,0,.78);display:none;align-items:stretch;justify-content:center;padding:10px'; document.body.appendChild(h); } return h; }
+function kcMsgHTML(m,i){
+  if(m.role==='user')return '<div style="display:flex;justify-content:flex-end;margin:8px 0"><div style="max-width:86%;background:color-mix(in srgb,var(--c-accent) 16%,transparent);border-radius:12px 12px 2px 12px;padding:8px 11px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere">'+lpEsc(m.text)+'</div></div>';
+  return '<div style="margin:8px 0"><div class="lp-inner" style="max-width:94%;font-size:13px;line-height:1.5;overflow-wrap:anywhere" data-kcm="'+i+'">'+(m.text?kcMd(m.text):'<span class="lp-mu">Claude denkt nach …</span>')+'</div>'
+    +(m.err?'<div style="font-size:11px;color:var(--c-work);margin-top:3px">'+lpEsc(m.err)+'</div>':'')
+    +(m.teile?'<div class="lp-mu" style="font-size:10px;margin-top:3px">Mitgeschickt: '+(m.teile.length?lpEsc(m.teile.join(', ')):'keine App-Daten')+(m.modell?' · '+lpEsc(m.modell):'')+(m.gekuerzt?' · Antwort wurde gekürzt':'')+'</div>':'')+'</div>';
+}
+function kcRender(keepInput){
+  var h=kcHost(); if(!KC.open){ h.style.display='none'; h.innerHTML=''; return; }
+  var old=document.getElementById('kc-in'), val=keepInput&&old?old.value:'', msgs=kcLoad(), key=lbKiKey(), body;
+  if(!key)body='<div style="margin:auto;max-width:420px"><div style="font-size:14px;font-weight:500;margin-bottom:6px">API-Schlüssel eintragen</div><div class="lp-mu" style="font-size:12px;margin-bottom:10px">Claude braucht einen Anthropic-API-Schlüssel (console.anthropic.com › API Keys). Er wird nur auf diesem Gerät gespeichert und nicht synchronisiert. Die Nutzung wird über dein Anthropic-Konto nach Verbrauch abgerechnet.</div><div class="lp-row" style="gap:6px"><input class="lp-in lp-mono" id="kc-key" type="password" placeholder="sk-ant-…" autocomplete="off" style="flex:1;min-width:0"/><button type="button" class="lp-btn fill" data-kc="key-save">Speichern</button></div></div>';
+  else if(!msgs.length)body='<div style="margin:auto;max-width:440px;text-align:center"><i class="ti ti-sparkles" style="font-size:26px;color:var(--c-accent)"></i><div style="font-size:14px;font-weight:500;margin:6px 0">Frag Claude zu deinem Plan</div><div class="lp-mu" style="font-size:12px;margin-bottom:12px">Claude sieht die Daten, die du im Hangar freigegeben hast, und ändert nichts in der App.</div>'
+    +['Was ist heute das Wichtigste?','Wo bin ich diese Woche unter dem Minimum?','Was ist im Lernplan am dringendsten?','Wo habe ich diese Woche noch Luft?'].map(function(q){ return '<button type="button" class="wp-pill" data-kc="frage" style="margin:3px">'+q+'</button>'; }).join('')+'</div>';
+  else body=msgs.map(kcMsgHTML).join('');
+  h.innerHTML='<div class="lp-cd" style="width:100%;max-width:680px;display:flex;flex-direction:column;padding:0;overflow:hidden">'
+    +'<div class="lp-row" style="justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid var(--lp-border)"><span class="lp-cap"><i class="ti ti-sparkles"></i> CLAUDE <span class="lp-mu" style="text-transform:none;letter-spacing:0">· '+lpEsc(kcModellName().replace('Claude ',''))+'</span></span><span class="lp-row" style="gap:6px">'+(msgs.length?'<button type="button" class="wp-pill" data-kc="neu" style="font-size:11px">Neuer Chat</button>':'')+'<button type="button" class="wp-pill" data-kc="hangar" style="font-size:11px" title="Einstellungen"><i class="ti ti-settings"></i></button><button type="button" class="lp-x" data-kc="close" aria-label="schliessen">✕</button></span></div>'
+    +'<div id="kc-list" style="flex:1;min-height:0;overflow-y:auto;padding:6px 12px;display:flex;flex-direction:column;overscroll-behavior:contain"><div style="margin-top:auto"></div>'+body+'</div>'
+    +(key?'<div class="lp-row" style="gap:6px;padding:10px 12px;border-top:1px solid var(--lp-border);align-items:flex-end"><textarea class="lp-in" id="kc-in" rows="2" placeholder="Nachricht an Claude …" style="flex:1;min-width:0;resize:none;font-size:14px"></textarea>'+(KC.busy?'<button type="button" class="lp-btn gray" data-kc="stop">Stopp</button>':'<button type="button" class="lp-btn fill" data-kc="send"><i class="ti ti-send"></i></button>')+'</div>':'')+'</div>';
+  h.style.display='flex';
+  var inp=document.getElementById('kc-in'); if(inp){ inp.value=val; if(!KC.busy&&window.innerWidth>700)inp.focus(); }
+  var l=document.getElementById('kc-list'); if(l)l.scrollTop=l.scrollHeight;
+}
+function kcOpen(){ KC.open=true; kcRender(); }
+function kcClose(){ KC.open=false; kcRender(); }
+function kcSend(text){
+  text=String(text||'').trim(); if(!text||KC.busy)return;
+  var msgs=kcLoad(), sys=kcSystem(null);
+  msgs.push({role:'user',text:text,ts:Date.now()});
+  var a={role:'assistant',text:'',teile:sys.teile,modell:kcModellName(),ts:Date.now()}; msgs.push(a);
+  var api=msgs.slice(0,-1).filter(function(m){ return m.text; }).slice(-24).map(function(m){ return {role:m.role,content:m.text}; });
+  while(api.length&&api[0].role!=='user')api.shift();
+  // aufeinanderfolgende gleiche Rollen (z. B. nach einem Fehler) zusammenziehen
+  var seq=[]; api.forEach(function(m){ var p=seq[seq.length-1]; if(p&&p.role===m.role)p.content+='\n\n'+m.content; else seq.push({role:m.role,content:m.content}); });
+  KC.busy=true; kcStore(); kcRender();
+  var idx=msgs.length-1, last=0;
+  kcCall({system:sys.blocks,messages:seq,onText:function(t){ a.text=t; var now=Date.now(); if(now-last<80)return; last=now; var el=document.querySelector('#kc-host [data-kcm="'+idx+'"]'), l=document.getElementById('kc-list'); if(el){ var unten=l&&(l.scrollHeight-l.scrollTop-l.clientHeight<60); el.innerHTML=kcMd(t); if(unten)l.scrollTop=l.scrollHeight; } }},
+    function(err,t,info){ KC.busy=false; if(t)a.text=t; if(err)a.err=err; if(info&&info.gekuerzt)a.gekuerzt=true; if(!a.text&&!err)a.err='Keine Antwort erhalten.'; kcStore(); if(KC.open)kcRender(true); });
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-kc]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-kc');
+  if(a==='open')return kcOpen();
+  if(a==='close')return kcClose();
+  if(a==='send'){ var i=document.getElementById('kc-in'), v=i?i.value:''; if(i)i.value=''; return kcSend(v); }
+  if(a==='frage')return kcSend(el.textContent);
+  if(a==='stop'){ if(KC.abort)KC.abort(); return; }
+  if(a==='neu'){ if(KC.busy&&KC.abort)KC.abort(); KC.msgs=[]; kcStore(); return kcRender(); }
+  if(a==='hangar'){ kcClose(); try{ HG.open=true; HG.sec='wochenbefehl'; goSec('set-hangar'); renderHangar(); setTimeout(function(){ var c=document.getElementById('kc-hg'); if(c)c.scrollIntoView({block:'start'}); },150); }catch(e){} return; }
+  if(a==='key-save'||a==='hg-key-save'){ var k=document.getElementById(a==='key-save'?'kc-key':'kc-hg-key'), v2=k?k.value.trim():''; if(!/^sk-ant-/.test(v2)){ showToast('Das sieht nicht nach einem Anthropic-Schlüssel aus (beginnt mit «sk-ant-»).'); return; } try{ localStorage.setItem('sos-anth',v2); }catch(e){ showToast('Speichern nicht möglich (Browser-Speicher blockiert).'); return; } showToast('API-Schlüssel gespeichert ✓','ok'); if(a==='key-save')kcRender(); else try{ waHgRender(); }catch(e){} return; }
+  if(a==='hg-key-del'){ if(!window.confirm('API-Schlüssel von diesem Gerät entfernen?'))return; try{ localStorage.removeItem('sos-anth'); }catch(e){} try{ waHgRender(); }catch(e){} return; }
+  if(a==='hg-dat'){ var d=JSON.parse(JSON.stringify(kcDaten())), kk=el.getAttribute('data-k'); d[kk]=!d[kk]; setCfg('ki.daten',d,'hangar'); try{ waHgRender(); }catch(e){} return; }
+  if(a==='hg-vorschau'){ var c=kcContext(null); syModal('kc-vorschau','<div class="lp-row" style="justify-content:space-between;margin-bottom:8px"><span class="lp-cap">DAS SIEHT CLAUDE JETZT</span><button type="button" class="lp-x" data-kc="vorschau-zu">✕</button></div><div class="lp-mu" style="font-size:11px;margin-bottom:8px">Genau dieser Text geht bei jeder Chat-Nachricht mit ('+c.text.length+' Zeichen).</div><pre style="white-space:pre-wrap;font-size:11px;line-height:1.45;margin:0;font-family:var(--mono)">'+lpEsc(c.text||'Nichts freigegeben.')+'</pre>'); return; }
+  if(a==='vorschau-zu'){ var v3=document.getElementById('kc-vorschau'); if(v3)v3.remove(); return; }
+  if(a==='wb-vorschlag')return kcWbVorschlag();
+  if(a==='wb-uebernehmen')return kcWbUebernehmen();
+  if(a==='wb-verwerfen'){ WBF.ki=null; return wbfRender(); }
+  if(a==='wb-komm')return kcWbKommentar();
+});
+document.addEventListener('keydown',function(ev){ if(ev.target&&ev.target.id==='kc-in'&&ev.key==='Enter'&&!ev.shiftKey&&window.innerWidth>700){ ev.preventDefault(); var v=ev.target.value; ev.target.value=''; kcSend(v); } });
+document.addEventListener('change',function(ev){ var el=ev.target; if(el&&el.id==='kc-hg-modell'){ setCfg('ki.modell',el.value,'hangar'); showToast('Modell: '+kcModellName(),'ok'); } });
+// Schwebender Knopf
+(function(){ var st=document.createElement('style'); st.textContent='#kc-fab{position:fixed;right:19px;bottom:76px;z-index:840;width:46px;height:46px;border-radius:50%;border:1px solid color-mix(in srgb,var(--c-accent) 55%,transparent);background:var(--lp-card,#11161d);color:var(--c-accent);font-size:20px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.45)}#kc-fab:hover{background:color-mix(in srgb,var(--c-accent) 14%,var(--lp-card,#11161d))}@media(max-width:700px){#kc-host{padding:0 !important}#kc-host>.lp-cd{border-radius:0;max-width:none !important}}'; document.head.appendChild(st); })();
+setTimeout(function(){ if(document.getElementById('kc-fab'))return; var b=document.createElement('button'); b.type='button'; b.id='kc-fab'; b.className='lp'; b.setAttribute('data-kc','open'); b.setAttribute('aria-label','Claude öffnen'); b.title='Claude'; b.innerHTML='<i class="ti ti-sparkles"></i>'; document.body.appendChild(b); },800);
+
+// ── Hangar › Wochenbefehl: Schlüssel, Modell, Daten ──
+var _waHgMehr_kc=waHgMehr;
+waHgMehr=function(){
+  var key=lbKiKey(), dat=kcDaten(), m=kcModell();
+  return _waHgMehr_kc()+'<div class="lp-cd" style="margin-top:12px" id="kc-hg"><div class="lp-cap" style="margin-bottom:6px">CLAUDE (KI IN DER APP)</div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-bottom:8px">Chat über den Knopf mit dem Stern-Symbol unten rechts, dazu «Vorschlag» und «Einschätzung» im Wochenbefehl. Anfragen gehen direkt von diesem Gerät an Anthropic und werden über dein Anthropic-Konto nach Verbrauch abgerechnet.</div>'
+    +'<div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:13px">API-Schlüssel</div><div class="lp-mu" style="font-size:11px">'+(key?'Auf diesem Gerät gespeichert (endet auf …'+lpEsc(key.slice(-4))+'). Wird nicht synchronisiert.':'Noch keiner auf diesem Gerät. console.anthropic.com › API Keys.')+'</div></div>'+(key?'<button type="button" class="lp-btn gray" data-kc="hg-key-del">Entfernen</button>':'<span class="lp-row" style="gap:6px"><input class="lp-in lp-mono" id="kc-hg-key" type="password" placeholder="sk-ant-…" autocomplete="off" style="width:150px"/><button type="button" class="lp-btn fill" data-kc="hg-key-save">Speichern</button></span>')+'</div>'
+    +'<div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:13px">Modell</div><div class="lp-mu" style="font-size:11px">Stärkere Modelle antworten besser, kosten aber mehr pro Anfrage.</div></div><select class="lp-in" id="kc-hg-modell" style="max-width:230px">'+KC_MODELLE.map(function(x){ return '<option value="'+x[0]+'"'+(x[0]===m?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select></div>'
+    +'<div class="lp-cap" style="margin:12px 0 4px">WAS CLAUDE SEHEN DARF</div>'
+    +KC_DATEN.map(function(k){ return '<div class="hg-ln"><span style="font-size:13px">'+k[1]+'</span><button type="button" class="lp-sw'+(dat[k[0]]?' on':'')+'" data-kc="hg-dat" data-k="'+k[0]+'" aria-label="'+lpEsc(k[1])+'"><i></i></button></div>'; }).join('')
+    +'<div class="lp-mu" style="font-size:11px;margin-top:6px">Nie mitgeschickt werden: Konsum-Tracking, Journal, Check-in, Mahlzeiten und Routinen. Der Chat-Verlauf bleibt auf diesem Gerät.</div>'
+    +'<div class="lp-row" style="justify-content:flex-end;margin-top:8px"><button type="button" class="lp-btn gray" data-kc="hg-vorschau">Ansehen, was Claude jetzt sieht</button></div></div>';
+};
+
+// ── Stufe 2: Wochenbefehl — Vorschlag (Blöcke zum Anhaken) und Einschätzung ──
+function kcWbSchema(){
+  return {type:'object',additionalProperties:false,required:['bloecke','hinweis'],properties:{
+    hinweis:{type:'string',description:'Zwei bis vier Sätze: was der Vorschlag erreicht und was bewusst offen bleibt.'},
+    bloecke:{type:'array',items:{type:'object',additionalProperties:false,required:['tag','start','ende','titel','bereich','unterart','optional','grund'],properties:{
+      tag:{type:'string',description:'Datum JJJJ-MM-TT innerhalb der Woche'},start:{type:'string',description:'HH:MM'},ende:{type:'string',description:'HH:MM'},titel:{type:'string'},
+      bereich:{type:'string',enum:wbBereicheAlle().map(function(b){return b[0];})},unterart:{type:'string',description:'Id einer Unterart des Bereichs oder leer'},
+      optional:{type:'boolean',description:'true = unverbindliches Fenster, false = befohlener Block'},grund:{type:'string',description:'Ein kurzer Satz, warum dieser Block (z. B. welches Minimum er deckt).'}}}}}};
+}
+function wbBereicheAlle(){ var l=WB_BEREICHE.slice(); try{ (cfg('wb.bereiche')||[]).forEach(function(b){ if(b&&b.id&&!l.some(function(x){return x[0]===b.id;}))l.push([b.id,b.name||b.id]); }); }catch(e){} if(WB_UNTER.selbst&&!l.some(function(x){return x[0]==='selbst';}))l.push(['selbst','Selbstentwicklung']); return l; }
+function kcWbPruefe(x,mon){
+  var td=today(), re=/^\d\d:\d\d$/; if(!x||!/^\d{4}-\d\d-\d\d$/.test(x.tag||'')||!re.test(x.start||'')||!re.test(x.ende||''))return 'ungültige Angaben';
+  if(x.tag<mon||x.tag>lpAdd(mon,6))return 'liegt ausserhalb der Woche'; if(x.tag<td)return 'liegt in der Vergangenheit'; if(lpT2M(x.ende)<=lpT2M(x.start))return 'Ende vor Start';
+  var k=wpBlocksOn(x.tag).find(function(b){ return (b.typ==='aufgabe'||b.typ==='fix')&&b.status!=='verschoben'&&KC_ALLTAG.indexOf(b.kategorie)<0&&lpT2M(b.start)<lpT2M(x.ende)&&lpT2M(b.ende)>lpT2M(x.start); });
+  return k?'überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')':'';
+}
+function kcWbVorschlag(){
+  if(WBF.ki&&WBF.ki.busy)return; var mon=WBF.mon, wunsch=(document.getElementById('kc-wb-wunsch')||{}).value||'', sys=kcSystem(mon);
+  var unter=wbBereicheAlle().map(function(b){ var u=(WB_UNTER[b[0]]||[]).map(function(y){return y[0]+' = '+y[1];}).join(', '); return ' '+b[0]+' = '+b[1]+(u?' (Unterarten: '+u+')':''); }).join('\n');
+  WBF.ki={busy:true,wunsch:wunsch}; wbfRender();
+  kcCall({system:sys.blocks,schema:kcWbSchema(),messages:[{role:'user',content:'Schlage Blöcke für die Woche KW '+wbKW(mon)+' ('+mon+' bis '+lpAdd(mon,6)+') vor, die den bestehenden Plan ergänzen.\n\nZiel: Bereiche unter dem Minimum auf mindestens das Minimum bringen, überfällige und dringende Lernplan-Posten und Pendenzen unterbringen, Regeln einhalten, kein Maximum überschreiten. Lieber wenige, gut begründete Blöcke als ein voller Plan; lass Erholung und Puffer stehen.\n\nRegeln für die Blöcke: nur ab '+(today()>mon?today():mon)+', nie in der Vergangenheit; keine Überschneidung mit bestehenden Blöcken ausser solchen mit «(optional)»; realistische Dauer (Lernblöcke 45 bis 120 Minuten); nichts vor 07:00 oder nach 22:30, ausser der bestehende Plan zeigt, dass der Nutzer dann aktiv ist. Wenn schon alles im Soll ist, gib eine leere Liste zurück und sag das im Hinweis.\n\nBereiche (Id = Name):\n'+unter+(wunsch.trim()?'\n\nWünsche des Nutzers für diese Woche: '+wunsch.trim():'')}]},
+    function(err,t){
+      if(WBF.mon!==mon)return;
+      if(err||!t){ WBF.ki={err:err||'Keine Antwort erhalten.',wunsch:wunsch}; return wbfRender(); }
+      var j=null; try{ j=JSON.parse(t); }catch(e){}
+      if(!j||!Array.isArray(j.bloecke)){ WBF.ki={err:'Die Antwort liess sich nicht lesen. Nochmals versuchen.',wunsch:wunsch}; return wbfRender(); }
+      var ids=wbBereicheAlle().map(function(b){return b[0];});
+      var items=j.bloecke.filter(function(x){ return x&&ids.indexOf(x.bereich)>=0&&String(x.titel||'').trim(); }).slice(0,25).map(function(x){ var p=kcWbPruefe(x,mon); return {x:x,problem:p,an:!p}; }).sort(function(a,b){ return (a.x.tag+a.x.start)<(b.x.tag+b.x.start)?-1:1; });
+      WBF.ki={items:items,hinweis:String(j.hinweis||''),teile:sys.teile,wunsch:wunsch}; wbfRender();
+    });
+}
+function kcWbUebernehmen(){
+  var K=WBF.ki; if(!K||!K.items)return; var n=0, days={};
+  [].slice.call(document.querySelectorAll('#wb-flow [data-kcwb]')).forEach(function(c){ var it=K.items[+c.getAttribute('data-kcwb')]; if(it)it.an=c.checked; });
+  K.items.forEach(function(it){
+    if(!it.an||kcWbPruefe(it.x,WBF.mon))return; var x=it.x;
+    var b=wpNew({tag:x.tag,start:x.start,ende:x.ende,titel:String(x.titel).slice(0,120),kategorie:x.bereich==='studium'?'lernen':x.bereich==='koerper'?'sport':'aufgabe',typ:x.optional?'fenster':'aufgabe',quelle:'ki'});
+    b.bereich=x.bereich; if(x.unterart&&(WB_UNTER[x.bereich]||[]).some(function(u){return u[0]===x.unterart;}))b.unter=x.unterart; if(x.grund)b.notiz=String(x.grund).slice(0,300);
+    wpAdd(b); days[x.tag]=1; n++;
+  });
+  if(!n){ showToast('Nichts ausgewählt, das sich einplanen lässt.'); return; }
+  WBF.ki=null; saveD(); try{ wpAfterChange(Object.keys(days)); }catch(e){ try{ wpRender(); }catch(x){} } wbfRender(); showToast(n+' Block'+(n===1?'':'e')+' aus dem Vorschlag eingeplant ✓','ok');
+}
+function kcWbVorschlagHTML(){
+  var K=WBF.ki||{}, h='<div class="lp-cd" style="margin-top:12px;padding:10px"><div class="lp-cap" style="margin-bottom:6px"><i class="ti ti-sparkles"></i> VORSCHLAG VON CLAUDE</div>';
+  if(!lbKiKey())return h+'<div class="lp-mu" style="font-size:12px">Dafür braucht es einen API-Schlüssel auf diesem Gerät (Hangar › Wochenbefehl › Claude).</div></div>';
+  if(K.busy)return h+'<div class="lp-mu" style="font-size:12px">Claude schaut sich Plan, Ampel und Pendenzen an … das kann bis zu einer Minute dauern.</div></div>';
+  if(K.items){
+    h+=(K.hinweis?'<div style="font-size:12px;margin-bottom:8px">'+lpEsc(K.hinweis)+'</div>':'');
+    if(!K.items.length)h+='<div class="lp-mu" style="font-size:12px">Keine zusätzlichen Blöcke vorgeschlagen.</div>';
+    K.items.forEach(function(it,i){ var x=it.x; h+='<label class="hg-ln" style="align-items:flex-start;gap:8px;cursor:pointer'+(it.problem?';opacity:.6':'')+'"><input type="checkbox" data-kcwb="'+i+'"'+(it.an?' checked':'')+(it.problem?' disabled':'')+' style="margin-top:3px"/><span style="flex:1;min-width:0"><span style="font-size:13px">'+lpEsc(x.titel)+'</span> <span class="lp-mu" style="font-size:11px">· '+lpEsc(wbBerName(x.bereich))+(x.optional?' · optional':'')+'</span><span class="lp-mu" style="display:block;font-size:11px">'+lpEsc(it.problem?'Nicht einplanbar: '+it.problem:x.grund||'')+'</span></span><span class="lp-mono lp-mu" style="font-size:11px;white-space:nowrap">'+lpEsc(lpDayLbl(x.tag)+' '+lpFmtShort(x.tag)+' '+x.start+'–'+x.ende)+'</span></label>'; });
+    h+='<div class="lp-mu" style="font-size:10px;margin-top:6px">Grundlage: '+lpEsc((K.teile||[]).join(', ')||'keine App-Daten')+'. Erst mit «Übernehmen» kommt etwas in den Wochenplan.</div>'
+      +'<div class="lp-row" style="justify-content:flex-end;gap:6px;margin-top:8px;flex-wrap:wrap"><button type="button" class="lp-btn gray" data-kc="wb-verwerfen">Verwerfen</button><button type="button" class="lp-btn gray" data-kc="wb-vorschlag">Neu vorschlagen</button>'+(K.items.some(function(it){return !it.problem;})?'<button type="button" class="lp-btn fill" data-kc="wb-uebernehmen">Ausgewählte übernehmen</button>':'')+'</div><input type="hidden" id="kc-wb-wunsch" value="'+lpEsc(K.wunsch||'')+'"/>';
+    return h+'</div>';
+  }
+  return h+(K.err?'<div style="font-size:12px;color:var(--c-work);margin-bottom:6px">'+lpEsc(K.err)+'</div>':'')
+    +'<div class="lp-mu" style="font-size:12px;margin-bottom:6px">Claude schlägt Blöcke vor, die Minima, Lernplan und Pendenzen abdecken. Du hakst an, was du willst.</div>'
+    +'<textarea class="lp-in" id="kc-wb-wunsch" rows="2" placeholder="Wünsche für diese Woche (optional), z. B. «Dienstagabend frei lassen»" style="width:100%;font-size:13px">'+lpEsc(K.wunsch||'')+'</textarea>'
+    +'<div class="lp-row" style="justify-content:flex-end;margin-top:6px"><button type="button" class="lp-btn fill" data-kc="wb-vorschlag">Vorschlag holen</button></div></div>';
+}
+var _wbfFrei_kc=wbfFrei;
+wbfFrei=function(mon){ return _wbfFrei_kc(mon)+(lpAdd(mon,6)<today()?'':kcWbVorschlagHTML()); };
+function kcWbKommentar(){
+  if(WBF.kiK&&WBF.kiK.busy)return; var mon=WBF.mon, sys=kcSystem(mon), last=0; WBF.kiK={busy:true,text:'',mon:mon}; wbfRender();
+  kcCall({system:sys.blocks,maxTokens:4000,messages:[{role:'user',content:'Beurteile den Plan für KW '+wbKW(mon)+' kurz, bevor ich ihn freigebe: Was trägt, was fehlt gemessen an Minima, Regeln, Lernplan und Pendenzen, und wo ist er zu voll oder unrealistisch? Höchstens sechs kurze Punkte, das Wichtigste zuerst, und am Schluss ein Satz, ob du ihn so freigeben würdest.'}],
+    onText:function(t){ if(!WBF.kiK||WBF.kiK.mon!==mon)return; WBF.kiK.text=t; var now=Date.now(); if(now-last<120)return; last=now; var el=document.getElementById('kc-wb-komm'); if(el)el.innerHTML=kcMd(t); }},
+    function(err,t){ WBF.kiK={text:t||'',err:err||'',mon:mon,teile:sys.teile}; if(WBF.mon===mon)wbfRender(); });
+}
+var _wbfPruef_kc=wbfPruef;
+wbfPruef=function(mon){
+  var h=_wbfPruef_kc(mon), K=(WBF.kiK&&WBF.kiK.mon===mon)?WBF.kiK:null; if(!lbKiKey())return h;
+  h+='<div class="lp-cd" style="margin-top:12px;padding:10px"><div class="lp-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span class="lp-cap"><i class="ti ti-sparkles"></i> EINSCHÄTZUNG VON CLAUDE</span>'+(K&&K.busy?'':'<button type="button" class="lp-btn gray" data-kc="wb-komm" style="padding:4px 10px">'+(K&&K.text?'Neu einschätzen':'Einschätzung holen')+'</button>')+'</div>';
+  if(K&&(K.busy||K.text))h+='<div id="kc-wb-komm" style="font-size:13px;line-height:1.5;margin-top:8px">'+(K.text?kcMd(K.text):'<span class="lp-mu">Claude liest den Plan …</span>')+'</div>';
+  if(K&&K.err)h+='<div style="font-size:12px;color:var(--c-work);margin-top:6px">'+lpEsc(K.err)+'</div>';
+  if(K&&K.teile&&!K.busy)h+='<div class="lp-mu" style="font-size:10px;margin-top:6px">Grundlage: '+lpEsc(K.teile.join(', ')||'keine App-Daten')+'. Eine Meinung, keine Prüfung: die Zeilen oben bleiben massgebend.</div>';
+  return h+'</div>';
+};
+
+// ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 var INITIAL_DATA = {"woechentlich":[{"id":"bsp-1","name":"Beispiel-Aufgabe (löschen oder umbenennen)","erledigt":false,"faellig":"","notizen":""}]};
