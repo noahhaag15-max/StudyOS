@@ -4828,7 +4828,7 @@ function wpRender(){
   for(var hh=z.von;hh<=z.bis;hh+=1)h+='<div class="lp-mono" style="top:'+((hh-z.von)*WP_HP-5)+'px">'+(hh<10?'0':'')+hh+'</div>';
   h+='</div>';
   for(var c=0;c<7;c++){
-    var dd=lpAdd(mon,c), bl=wpLanes(wpBlocksOn(dd).concat(lnSuggest(dd)).concat(mdWindows(dd))), free2=lpWd(dd)===+cfg('zeiten.freierTag');
+    var dd=lpAdd(mon,c), bl=wpLanes(wpDayList(dd).concat(lnSuggest(dd)).concat(mdWindows(dd))), free2=lpWd(dd)===+cfg('zeiten.freierTag');
     h+='<div class="wp-col'+(free2?' free':'')+'" data-wpday="'+dd+'" style="height:'+((z.bis-z.von)*WP_HP)+'px">';
     for(var g=1;g<z.bis-z.von;g++)h+='<div class="wp-hl" style="top:'+(g*WP_HP)+'px"></div>';
     h+=bl.map(function(b){return wpBlockHTML(b,z,dd===td?nowMin:null);}).join('');
@@ -4877,10 +4877,10 @@ function wpSetStatus(b,st){
 }
 // Verschieben: vor Beginn = einfach verschieben (kostet nichts); ab Beginn = ↻-Spur am alten Ort + neuer Block
 function wpMoveBlock(b,tag,start,ende,forceGhost){
-  var oldTag=b.tag, started=wpBlockStartTs(b)<=Date.now();
+  var oldTag=b.tag, started=wpBlockStartTs(b)<=Date.now(), _mt=wpIsMulti(b), _od=_mt?wpDurMin(b):0;
   if(tag!==oldTag&&(forceGhost||started)&&b.typ==='aufgabe'&&b.status==='offen'){
     var nb=wpNew({tag:tag,start:start,ende:ende,titel:b.titel,kategorie:b.kategorie,typ:b.typ,quelle:b.quelle});
-    nb.vonBlock=b.id; if(b.termin)nb.termin=true; wpAdd(nb);
+    nb.vonBlock=b.id; if(b.termin)nb.termin=true; if(_mt)wpFitEnd(nb,_od); wpAdd(nb);
     b.status='verschoben'; b.verschobenNach=tag; b.vfaktor=(today()<oldTag)?0:((!started&&today()===oldTag)?0.5:1); lpTouch(b);
     wpAfterChange([oldTag,tag]); return nb;
   }
@@ -4888,7 +4888,7 @@ function wpMoveBlock(b,tag,start,ende,forceGhost){
     var w=wpWeek(lpMonday(oldTag)); if(w)w.bloecke=w.bloecke.filter(function(x){return x.id!==b.id;});
     b.tag=tag; wpAdd(b);
   } else b.tag=tag;
-  b.start=start; b.ende=ende; lpTouch(b);
+  b.start=start; b.ende=ende; if(_mt)wpFitEnd(b,_od); lpTouch(b);
   wpAfterChange([oldTag,tag]); return b;
 }
 function wpEditor(id,def){
@@ -4936,7 +4936,7 @@ function wpEditorSave(){
 }
 function wpVorlageSpeichern(){
   var name=(document.getElementById('wp-vorl-name').value||'').trim()||'Standardwoche', mon=WP_UI.week, w=wpWeek(mon); if(!w||!w.bloecke.length){ showToast('Diese Woche ist leer — nichts zu speichern.'); return; }
-  var W=wpEnsure(), bl=w.bloecke.filter(function(b){return b.typ!=='fix'&&b.status!=='verschoben'&&b.typ!=='belohnung';}).map(function(b){ return {tagIdx:(lpWd(b.tag)+6)%7,start:b.start,ende:b.ende,titel:b.titel,kategorie:b.kategorie,mix:pxMix(b),prio:b.prio||'',typ:b.typ}; });
+  var W=wpEnsure(), bl=w.bloecke.filter(function(b){return b.typ!=='fix'&&b.status!=='verschoben'&&b.typ!=='belohnung';}).map(function(b){ return {tagIdx:(lpWd(b.tag)+6)%7,tage:wpIsMulti(b)?lpDayDiff(b.tag,b.endTag):0,start:b.start,ende:b.ende,titel:b.titel,kategorie:b.kategorie,mix:pxMix(b),prio:b.prio||'',typ:b.typ}; });
   var ex=W.vorlagen.find(function(v){return v.name===name;});
   if(ex){ ex.bloecke=bl; ex.ts=Date.now(); } else W.vorlagen.push({id:uid(),name:name,bloecke:bl,ts:Date.now()});
   saveD(); showToast('Vorlage «'+name+'» gespeichert ('+bl.length+' Blöcke) ✓','ok'); wpRender();
@@ -4947,7 +4947,7 @@ function wpVorlageAnwenden(id){
   (v.bloecke||[]).forEach(function(t){
     var tag=lpAdd(mon,t.tagIdx);
     if(wpBlocksOn(tag).some(function(b){return b.titel===t.titel&&b.start===t.start;}))return;
-    var vb=wpNew({tag:tag,start:t.start,ende:t.ende,titel:t.titel,kategorie:t.kategorie,typ:t.typ,quelle:'vorlage'}); var tm=Array.isArray(t.mix)?t.mix:(t.kategorie2?[t.kategorie2]:[]); if(tm.length)vb.mix=tm.slice(); if(t.prio)vb.prio=t.prio; wpAdd(vb); n++;
+    var vb=wpNew({tag:tag,start:t.start,ende:t.ende,titel:t.titel,kategorie:t.kategorie,typ:t.typ,quelle:'vorlage'}); var tm=Array.isArray(t.mix)?t.mix:(t.kategorie2?[t.kategorie2]:[]); if(tm.length)vb.mix=tm.slice(); if(t.prio)vb.prio=t.prio; if(t.tage>0)vb.endTag=lpAdd(tag,t.tage); wpAdd(vb); n++;
   });
   WP_UI.vorlagen=false; saveD(); wpRender(); showToast('Vorlage angewendet: '+n+' Blöcke ✓','ok');
 }
@@ -5406,8 +5406,8 @@ function wpDlgOpen(b,st){
   if(k==='sport')h+='<div class="lp-fld"><label>Übung</label><input class="lp-in" id="wpd-ueb" list="wpd-ubs" value="'+lpEsc(d.uebung||b.titel)+'" placeholder="z. B. Beine, Joggen"/><datalist id="wpd-ubs">'+Object.keys(ubs).map(function(u){return '<option value="'+lpEsc(u)+'">';}).join('')+'</datalist></div><div class="lp-fld"><label>Minuten</label><input class="lp-in lp-mono" type="number" min="1" step="5" id="wpd-min" value="'+(d.minuten||Math.max(1,lpT2M(b.ende)-lpT2M(b.start)))+'" style="max-width:100px"/><span class="lp-mu">Min (Pflicht)</span></div>';
   if(k==='waegen')h+='<div class="lp-fld"><label>Gewicht</label><input class="lp-in lp-mono" type="number" min="20" max="300" step="0.1" id="wpd-kg" value="'+(d.kg||trkLastKg()||'')+'" placeholder="z. B. 75,2" style="max-width:110px"/><span class="lp-mu">kg gewogen (Pflicht)</span></div>';
   if(k==='pushups')h+='<div class="lp-fld"><label>Anzahl</label><input class="lp-in lp-mono" type="number" min="1" step="1" id="wpd-pu" value="'+(d.anzahl||'')+'" placeholder="z. B. 40" style="max-width:110px"/><span class="lp-mu">Pushups gemacht (Pflicht)</span></div>';
-  if(k==='lernen')h+='<div class="lp-fld"><label>Lernzeit</label><input class="lp-in lp-mono" type="number" min="1" step="5" id="wpd-lmin" value="'+(d.minuten||Math.max(1,lpT2M(b.ende)-lpT2M(b.start)))+'" style="max-width:100px"/><span class="lp-mu">Min tatsächlich gelernt (Pflicht)</span></div>';
-  if(k==='schlaf'){ var _sm=((lpT2M(b.ende)-lpT2M(b.start))%1440+1440)%1440, _sh=Math.round(_sm/60*4)/4||0.5;
+  if(k==='lernen')h+='<div class="lp-fld"><label>Lernzeit</label><input class="lp-in lp-mono" type="number" min="1" step="5" id="wpd-lmin" value="'+(d.minuten||Math.max(1,wpDurMin(b)))+'" style="max-width:100px"/><span class="lp-mu">Min tatsächlich gelernt (Pflicht)</span></div>';
+  if(k==='schlaf'){ var _sm=wpIsMulti(b)?wpDurMin(b):((lpT2M(b.ende)-lpT2M(b.start))%1440+1440)%1440, _sh=Math.round(_sm/60*4)/4||0.5;
     h+='<div class="lp-fld"><label>Stunden</label><input class="lp-in lp-mono" type="number" min="0.5" max="16" step="0.25" id="wpd-std" value="'+(d.stunden||wpSleepH(b)||_sh)+'" style="max-width:100px"/><span class="lp-mu">h geschlafen (Pflicht)</span></div>'; }
   h+='<div class="lp-row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="lp-btn gray" data-wp="dlg-close">Abbrechen</button><button type="button" class="lp-btn fill" data-wp="dlg-ok" data-st="'+st+'">Abschliessen</button></div></div>';
   host.innerHTML=h; host.style.display='flex'; host.setAttribute('data-id',b.id);
@@ -5470,20 +5470,21 @@ function wpEditorSave(){
   if(b&&b.typ==='fix'){ wpEditorClose(); return; }
   if(!titel){ showToast('Bitte einen Titel eingeben.'); return; }
   if(!tag||!s||!e){ showToast('Tag und Zeit ausfüllen.'); return; }
-  if(lpT2M(e)<=lpT2M(s)){ showToast('«Bis» muss nach dem Start liegen.'); return; }
+  var etag=wpEtagForm(tag,s,e); if(etag===null){ showToast('Das Ende muss nach dem Start liegen (höchstens 7 Tage später).'); return; }
   if(typ==='aufgabe'&&kat==='routine'&&!items.length){ showToast('Bitte den Inhalt der Routine eintragen (ein Punkt pro Zeile).'); return; }
   if(b){
-    var oldTag=b.tag; b.titel=titel; b.kategorie=kat; b.typ=typ; b.start=s; b.ende=e;
+    var oldTag=b.tag, oldEt=b.endTag||'', etNeu=(oldEt!==etag&&tag===oldTag); if(b.daten&&etNeu)wpUnlogData(b); b.titel=titel; b.kategorie=kat; b.typ=typ; b.start=s; b.ende=e; if(etag)b.endTag=etag; else delete b.endTag;
     if(typ!=='aufgabe'&&typ!=='fix'&&b.status!=='verschoben')b.status='offen';
     if(typ==='aufgabe'&&kat==='routine'){ wpRoutineSetItems(b,items); wpRoutineSave(titel,items); b.status=b.status==='nein'||b.status==='verschoben'?b.status:wpRoutineStatus(b); }
-    if(tag!==oldTag){ var w=wpWeek(lpMonday(oldTag)); if(w)w.bloecke=w.bloecke.filter(function(x){return x.id!==b.id;}); if(b.daten)wpUnlogData(b); b.tag=tag; wpAdd(b); if(b.daten&&b.daten.fertig)wpLogData(b); }
+    if(tag!==oldTag){ var w=wpWeek(lpMonday(oldTag)); if(w)w.bloecke=w.bloecke.filter(function(x){return x.id!==b.id;}); if(b.daten){ b.endTag=oldEt||undefined; var _nt=b.tag; wpUnlogData(b); if(etag)b.endTag=etag; else delete b.endTag; } b.tag=tag; wpAdd(b); if(b.daten&&b.daten.fertig)wpLogData(b); }
+    else if(b.daten&&b.daten.fertig&&etNeu)wpLogData(b);
     lpTouch(b); wpEditorClose(); wpAfterChange([oldTag,tag]);
   } else {
     if(typ==='belohnung'){
       if(!preis){ showToast('Bitte eine Belohnung wählen (Preis in Meilen).'); return; }
       if(spielTotals().meilen<preis){ showToast('Nicht genug Meilen: '+fmtCH(spielTotals().meilen)+' von '+preis+'.'); return; }
     }
-    var nb=wpNew({tag:tag,start:s,ende:e,titel:titel,kategorie:kat,typ:typ,quelle:WP_UI.neuQuelle||'manuell'}); WP_UI.neuQuelle=null;
+    var nb=wpNew({tag:tag,start:s,ende:e,titel:titel,kategorie:kat,typ:typ,quelle:WP_UI.neuQuelle||'manuell'}); WP_UI.neuQuelle=null; if(etag)nb.endTag=etag;
     if(typ==='belohnung'){ nb.preis=preis; buche({id:'rew:'+nb.id,betrag:-preis,einheit:'Meilen',text:'Belohnung: '+titel,datum:today(),quelle:'einloesung'}); }
     if(typ==='aufgabe'&&kat==='routine'){ wpRoutineSetItems(nb,items); wpRoutineSave(titel,items); }
     wpAdd(nb); wpEditorClose(); wpAfterChange([tag]); showToast(typ==='belohnung'?'★ Belohnung eingeplant — '+preis+' Meilen eingelöst':'Block angelegt ✓','ok');
@@ -5621,14 +5622,14 @@ function ckWeekStats(mon){
     if(tr&&tr.sleep){ row.schlaf=(tr.sleep.h||0)+(tr.sleep.m||0)/60; sl.push(row.schlaf); }
     wpBlocksOn(d).forEach(function(b){
       if(!wpZaehlt(b))return;
-      var h=(b.kategorie==='lernen'&&b.daten&&b.daten.minuten?b.daten.minuten/60:(lpT2M(b.ende)-lpT2M(b.start))/60*(b.status==='teil'?.5:1));
+      var h=(b.kategorie==='lernen'&&b.daten&&b.daten.minuten?b.daten.minuten/60:wpDurMin(b)/60*(b.status==='teil'?.5:1));
       if(b.kategorie==='arbeit'){ st.arbeit+=h; row.arbeit+=h; }
       else if(b.kategorie==='lernen'){ blkH+=h; row.lernen+=h; }
       else if(b.kategorie==='uni'){ row.uni+=h; }
       else if(b.kategorie==='sport'){ st.sport++; row.sport+=(b.daten&&b.daten.minuten?b.daten.minuten/60:h); }
       if(b.kategorie==='schlaf'){ if(!row.schlaf&&b.daten&&b.daten.stunden)row.schlaf=b.daten.stunden; return; }   // Schlaf läuft separat, nicht in die Überschneidungs-Prüfung
       row.kat[b.kategorie]=(row.kat[b.kategorie]||0)+h;
-      var bs=Math.max(0,lpT2M(b.start)), be=Math.min(1440,lpT2M(b.ende)); if(be>bs)row.iv.push([bs,be]);          // für die reale (überschneidungsfreie) Tagessumme
+      var bs=Math.max(0,lpT2M(b.start)), be=wpIsMulti(b)?1440:Math.min(1440,lpT2M(b.ende)); if(be>bs)row.iv.push([bs,be]);          // für die reale (überschneidungsfreie) Tagessumme
     });
     if(tr&&tr.sports)tr.sports.forEach(function(s){ if(!s.wpId){ st.sport++; row.sport+=(s.min||30)/60; } });
     var sh=0; lpEnsure().sessions.forEach(function(s){ if(s.status==='abgeschlossen'&&lpSessDate(s)===d)sh+=(s.nettoMin||0)/60; });
@@ -5669,7 +5670,7 @@ function ckHeaderHTML(){
 // ── Jetzt-Karte ──
 function ckCurrent(){
   var now=ckNowMin(), bl=ckBlocksToday().filter(function(b){return b.status==='offen';}).sort(function(a,b){return a.start.localeCompare(b.start);});
-  var cur=bl.find(function(b){return lpT2M(b.start)<=now&&now<lpT2M(b.ende);}), nxt=bl.filter(function(b){return lpT2M(b.start)>now;});
+  var cur=bl.find(function(b){return lpT2M(b.start)<=now&&(wpIsMulti(b)||now<lpT2M(b.ende));}), nxt=bl.filter(function(b){return lpT2M(b.start)>now;});
   var main=cur||nxt[0]||bl[bl.length-1]||null, idx=main?bl.indexOf(main):-1;
   return {main:main,danach:idx>=0?bl[idx+1]||null:null,laufend:!!cur};
 }
@@ -6455,7 +6456,7 @@ function lnPlan(){ var n=Date.now(); if(!LN_MEMO.plan||n-LN_MEMO.t>800){ LN_MEMO
 // Belegte Zeiten eines Tages: alle Blöcke (auch Fenster) und Favoriten-Matches (Anpfiff −15 Min bis Schluss)
 function lnOccupied(d){
   var occ=[];
-  wpBlocksOn(d).forEach(function(b){ if(b.status==='verschoben')return; var s=lpT2M(b.start); occ.push([s,Math.max(lpT2M(b.ende),s+15)]); });
+  wpDayList(d).forEach(function(b){ if(b.status==='verschoben')return; var s=lpT2M(b.start); occ.push([s,Math.max(lpT2M(b.ende),s+15)]); });
   ckFavMatches(d).forEach(function(m){ if(!m.time)return; var s=lpT2M(m.time); occ.push([s-15,s+(m.ico==='ball-american-football'?200:125)]); });
   return occ;
 }
@@ -7409,8 +7410,9 @@ document.addEventListener('mousedown',function(ev){
   var el=ev.target.closest&&ev.target.closest('#wp-root .wp-b[data-wpb]'); if(!el||ev.target.closest('[data-wpe]'))return;
   var id=el.getAttribute('data-wpb'); if(id.indexOf('sug:')===0)return;
   var b=wpFind(id); if(!b||b.typ==='fix')return;
-  var r=el.getBoundingClientRect(), st=lpT2M(b.start), dur=Math.max(15,lpT2M(b.ende)-st);
-  WD={id:id,on:false,el:el,x0:ev.clientX,y0:ev.clientY,resize:(ev.clientY>r.bottom-7&&r.height>=28),dur:dur,st:st,offY:ev.clientY-r.top,w:r.width,h:r.height,sup:false};
+  var multi=wpIsMulti(b); if(multi&&el.getAttribute('data-mt')!=='a')return;   // mehrtägig: nur am ersten Stück ziehen, Länge im Editor
+  var r=el.getBoundingClientRect(), st=lpT2M(b.start), dur=multi?wpDurMin(b):Math.max(15,lpT2M(b.ende)-st);
+  WD={id:id,on:false,el:el,x0:ev.clientX,y0:ev.clientY,multi:multi,resize:(!multi&&ev.clientY>r.bottom-7&&r.height>=28),dur:dur,st:st,offY:ev.clientY-r.top,w:r.width,h:r.height,sup:false};
 });
 document.addEventListener('mousemove',function(ev){
   if(!WD.id)return;
@@ -7428,10 +7430,10 @@ document.addEventListener('mousemove',function(ev){
     WD.ghost.style.left=WD.el.getBoundingClientRect().left+'px'; WD.ghost.style.top=(cr.top+(WD.st-z.von*60)/60*WP_HP)+'px'; WD.ghost.style.height=(dur/60*WP_HP)+'px';
     WD.ghost.firstChild.textContent=wpM2T(WD.st)+'–'+wpM2T(WD.st+dur); return;
   }
-  var top=ev.clientY-cr.top-WD.offY, min=Math.max(0,Math.min(1439-WD.dur,snap(z.von*60+top/WP_HP*60)));
+  var top=ev.clientY-cr.top-WD.offY, min=Math.max(0,Math.min(WD.multi?1425:1439-WD.dur,snap(z.von*60+top/WP_HP*60)));
   WD.tag=col.getAttribute('data-wpday'); WD.newSt=min; WD.newDur=WD.dur;
   WD.ghost.style.left=(cr.left+2)+'px'; WD.ghost.style.width=(cr.width-4)+'px'; WD.ghost.style.top=(cr.top+(min-z.von*60)/60*WP_HP)+'px';
-  WD.ghost.firstChild.textContent=wpM2T(min)+'–'+wpM2T(min+WD.dur)+' · '+lpDayLbl(WD.tag);
+  WD.ghost.firstChild.textContent=wpM2T(min)+'–'+wpM2T((min+WD.dur)%1440)+' · '+lpDayLbl(WD.tag);
 });
 document.addEventListener('mouseup',function(){
   if(!WD.id)return;
@@ -7441,7 +7443,7 @@ document.addEventListener('mouseup',function(){
   if(!b||tag==null||st==null)return;
   if(resize){ if(dur!==Math.max(15,lpT2M(b.ende)-lpT2M(b.start))){ b.ende=wpM2T(st+dur); lpTouch(b); wpAfterChange([b.tag]); } return; }
   if(tag===b.tag&&st===lpT2M(b.start))return;
-  var oldTag=b.tag, r=wpMoveBlock(b,tag,wpM2T(st),wpM2T(st+dur));
+  var oldTag=b.tag, r=wpMoveBlock(b,tag,wpM2T(st),wpM2T(wpIsMulti(b)?(st+dur)%1440:st+dur));
   if(r&&r!==b){ var _f=b.vfaktor==null?1:b.vfaktor, _k=Math.round(punkteAt(oldTag).block_verschoben*_f); showToast('↻ Verschoben'+(_k?' — '+_k+' Meilen':' — kostet nichts')+', der neue Block steht auf '+lpDayLbl(tag)+' '+lpFmtShort(tag)); }
 });
 document.addEventListener('keydown',function(ev){ if(ev.key==='Escape'&&WD.id&&WD.on){ wdCancel(); } });
@@ -8086,7 +8088,7 @@ function lvTagMin(d){
 
 // ── Wochenplan: neue Kategorien «Wägen» (kg Pflicht) und «Pushups» (Anzahl Pflicht) ──
 WP_KAT_DEFAULT.push({id:'waegen',name:'Wägen',farbe:'#d9d9ee'},{id:'pushups',name:'Pushups',farbe:'#d8f04a'});
-function wpSleepH(b){ var s=D.track&&D.track[b.tag]&&D.track[b.tag].sleep; return s?Math.round(((s.h||0)+(s.m||0)/60)*100)/100:null; }
+function wpSleepH(b){ var _t=wpEndTag(b), s=D.track&&D.track[_t]&&D.track[_t].sleep; return s?Math.round(((s.h||0)+(s.m||0)/60)*100)/100:null; }
 function trkDt(d){ if(!D.dailyTracker)D.dailyTracker={}; if(!D.dailyTracker[d])D.dailyTracker[d]={}; return D.dailyTracker[d]; }
 function trkPuSum(dt){ var s=0; Object.keys(dt.pushupsWp||{}).forEach(function(k){ s+=dt.pushupsWp[k]||0; }); return s; }
 function trkPuEnsure(dt){ if(dt.pushupsManual==null)dt.pushupsManual=Math.max(0,(dt.pushups||0)-trkPuSum(dt)); if(!dt.pushupsWp)dt.pushupsWp={}; }
@@ -8096,13 +8098,14 @@ wpLogData=function(b){
   _wpLogData_p8(b); var day=getDayFor(b.tag), d=b.daten||{};
   if(b.kategorie==='waegen'&&d.kg){ day.weight=day.weight||{m:null,a:null}; day.weight.m=d.kg; day.weight.wpId=b.id; }
   if(b.kategorie==='pushups'&&d.anzahl){ var dt=trkDt(b.tag); trkPuEnsure(dt); dt.pushupsWp[b.id]=d.anzahl; trkPuSync(dt); }
-  if(b.kategorie==='schlaf'&&d.stunden&&!day.sleep){ var h=Math.floor(d.stunden), m=Math.round((d.stunden-h)*60); day.sleep={from:'',to:'',h:h,m:m,q:3,note:'',wpId:b.id}; }
+  if(b.kategorie==='schlaf'&&d.stunden){ var sday=getDayFor(wpEndTag(b)); if(!sday.sleep){ var h=Math.floor(d.stunden), m=Math.round((d.stunden-h)*60); sday.sleep={from:'',to:'',h:h,m:m,q:3,note:'',wpId:b.id}; } }
 };
 var _wpUnlogData_p8=wpUnlogData;
 wpUnlogData=function(b){
   _wpUnlogData_p8(b); var day=D.track&&D.track[b.tag]; if(!day)return;
   if(day.weight&&day.weight.wpId===b.id){ day.weight.m=null; delete day.weight.wpId; }
   if(day.sleep&&day.sleep.wpId===b.id)day.sleep=null;
+  var eday=D.track&&D.track[wpEndTag(b)]; if(eday&&eday.sleep&&eday.sleep.wpId===b.id)eday.sleep=null;
   var dt=D.dailyTracker&&D.dailyTracker[b.tag]; if(dt&&dt.pushupsWp&&dt.pushupsWp[b.id]!=null){ delete dt.pushupsWp[b.id]; trkPuSync(dt); }
 };
 var _wpAfterChange_p8=wpAfterChange;
@@ -8183,7 +8186,7 @@ var TRK_FRAGEN={
 var TRK_CHECK=[['energie','Energie','leer','voll'],['wohl','Wohlbefinden','schlecht','sehr gut'],['fokus','Fokus','unruhig','klar'],['stress','Anspannung','entspannt','hoch']];
 function trkDate(){ return TRK_UI.date||(TRK_UI.date=today()); }
 function trkDayTyp(d){
-  var m={arbeit:0,schule:0,liv:0}; wpBlocksOn(d).forEach(function(b){ if(b.status==='verschoben')return; var l=Math.max(0,lpT2M(b.ende)-lpT2M(b.start)); if(b.kategorie==='arbeit')m.arbeit+=l; else if(b.kategorie==='uni'||b.kategorie==='lernen')m.schule+=l; else if(b.kategorie==='liv')m.liv+=l; });
+  var m={arbeit:0,schule:0,liv:0}; wpBlocksOn(d).forEach(function(b){ if(b.status==='verschoben')return; var l=wpIsMulti(b)?wpDurMin(b):Math.max(0,lpT2M(b.ende)-lpT2M(b.start)); if(b.kategorie==='arbeit')m.arbeit+=l; else if(b.kategorie==='uni'||b.kategorie==='lernen')m.schule+=l; else if(b.kategorie==='liv')m.liv+=l; });
   var j=D.journal&&D.journal[d]; if(j&&j.typ)return j.typ;
   if(m.arbeit>=120&&m.arbeit>=m.schule)return 'arbeit'; if(m.schule>=120)return 'schule'; if(m.liv>=120)return 'liv';
   return 'freizeit';
@@ -10037,7 +10040,7 @@ clTaskSave=function(id){
 // ═══════════════ D3 RETTUNGSMODUS ═══════════════
 function pdRescueWeek(mon){ var n=0, R=D.rettung||{}; for(var i=0;i<7;i++)if(R[lpAdd(mon,i)])n++; return n; }
 function pdMovable(d){
-  return wpBlocksOn(d).filter(function(b){ return b.typ==='aufgabe'&&b.status==='offen'&&!wpIsRoutine(b)&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0; });
+  return wpBlocksOn(d).filter(function(b){ return b.typ==='aufgabe'&&b.status==='offen'&&!wpIsRoutine(b)&&!wpIsMulti(b)&&['mahlzeit','schlaf','routine'].indexOf(b.kategorie)<0; });
 }
 function pdPrio(b){ var p={lernen:0,uni:1,arbeit:2,aufgabe:3,sport:4,liv:6}; return (p[b.kategorie]!=null?p[b.kategorie]:5)*10000+lpT2M(b.start); }
 function pdRescuePlan(d,keepId){
@@ -19989,7 +19992,7 @@ function waInit(){
 // ═══════════════════════════════════════════════════════════
 var WB2={open:false};
 function wbIs(b,ber,unters){ if(wbBereich(b)!==ber)return false; return !unters||unters.indexOf(wbUnter(b))>=0; }
-function wbDauer(b){ var s=lpT2M(b.start), e=lpT2M(b.ende); if(e<=s)e+=1440; return e-s; }
+function wbDauer(b){ if(wpIsMulti(b))return wpDurMin(b); var s=lpT2M(b.start), e=lpT2M(b.ende); if(e<=s)e+=1440; return e-s; }
 var WB_COUNT={
   flug:function(b){ return wbIs(b,'flug',['abfrage'])?1:0; },
   lern:function(b){ return wbIs(b,'studium',['lerntermin'])?1:0; },
@@ -20392,7 +20395,7 @@ wpEditorSave=function(){
   var host=document.getElementById('wp-modal'), id=host&&host.getAttribute('data-id'), b=id?wpFind(id):null;
   if(b&&!WB4.bypass){
     var tag=(document.getElementById('wpm-tag')||{}).value, s=(document.getElementById('wpm-start')||{}).value, e=(document.getElementById('wpm-ende')||{}).value;
-    if(tag&&s&&e&&(tag!==b.tag||s!==b.start||e!==b.ende)&&lpT2M(e)>lpT2M(s)){
+    if(tag&&s&&e&&(tag!==b.tag||s!==b.start||e!==b.ende)){
       var vor={tag:b.tag,start:b.start,ende:b.ende};
       if(wbGuard(b,(tag!==b.tag?'Verschieben auf '+wbFmtT(tag)+' '+s+'–'+e:'Zeit ändern auf '+s+'–'+e),vor,function(){ _wpEditorSave_wb(); return {nach:{tag:tag,start:s,ende:e}}; }))return;
     }
@@ -22630,7 +22633,7 @@ var KC_ALLTAG=['mahlzeit','schlaf','routine','waegen','messen','pushups'];
 function kcBlockLine(b,dat){
   var ber=wbBereich(b), u=wbUnter(b), priv=(ber==='liv'&&!dat.liv);
   var st={ok:'erledigt',teil:'teilweise',nein:'nicht gemacht',verschoben:'verschoben',offen:''}[b.status]||'';
-  return '  '+b.start+'–'+b.ende+' '+(priv?'privat (belegt)':String(b.titel||'').slice(0,80))+' ['+(priv?'privat':wbBerName(ber)+(u&&wbUnterName(ber,u)?' / '+wbUnterName(ber,u):''))+']'+(b.typ==='fenster'?' (optional)':'')+(b.typ==='fix'?' (fix)':'')+(wbPrioText(b)&&b.prio?' Prio '+wbPrioText(b):'')+(st?' — '+st:'')+(kcAend()?' #'+b.id:'');
+  return '  '+b.start+'–'+b.ende+(wpIsMulti(b)?' (endet '+lpDayLbl(b.endTag)+' '+lpFmtShort(b.endTag)+')':'')+' '+(priv?'privat (belegt)':String(b.titel||'').slice(0,80))+' ['+(priv?'privat':wbBerName(ber)+(u&&wbUnterName(ber,u)?' / '+wbUnterName(ber,u):''))+']'+(b.typ==='fenster'?' (optional)':'')+(b.typ==='fix'?' (fix)':'')+(wbPrioText(b)&&b.prio?' Prio '+wbPrioText(b):'')+(st?' — '+st:'')+(kcAend()?' #'+b.id:'');
 }
 function kcAend(){ return cfg('ki.aendern')!==false; }
 // Offene Etappen (überfällig oder in den nächsten 14 Tagen geplant) und offene Pool-Aufgaben, mit Kennung — nur wenn Claude Änderungen vorbereiten darf
@@ -22870,7 +22873,7 @@ function wbBereicheAlle(){ var l=WB_BEREICHE.slice(); try{ (cfg('wb.bereiche')||
 function kcWbPruefe(x,mon){
   var td=today(), re=/^\d\d:\d\d$/; if(!x||!/^\d{4}-\d\d-\d\d$/.test(x.tag||'')||!re.test(x.start||'')||!re.test(x.ende||''))return 'ungültige Angaben';
   if(x.tag<mon||x.tag>lpAdd(mon,6))return 'liegt ausserhalb der Woche'; if(x.tag<td)return 'liegt in der Vergangenheit'; if(lpT2M(x.ende)<=lpT2M(x.start))return 'Ende vor Start';
-  var k=wpBlocksOn(x.tag).find(function(b){ return (b.typ==='aufgabe'||b.typ==='fix')&&b.status!=='verschoben'&&KC_ALLTAG.indexOf(b.kategorie)<0&&lpT2M(b.start)<lpT2M(x.ende)&&lpT2M(b.ende)>lpT2M(x.start); });
+  var k=wpDayList(x.tag).find(function(b){ return (b.typ==='aufgabe'||b.typ==='fix')&&b.status!=='verschoben'&&KC_ALLTAG.indexOf(b.kategorie)<0&&lpT2M(b.start)<lpT2M(x.ende)&&lpT2M(b.ende)>lpT2M(x.start); });
   return k?'überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')':'';
 }
 function kcWbVorschlag(){
@@ -22950,8 +22953,8 @@ function kcAendPrompt(){
   return 'Du kannst Änderungen in der App vorbereiten. Du führst nie selbst etwas aus: Die App zeigt deinen Vorschlag als Karte, und der Nutzer entscheidet pro Zeile. Schlage Änderungen nur vor, wenn er darum bittet oder klar zustimmt; auf eine blosse Frage antwortest du nur mit Text.\n\n'
     +'So geht es: Schreibe ein bis drei Sätze, was du vorschlägst, und hänge ganz am Ende genau einen Block in dieser Form an (gültiges JSON, höchstens 15 Aktionen):\n```aenderungen\n{"aktionen":[{"typ":"block_neu","tag":"2026-01-14","start":"09:00","ende":"10:30","titel":"Beispiel","bereich":"studium","unterart":"zuhause","optional":false,"grund":"kurzer Satz"}]}\n```\n'
     +'Aktionen und ihre Felder («grund» ist überall ein kurzer Satz und freiwillig):\n'
-    +'- block_neu: tag (JJJJ-MM-TT), start und ende (HH:MM), titel, bereich; freiwillig unterart und optional (true = unverbindliches Fenster)\n'
-    +'- block_aendern: id, dazu nur die Felder, die sich ändern: tag, start, ende, titel, bereich, unterart, prio (must, sehr, hoch, mittel, niedrig, moeglich, optional)\n'
+    +'- block_neu: tag (JJJJ-MM-TT), start und ende (HH:MM), titel, bereich; freiwillig unterart, optional (true = unverbindliches Fenster) und endtag (JJJJ-MM-TT, wenn der Block nach Mitternacht oder an einem späteren Tag endet, höchstens 7 Tage; z. B. Schlaf 23:00 bis 06:00 mit endtag = Folgetag)\n'
+    +'- block_aendern: id, dazu nur die Felder, die sich ändern: tag, start, ende, endtag, titel, bereich, unterart, prio (must, sehr, hoch, mittel, niedrig, moeglich, optional)\n'
     +'- block_loeschen: id\n- aufgabe_neu: name; freiwillig faellig (JJJJ-MM-TT)\n- aufgabe_erledigt: id\n- aufgabe_aendern: id, name und/oder faellig\n- aufgabe_loeschen: id\n'
     +'- etappe_planen: id, datum (JJJJ-MM-TT, ab heute)\n- etappe_erledigt: id; bei Drill-Etappen zusätzlich ergebnis (ok = allein gelöst, hilfe, falsch)\n- pool_bewerten: id, ergebnis (sicher, zaeh, hilfe, falsch); freiwillig nachholen (JJJJ-MM-TT, oder null für «nicht nachholen»)\n\n'
     +'Die Kennung (id) steht in den Daten hinter dem Eintrag als «#…». Verwende sie exakt und ohne das Zeichen #, und erfinde keine: Fehlt sie für das, was der Nutzer meint, frag nach. Im Fliesstext nennst du keine Kennungen. Als erledigt markierst oder bewertest du nur, was der Nutzer dir ausdrücklich so gesagt hat, und Löschen schlägst du nur vor, wenn er es verlangt. Blöcke einer freigegebenen Woche darfst du zum Verschieben oder Löschen vorschlagen; die App verlangt dann von ihm einen Änderungsantrag. Vor der nächsten Nachricht meldet dir die App in eckigen Klammern, was aus deiner Karte wurde.\n\n'
@@ -22959,11 +22962,12 @@ function kcAendPrompt(){
 }
 function kcSichtbar(t){ t=String(t||''); var i=t.indexOf('```aenderungen'); if(i<0)return t; var j=t.indexOf('```',i+14); return (t.slice(0,i)+(j>=0?t.slice(j+3):'')).trim(); }
 function kcIsD(s){ return /^\d{4}-\d\d-\d\d$/.test(String(s||'')); }
+function kcEt(tag,s,e,et){ if(et){ if(!kcIsD(et)||et<tag||lpDayDiff(tag,et)>7)return null; if(et===tag)return lpT2M(e)>lpT2M(s)?'':null; return et; } return lpT2M(e)<=lpT2M(s)?lpAdd(tag,1):''; }
 function kcIsT(s){ return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(s||'')); }
 function kcBFmt(tag,s,e){ return lpDayLbl(tag)+' '+lpFmtShort(tag)+' '+s+'–'+e; }
 function kcTask(id){ return clTasks().find(function(t){ return t.id===id; })||null; }
 function kcPool(id){ return lpAufgaben().find(function(a){ return a.id===id; })||null; }
-function kcUeberschn(tag,s,e,ohneId){ return wpBlocksOn(tag).find(function(b){ return b.id!==ohneId&&(b.typ==='aufgabe'||b.typ==='fix')&&b.status!=='verschoben'&&KC_ALLTAG.indexOf(b.kategorie)<0&&lpT2M(b.start)<lpT2M(e)&&lpT2M(b.ende)>lpT2M(s); })||null; }
+function kcUeberschn(tag,s,e,ohneId){ return wpDayList(tag).find(function(b){ return b.id!==ohneId&&(b.typ==='aufgabe'||b.typ==='fix')&&b.status!=='verschoben'&&KC_ALLTAG.indexOf(b.kategorie)<0&&lpT2M(b.start)<lpT2M(e)&&lpT2M(b.ende)>lpT2M(s); })||null; }
 function kcGeschuetzt(b){ try{ return !!(wbAktiv()&&cfg('wb.aktiv')&&b&&(b.typ==='aufgabe'||b.typ==='fix')&&b.status==='offen'&&b.tag>=today()&&wbFrozenEntry(b)); }catch(e){ return false; } }
 // Beschreibt und prüft eine Aktion gegen den aktuellen Stand → {text, sub, problem, loeschen}
 function kcAktInfo(a){
@@ -22971,27 +22975,28 @@ function kcAktInfo(a){
   if(!a||typeof a!=='object'){ o.text='Unlesbare Aktion'; o.problem='ungültige Angaben'; return o; }
   switch(a.typ){
     case 'block_neu':
-      o.text='Neuer Block: '+String(a.titel||'')+(kcIsD(a.tag)&&kcIsT(a.start)&&kcIsT(a.ende)?' · '+kcBFmt(a.tag,a.start,a.ende):'')+(a.bereich?' · '+wbBerName(a.bereich):'')+(a.optional?' · optional':'');
+      o.text='Neuer Block: '+String(a.titel||'')+(kcIsD(a.tag)&&kcIsT(a.start)&&kcIsT(a.ende)?' · '+kcBFmt(a.tag,a.start,a.ende)+(kcEt(a.tag,a.start,a.ende,a.endtag)?' (endet '+lpDayLbl(kcEt(a.tag,a.start,a.ende,a.endtag))+' '+lpFmtShort(kcEt(a.tag,a.start,a.ende,a.endtag))+')':''):'')+(a.bereich?' · '+wbBerName(a.bereich):'')+(a.optional?' · optional':'');
       if(!String(a.titel||'').trim()||!kcIsD(a.tag)||!kcIsT(a.start)||!kcIsT(a.ende))o.problem='Angaben unvollständig';
       else if(ids.indexOf(a.bereich)<0)o.problem='unbekannter Bereich';
-      else if(lpT2M(a.ende)<=lpT2M(a.start))o.problem='Ende liegt vor dem Start';
+      else if(kcEt(a.tag,a.start,a.ende,a.endtag)===null)o.problem='Enddatum ungültig (vor dem Start oder mehr als 7 Tage später)';
       else if(a.tag<td)o.problem='liegt in der Vergangenheit';
-      else if(!a.optional&&(k=kcUeberschn(a.tag,a.start,a.ende,null)))o.problem='überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')';
+      else if(!a.optional&&(k=kcUeberschn(a.tag,a.start,kcEt(a.tag,a.start,a.ende,a.endtag)?'24:00':a.ende,null)))o.problem='überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')';
       break;
     case 'block_aendern':
       b=wpFind(a.id); if(!b){ o.text='Block ändern'; o.problem='Block nicht gefunden'; break; }
-      var nt=a.tag||b.tag, ns=a.start||b.start, ne=a.ende||b.ende, zeit=(nt!==b.tag||ns!==b.start||ne!==b.ende), teile=[];
-      if(zeit)teile.push(kcBFmt(b.tag,b.start,b.ende)+' → '+(kcIsD(nt)&&kcIsT(ns)&&kcIsT(ne)?kcBFmt(nt,ns,ne):'?'));
+      var nt=a.tag||b.tag, ns=a.start||b.start, ne=a.ende||b.ende, zeit=(nt!==b.tag||ns!==b.start||ne!==b.ende||(!!a.endtag&&a.endtag!==wpEndTag(b))), teile=[], multiNeu=wpIsMulti(b)||!!a.endtag;
+      if(zeit)teile.push(kcBFmt(b.tag,b.start,b.ende)+(wpIsMulti(b)?' (endet '+lpDayLbl(b.endTag)+')':'')+' → '+(kcIsD(nt)&&kcIsT(ns)&&kcIsT(ne)?kcBFmt(nt,ns,ne)+(a.endtag&&kcIsD(a.endtag)&&a.endtag>nt?' (endet '+lpDayLbl(a.endtag)+' '+lpFmtShort(a.endtag)+')':''):'?'));
       if(a.titel&&a.titel!==b.titel)teile.push('Titel «'+a.titel+'»'); if(a.bereich&&a.bereich!==wbBereich(b))teile.push('Bereich '+wbBerName(a.bereich)); if(a.unterart!=null&&a.unterart!==(b.unter||''))teile.push('Unterart '+(wbUnterName(a.bereich||wbBereich(b),a.unterart)||'keine')); if(a.prio!=null&&KC_PRIO[a.prio]!=null&&KC_PRIO[a.prio]!==(b.prio||''))teile.push('Priorität '+pzPrioLbl(KC_PRIO[a.prio]));
       o.text='«'+b.titel+'»: '+(teile.join(' · ')||'keine Änderung');
       if(!teile.length)o.problem='ändert nichts';
       else if(!kcIsD(nt)||!kcIsT(ns)||!kcIsT(ne))o.problem='Datum oder Zeit ungültig';
-      else if(lpT2M(ne)<=lpT2M(ns))o.problem='Ende liegt vor dem Start';
+      else if(a.endtag&&kcEt(nt,ns,ne,a.endtag)===null)o.problem='Enddatum ungültig (vor dem Start oder mehr als 7 Tage später)';
+      else if(!multiNeu&&lpT2M(ne)<=lpT2M(ns))o.problem='Ende liegt vor dem Start (für einen Block über Mitternacht endtag angeben)';
       else if(zeit&&nt<td)o.problem='liegt in der Vergangenheit';
       else if(a.bereich&&ids.indexOf(a.bereich)<0)o.problem='unbekannter Bereich';
       else if(a.prio!=null&&KC_PRIO[a.prio]==null)o.problem='unbekannte Priorität';
       else if(zeit&&b.status!=='offen')o.problem='Block ist schon bewertet';
-      else { if(zeit&&b.typ!=='fenster'&&(k=kcUeberschn(nt,ns,ne,b.id)))o.sub=(o.sub?o.sub+' · ':'')+'Achtung: überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')'; if(zeit&&kcGeschuetzt(b))o.sub=(o.sub?o.sub+' · ':'')+'freigegeben: braucht einen Änderungsantrag'; }
+      else { if(zeit&&b.typ!=='fenster'&&(k=kcUeberschn(nt,ns,(multiNeu&&lpT2M(ne)<=lpT2M(ns))?'24:00':ne,b.id)))o.sub=(o.sub?o.sub+' · ':'')+'Achtung: überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')'; if(zeit&&kcGeschuetzt(b))o.sub=(o.sub?o.sub+' · ':'')+'freigegeben: braucht einen Änderungsantrag'; }
       break;
     case 'block_loeschen':
       b=wpFind(a.id); o.loeschen=true; o.text='Löschen: '+(b?'«'+b.titel+'» · '+kcBFmt(b.tag,b.start,b.ende):'Block');
@@ -23042,6 +23047,7 @@ function kcAktRun(a,days){
     case 'block_neu':
       b=wpNew({tag:a.tag,start:a.start,ende:a.ende,titel:String(a.titel).slice(0,120),kategorie:a.bereich==='studium'?'lernen':a.bereich==='koerper'?'sport':'aufgabe',typ:a.optional?'fenster':'aufgabe',quelle:'ki'});
       b.bereich=a.bereich; if(a.unterart&&(WB_UNTER[a.bereich]||[]).some(function(u){return u[0]===a.unterart;}))b.unter=a.unterart;
+      var et0=kcEt(a.tag,a.start,a.ende,a.endtag); if(et0)b.endTag=et0;
       wpAdd(b); days[a.tag]=1; return {undo:{typ:'block_weg',id:b.id}};
     case 'block_aendern':
       b=wpFind(a.id); snap=JSON.parse(JSON.stringify(b)); days[b.tag]=1;
@@ -23051,9 +23057,12 @@ function kcAktRun(a,days){
       if(a.prio!=null&&KC_PRIO[a.prio]!=null){ if(KC_PRIO[a.prio])b.prio=KC_PRIO[a.prio]; else delete b.prio; }
       lpTouch(b);
       var nt=a.tag||b.tag, ns=a.start||b.start, ne=a.ende||b.ende;
-      if(nt!==b.tag||ns!==b.start||ne!==b.ende){
+      var etN=a.endtag?kcEt(nt,ns,ne,a.endtag):undefined;
+      if(nt!==b.tag||ns!==b.start||ne!==b.ende||(etN!==undefined&&(etN||'')!==(b.endTag||''))){
+        if(etN!==undefined&&nt===b.tag&&ns===b.start&&ne===b.ende){ if(etN)b.endTag=etN; else delete b.endTag; lpTouch(b); return {undo:{typ:'block_restore',snap:snap}}; }
         days[nt]=1; WB4.ui=true; try{ r=wpMoveBlock(b,nt,ns,ne); }finally{ WB4.ui=false; }
         if(WBA.ctx)return {pending:true,check:function(){ var c=wpFind(a.id); return !!c&&((c.tag===nt&&c.start===ns&&c.ende===ne)||c.status==='verschoben'); }};
+        if(etN!==undefined&&r){ if(etN)r.endTag=etN; else delete r.endTag; lpTouch(r); }
         return {undo:{typ:'block_restore',snap:snap,extra:(r&&r.id!==snap.id)?r.id:null}};
       }
       return {undo:{typ:'block_restore',snap:snap}};
@@ -23170,6 +23179,101 @@ waHgMehr=function(){
     +(l.length?l.map(function(x){ var st=KC_STATUS[x.status]||['',''], d=new Date(x.ts); return '<div class="hg-ln" style="gap:8px;align-items:flex-start"><span style="font-size:12px;flex:1;min-width:0;overflow-wrap:anywhere">'+lpEsc(x.text)+'</span><span class="lp-mono lp-mu" style="font-size:10px;white-space:nowrap;text-align:right">'+lpEsc(st[0])+'<br>'+lpEsc(d.toLocaleDateString('de-CH')+' '+d.toLocaleTimeString('de-CH').slice(0,5))+'</span></div>'; }).join('')+'<div class="lp-row" style="justify-content:flex-end;margin-top:6px"><button type="button" class="lp-btn gray" data-kc2="log-leer">Protokoll leeren</button></div>':'<div class="lp-mu" style="font-size:12px">Noch keine Änderungen über Claude.</div>')
     +'</div></details></div>';
 };
+
+// ═══════════════════════════════════════════════════════════
+// MEHRTÄGIGE BLÖCKE — ein Block kann nach Mitternacht oder an einem späteren Tag enden (b.endTag > b.tag, höchstens 7 Tage).
+// Er bleibt EIN Block (gehört zum Starttag, zählt dort einmal mit seiner ganzen Dauer). Im Raster wird er pro Tag als Stück
+// gezeichnet (wpDayList liefert Kopien mit _mt: a = Anfang, m = Mitte, e = Ende; die Kennung bleibt die des echten Blocks).
+// Schlaf über Mitternacht trägt die Stunden beim Aufwachtag ein. Ziehen: nur am ersten Stück, die Dauer bleibt; Länge im Editor.
+// ═══════════════════════════════════════════════════════════
+function wpIsMulti(b){ return !!(b&&b.endTag&&b.endTag>b.tag); }
+function wpEndTag(b){ return wpIsMulti(b)?b.endTag:(b?b.tag:''); }
+function wpDurMin(b){ return Math.max(15,(wpIsMulti(b)?lpDayDiff(b.tag,b.endTag)*1440:0)+lpT2M(b.ende)-lpT2M(b.start)); }
+function wpFitEnd(b,oldDur){ var s=lpT2M(b.start), e=lpT2M(b.ende), off=Math.round((oldDur-(e-s))/1440); if(off<0)off=0; if(off===0&&e<=s)off=1; if(off>7)off=7; if(off>0)b.endTag=lpAdd(b.tag,off); else delete b.endTag; }
+// Enddatum aus dem Editor: '' = gleicher Tag, Datum = mehrtägig, null = ungültig. Leer + «Bis» vor «Von» = Folgetag.
+function wpEtagForm(tag,s,e){ var el=document.getElementById('wpm-etag'), v=el?el.value:''; if(!v)return lpT2M(e)<=lpT2M(s)?lpAdd(tag,1):''; if(v<tag||lpDayDiff(tag,v)>7)return null; if(v===tag)return lpT2M(e)>lpT2M(s)?'':null; return v; }
+function wpSegOn(b,date){
+  var et=wpEndTag(b); if(date<b.tag||date>et)return null; if(date===et&&date!==b.tag&&lpT2M(b.ende)<=0)return null;
+  var p={}, k; for(k in b)if(Object.prototype.hasOwnProperty.call(b,k))p[k]=b[k];
+  p.start=date===b.tag?b.start:'00:00'; p.ende=date===et?b.ende:'24:00'; p.tag=date; p._mt=date===b.tag?'a':(date===et?'e':'m'); p._real=b; return p;
+}
+function wpDayList(date){
+  var l=[]; wpBlocksOn(date).forEach(function(b){ l.push(wpIsMulti(b)?wpSegOn(b,date):b); });
+  for(var i=1;i<=7;i++){ wpBlocksOn(lpAdd(date,-i)).forEach(function(b){ if(!wpIsMulti(b)||b.endTag<date)return; var p=wpSegOn(b,date); if(p)l.push(p); }); }
+  return l;
+}
+(function(){ var st=document.createElement('style'); st.textContent='.wp-b.mt-a{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-style:dashed}.wp-b.mt-e{border-top-left-radius:0;border-top-right-radius:0;border-top-style:dashed}.wp-b.mt-m{border-radius:0;border-top-style:dashed;border-bottom-style:dashed}.wp-b .wp-mt{position:absolute;right:4px;bottom:1px;font-size:9px;opacity:.85;white-space:nowrap;pointer-events:none}'
+  +'#wp-root.wp-tv .wp-head,#wp-root.wp-tv .wp-grid{grid-template-columns:24px minmax(0,1fr) !important;min-width:0 !important}#wp-root.wp-tv .wp-dh:not(.wp-tvsel),#wp-root.wp-tv .wp-col:not(.wp-tvsel){display:none}#wp-root.wp-tv .wp-b{font-size:12px}.wp-tvbar{display:flex;gap:4px;align-items:center;margin-bottom:8px;overflow-x:auto}.wp-tvbar .wp-pill{flex:1;min-width:0;padding-left:2px;padding-right:2px;text-align:center;justify-content:center;white-space:nowrap}@media(max-width:480px){.wp-tvbar{gap:3px}.wp-tvbar .wp-pill{font-size:11px;letter-spacing:-.2px}}.wp-tvbar .wp-pill.nav{flex:0 0 auto}.wp-tvbar .wp-pill.heute:not(.on){border-color:color-mix(in srgb,var(--c-accent) 55%,transparent)}';
+  document.head.appendChild(st); })();
+var _wpBlockHTML_mt=wpBlockHTML;
+wpBlockHTML=function(b,z,now){
+  var h=_wpBlockHTML_mt.apply(this,arguments); if(!h||!b||!b._mt||!b._real)return h;
+  var R=b._real, ganz=R.start+'–'+R.ende, marke=b._mt==='a'?'▼ bis '+lpDayLbl(R.endTag)+' '+R.ende:'▲ seit '+lpDayLbl(R.tag)+' '+R.start;
+  h=h.split(b.start+'–'+b.ende).join(ganz+' ('+lpDayLbl(R.tag)+'–'+lpDayLbl(R.endTag)+')');
+  h=h.replace('class="wp-b ','class="wp-b mt-'+b._mt+' ');
+  return h.replace(/(<div class="wp-b[^>]*)>/,'$1 data-mt="'+b._mt+'"><span class="wp-mt">'+lpEsc(marke)+'</span>');
+};
+function wpEtHint(){
+  var g=function(i){ var e=document.getElementById(i); return e?e.value:''; }, el=document.getElementById('wpm-ethint'); if(!el)return;
+  var tag=g('wpm-tag'), s=g('wpm-start'), e=g('wpm-ende'), et=g('wpm-etag'), t='leer = gleicher Tag';
+  if(tag&&s&&e){ var r=wpEtagForm(tag,s,e); if(r===null)t='Enddatum passt nicht (vor dem Start oder mehr als 7 Tage später)'; else if(r)t=(et?'':'leer = ')+'endet '+lpDayLbl(r)+' '+lpFmtShort(r)+' · '+lpDec(Math.round(((lpDayDiff(tag,r)*1440+lpT2M(e)-lpT2M(s))/60)*10)/10)+' h'; }
+  el.textContent=t;
+}
+var _wpEditor_mt=wpEditor;
+wpEditor=function(id,pre){
+  var r=_wpEditor_mt.apply(this,arguments);
+  try{
+    var b=id?wpFind(id):null, en=document.getElementById('wpm-ende');
+    if(en&&!document.getElementById('wpm-etag')){
+      var fld=en.closest('.lp-fld'), row=document.createElement('div'); row.className='lp-fld';
+      row.innerHTML='<label>Endet am</label><input class="lp-in" type="date" id="wpm-etag" value="'+lpEsc(b&&wpIsMulti(b)?b.endTag:((pre&&pre.endTag)||''))+'"'+(b&&b.typ==='fix'?' disabled':'')+' style="width:auto"/><span class="lp-mu" id="wpm-ethint" style="font-size:11px"></span>';
+      fld.parentNode.insertBefore(row,fld.nextSibling); wpEtHint();
+    }
+  }catch(e){}
+  return r;
+};
+document.addEventListener('input',function(ev){ var i=ev.target&&ev.target.id; if(i==='wpm-tag'||i==='wpm-start'||i==='wpm-ende'||i==='wpm-etag')wpEtHint(); });
+
+// ═══════════════════════════════════════════════════════════
+// TAGESANSICHT — Umschalter Woche | Tag im Kopf des Wochenplans. «Tag» zeigt nur den gewählten Tag in voller Breite
+// (gleiche Spalte wie in der Woche, die anderen sechs sind ausgeblendet: Antippen, Ziehen, neuer Block funktionieren gleich).
+// Standard: Handy = Tag, Laptop = Woche; die Wahl bleibt pro Gerät (localStorage «sos_wp_view»). Wischen wechselt den Tag.
+// ═══════════════════════════════════════════════════════════
+function wpvView(){ if(WP_UI.view)return WP_UI.view; var v=''; try{ v=localStorage.getItem('sos_wp_view')||''; }catch(e){} return WP_UI.view=(v==='tag'||v==='woche')?v:(window.innerWidth<700?'tag':'woche'); }
+function wpvTag(){ var mon=WP_UI.week||lpMonday(today()), t=WP_UI.tag, td=today(); if(!t||t<mon||t>lpAdd(mon,6)){ t=(td>=mon&&td<=lpAdd(mon,6))?td:mon; WP_UI.tag=t; } return t; }
+function wpvGo(d){ WP_UI.tag=d; WP_UI.week=lpMonday(d); wpRender(); }
+var _wpRender_tv=wpRender;
+wpRender=function(){
+  var tv=wpvView()==='tag'; if(tv)WP_UI.zoom=null;
+  var r=_wpRender_tv.apply(this,arguments);
+  try{
+    var root=document.getElementById('wp-root'); if(!root)return r; root.classList.toggle('wp-tv',tv);
+    var nb=root.querySelector('[data-wp="nav"]');
+    if(nb&&!root.querySelector('.wp-tvseg'))nb.insertAdjacentHTML('beforebegin','<span class="lp-seg wp-tvseg"><button type="button" class="'+(tv?'':'on')+'" data-wpv="view" data-v="woche">Woche</button><button type="button" class="'+(tv?'on':'')+'" data-wpv="view" data-v="tag">Tag</button></span>');
+    if(tv){
+      var mon=WP_UI.week, sel=wpvTag(), i=lpDayDiff(mon,sel), td=today(), heads=root.querySelectorAll('.wp-head .wp-dh'), cols=root.querySelectorAll('.wp-grid .wp-col'), sc=root.querySelector('.wp-scroll');
+      if(heads[i])heads[i].classList.add('wp-tvsel'); if(cols[i])cols[i].classList.add('wp-tvsel');
+      if(sc&&!root.querySelector('.wp-tvbar')){
+        var h='<div class="wp-tvbar"><button type="button" class="wp-pill nav" data-wpv="day" data-d="'+lpAdd(sel,-1)+'" aria-label="Tag zurück"><i class="ti ti-chevron-left"></i></button>';
+        for(var k=0;k<7;k++){ var d=lpAdd(mon,k); h+='<button type="button" class="wp-pill'+(d===sel?' on':'')+(d===td?' heute':'')+'" data-wpv="day" data-d="'+d+'">'+lpDayLbl(d)+' '+d.slice(8)+'</button>'; }
+        sc.insertAdjacentHTML('beforebegin',h+'<button type="button" class="wp-pill nav" data-wpv="day" data-d="'+lpAdd(sel,1)+'" aria-label="Tag vor"><i class="ti ti-chevron-right"></i></button></div>');
+      }
+    }
+  }catch(e){}
+  return r;
+};
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-wpv]');
+  if(el){ ev.preventDefault(); if(el.getAttribute('data-wpv')==='view'){ WP_UI.view=el.getAttribute('data-v'); try{ localStorage.setItem('sos_wp_view',WP_UI.view); }catch(e){} if(WP_UI.view==='tag')WP_UI.tag=null; return wpRender(); } return wpvGo(el.getAttribute('data-d')); }
+  // Wochen-Pfeile und «Heute» in der Tagesansicht: Tag mitnehmen
+  var nv=ev.target.closest&&ev.target.closest('#wp-root [data-wp="nav"]'); if(!nv||wpvView()!=='tag')return;
+  ev.preventDefault(); ev.stopImmediatePropagation(); var n=+nv.getAttribute('data-n'); wpvGo(n===0?today():lpAdd(wpvTag(),7*n));
+},true);
+(function(){
+  var t0=null;
+  document.addEventListener('touchstart',function(ev){ t0=null; if(wpvView()!=='tag'||ev.touches.length!==1)return; var t=ev.target; if(!t.closest||!t.closest('#wp-root .wp-scroll')||t.closest('.wp-b'))return; t0={x:ev.touches[0].clientX,y:ev.touches[0].clientY,ts:Date.now()}; },{passive:true});
+  document.addEventListener('touchend',function(ev){ if(!t0)return; var c=ev.changedTouches[0], dx=c.clientX-t0.x, dy=c.clientY-t0.y, ok=Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)*2&&Date.now()-t0.ts<700; t0=null; if(ok)wpvGo(lpAdd(wpvTag(),dx<0?1:-1)); },{passive:true});
+})();
 
 // ═══════════════════════════════════════════════════════════
 // INIT
