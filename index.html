@@ -22619,7 +22619,7 @@ var KC_MODELLE=[['claude-opus-5-5','Claude Opus 5.5 (stark, Standard)'],['claude
 var KC_DATEN=[['plan','Wochenplan (diese und nächste Woche)'],['ampel','Bereichs-Ampel und Regeln'],['termine','Termine und Zeitspannen (14 Tage)'],['pendenzen','Pendenzen und Monatsziele'],['lernplan','Lernplan (Stand je Fach, Prüfungsdaten)'],['alltag','Alltags-Blöcke im Wochenplan (Mahlzeiten, Routinen, Wägen, Messen, Pushups)'],['profil','Leitsatz, Werte, Nicht-Verhandelbares'],['liv','Titel der Liv-Blöcke (sonst nur «privat, belegt»)'],['koerper','Gewicht, Bauchumfang, Schlaf (14 Tage)']];
 CFG_DEFAULTS['ki.modell']='claude-opus-5-5'; CFG_META['ki.modell']={gruppe:'Claude',label:'Modell'};
 CFG_VALIDATE['ki.modell']=function(v){ return KC_MODELLE.some(function(m){return m[0]===v;})?null:'Unbekanntes Modell.'; };
-CFG_DEFAULTS['ki.daten']={alltag:true,plan:true,ampel:true,termine:true,pendenzen:true,lernplan:true,profil:true,liv:false,koerper:false}; CFG_META['ki.daten']={gruppe:'Claude',label:'Daten, die Claude sehen darf'};
+CFG_DEFAULTS['ki.daten']={alltag:true,plan:true,ampel:true,termine:true,pendenzen:true,lernplan:true,profil:true,liv:true,koerper:false}; CFG_META['ki.daten']={gruppe:'Claude',label:'Daten, die Claude sehen darf'};
 CFG_VALIDATE['ki.daten']=function(v){ return (v&&typeof v==='object')?null:'Ungültig.'; };
 var KC={open:false,busy:false,msgs:null,err:'',abort:null};
 function kcDaten(){ var d=cfg('ki.daten')||{}, o={}; KC_DATEN.forEach(function(k){ o[k[0]]=d[k[0]]==null?!!CFG_DEFAULTS['ki.daten'][k[0]]:!!d[k[0]]; }); return o; }
@@ -22635,7 +22635,7 @@ var KC_STLBL={offen:'offen',ok:'✓ erledigt',teil:'◐ teilweise',nein:'✗ nic
 function kcBlockLine(b,dat){
   var ber=wbBereich(b), u=wbUnter(b), priv=(ber==='liv'&&!dat.liv);
   var st={ok:'erledigt',teil:'teilweise',nein:'nicht gemacht',verschoben:'verschoben',offen:''}[b.status]||'';
-  return '  '+b.start+'–'+b.ende+(wpIsMulti(b)?' (endet '+lpDayLbl(b.endTag)+' '+lpFmtShort(b.endTag)+')':'')+' '+(priv?'privat (belegt)':String(b.titel||'').slice(0,80))+' ['+(priv?'privat':wbBerName(ber)+(u&&wbUnterName(ber,u)?' / '+wbUnterName(ber,u):'')+(kcAend()&&kcKatName(b.kategorie)?'; Kategorie '+kcKatName(b.kategorie):''))+']'+(b.typ==='fenster'?' (optional)':'')+(b.typ==='fix'?' (fix)':'')+(wbPrioText(b)&&b.prio?' Prio '+wbPrioText(b):'')+(st?' — '+st:'')+(kcAend()?' #'+b.id:'');
+  return '  '+b.start+'–'+b.ende+(wpIsMulti(b)?' (endet '+lpDayLbl(b.endTag)+' '+lpFmtShort(b.endTag)+')':'')+' '+(priv?'privat (belegt)':String(b.titel||'').slice(0,80))+' ['+(priv?'privat':wbBerName(ber)+(u&&wbUnterName(ber,u)?' / '+wbUnterName(ber,u):'')+(kcAend()&&kcKatName(b.kategorie)?'; Kategorie '+kcKatName(b.kategorie):''))+']'+(b.typ==='fenster'?' (optional)':'')+(b.typ==='fix'?' (fix)':'')+(b.typ==='belohnung'?' (Belohnung)':'')+(wbPrioText(b)&&b.prio?' Prio '+wbPrioText(b):'')+(st?' — '+st:'')+(kcAend()?' #'+b.id:'');
 }
 function kcAend(){ return cfg('ki.aendern')!==false; }
 // Offene Etappen (überfällig oder in den nächsten 14 Tagen geplant) und offene Pool-Aufgaben, mit Kennung — nur wenn Claude Änderungen vorbereiten darf
@@ -22655,7 +22655,7 @@ function kcEtappenText(){
 function kcWocheText(mon,dat){
   var out=['Woche KW '+wbKW(mon)+' ('+lpFmtShort(mon)+'–'+lpFmtShort(lpAdd(mon,6))+'), Modus '+wbModusName(wbModus(mon))+(wbFreigabe(mon)?', freigegeben':', nicht freigegeben')+':'];
   for(var i=0;i<7;i++){
-    var d=lpAdd(mon,i), bl=wpBlocksOn(d).filter(function(b){ return b.typ!=='belohnung'&&(dat.alltag||KC_ALLTAG.indexOf(b.kategorie)<0); }).sort(function(a,b){ return a.start.localeCompare(b.start); });
+    var d=lpAdd(mon,i), bl=wpBlocksOn(d).filter(function(b){ return dat.alltag||KC_ALLTAG.indexOf(b.kategorie)<0; }).sort(function(a,b){ return a.start.localeCompare(b.start); });
     out.push(' '+lpDayLbl(d)+' '+lpFmtShort(d)+' ('+d+')'+(bl.length?':':': keine Blöcke')); bl.forEach(function(b){ out.push(kcBlockLine(b,dat)); });
   }
   return out.join('\n');
@@ -22956,7 +22956,7 @@ function kcAendPrompt(){
     +'So geht es: Schreibe ein bis drei Sätze, was du vorschlägst, und hänge ganz am Ende genau einen Block in dieser Form an (gültiges JSON, höchstens 15 Aktionen):\n```aenderungen\n{"aktionen":[{"typ":"block_neu","tag":"2026-01-14","start":"09:00","ende":"10:30","titel":"Beispiel","bereich":"studium","unterart":"zuhause","optional":false,"grund":"kurzer Satz"}]}\n```\n'
     +'Aktionen und ihre Felder («grund» ist überall ein kurzer Satz und freiwillig):\n'
     +'- block_neu: tag (JJJJ-MM-TT), start und ende (HH:MM), titel, bereich; freiwillig unterart, optional (true = unverbindliches Fenster) kategorie und endtag (JJJJ-MM-TT, wenn der Block nach Mitternacht oder an einem späteren Tag endet, höchstens 7 Tage; z. B. Schlaf 23:00 bis 06:00 mit endtag = Folgetag)\n'
-    +'- block_aendern: id, dazu nur die Felder, die sich ändern: tag, start, ende, endtag, titel, kategorie, bereich, unterart, prio (must, sehr, hoch, mittel, niedrig, moeglich, optional), status (offen, ok, teil, nein)\n'
+    +'- block_aendern: id, dazu nur die Felder, die sich ändern: tag, start, ende, endtag, titel, kategorie, bereich, unterart, prio (must, sehr, hoch, mittel, niedrig, moeglich, optional), status (offen, ok, teil, nein), optional (true = unverbindliches Fenster, false = fest eingeplanter Block)\n'
     +'- block_loeschen: id\n- aufgabe_neu: name; freiwillig faellig (JJJJ-MM-TT)\n- aufgabe_erledigt: id\n- aufgabe_aendern: id, name und/oder faellig\n- aufgabe_loeschen: id\n'
     +'- etappe_planen: id, datum (JJJJ-MM-TT, ab heute)\n- etappe_erledigt: id; bei Drill-Etappen zusätzlich ergebnis (ok = allein gelöst, hilfe, falsch)\n- pool_bewerten: id, ergebnis (sicher, zaeh, hilfe, falsch); freiwillig nachholen (JJJJ-MM-TT, oder null für «nicht nachholen»)\n\n'
     +'Die Kennung (id) steht in den Daten hinter dem Eintrag als «#…». Verwende sie exakt und ohne das Zeichen #, und erfinde keine: Fehlt sie für das, was der Nutzer meint, frag nach. Im Fliesstext nennst du keine Kennungen. Als erledigt markierst oder bewertest du nur, was der Nutzer dir ausdrücklich so gesagt hat, und Löschen schlägst du nur vor, wenn er es verlangt. Blöcke einer freigegebenen Woche darfst du zum Verschieben oder Löschen vorschlagen; die App verlangt dann von ihm einen Änderungsantrag. Vor der nächsten Nachricht meldet dir die App in eckigen Klammern, was aus deiner Karte wurde.\n\n'
@@ -22990,7 +22990,7 @@ function kcAktInfo(a){
       b=wpFind(a.id); if(!b){ o.text='Block ändern'; o.problem='Block nicht gefunden'; break; }
       var nt=a.tag||b.tag, ns=a.start||b.start, ne=a.ende||b.ende, zeit=(nt!==b.tag||ns!==b.start||ne!==b.ende||(!!a.endtag&&a.endtag!==wpEndTag(b))), teile=[], multiNeu=wpIsMulti(b)||!!a.endtag;
       if(zeit)teile.push(kcBFmt(b.tag,b.start,b.ende)+(wpIsMulti(b)?' (endet '+lpDayLbl(b.endTag)+')':'')+' → '+(kcIsD(nt)&&kcIsT(ns)&&kcIsT(ne)?kcBFmt(nt,ns,ne)+(a.endtag&&kcIsD(a.endtag)&&a.endtag>nt?' (endet '+lpDayLbl(a.endtag)+' '+lpFmtShort(a.endtag)+')':''):'?'));
-      if(a.titel&&a.titel!==b.titel)teile.push('Titel «'+a.titel+'»'); if(a.kategorie&&a.kategorie!==b.kategorie)teile.push('Kategorie '+(kcKatName(a.kategorie)||'?')); if(a.status&&a.status!==b.status)teile.push('Status '+(KC_STLBL[a.status]||'?')); if(a.bereich&&a.bereich!==wbBereich(b))teile.push('Bereich '+wbBerName(a.bereich)); if(a.unterart!=null&&a.unterart!==(b.unter||''))teile.push('Unterart '+(wbUnterName(a.bereich||wbBereich(b),a.unterart)||'keine')); if(a.prio!=null&&KC_PRIO[a.prio]!=null&&KC_PRIO[a.prio]!==(b.prio||''))teile.push('Priorität '+pzPrioLbl(KC_PRIO[a.prio]));
+      if(a.titel&&a.titel!==b.titel)teile.push('Titel «'+a.titel+'»'); if(a.kategorie&&a.kategorie!==b.kategorie)teile.push('Kategorie '+(kcKatName(a.kategorie)||'?')); if(a.status&&a.status!==b.status)teile.push('Status '+(KC_STLBL[a.status]||'?')); var optNeu=(a.optional===true||a.optional===false)&&a.optional!==(b.typ==='fenster'); if(optNeu)teile.push(a.optional?'wird optional (Fenster)':'wird fest eingeplant'); if(a.bereich&&a.bereich!==wbBereich(b))teile.push('Bereich '+wbBerName(a.bereich)); if(a.unterart!=null&&a.unterart!==(b.unter||''))teile.push('Unterart '+(wbUnterName(a.bereich||wbBereich(b),a.unterart)||'keine')); if(a.prio!=null&&KC_PRIO[a.prio]!=null&&KC_PRIO[a.prio]!==(b.prio||''))teile.push('Priorität '+pzPrioLbl(KC_PRIO[a.prio]));
       o.text='«'+b.titel+'»: '+(teile.join(' · ')||'keine Änderung');
       if(!teile.length)o.problem='ändert nichts';
       else if(!kcIsD(nt)||!kcIsT(ns)||!kcIsT(ne))o.problem='Datum oder Zeit ungültig';
@@ -23001,7 +23001,9 @@ function kcAktInfo(a){
       else if(a.prio!=null&&KC_PRIO[a.prio]==null)o.problem='unbekannte Priorität';
       else if(a.kategorie&&!kcKatName(a.kategorie))o.problem='unbekannte Kategorie';
       else if(a.status&&!KC_STLBL[a.status])o.problem='unbekannter Status';
-      else if(a.status&&a.status!==b.status&&(b.typ!=='aufgabe'&&b.typ!=='fix'))o.problem='dieser Block hat keinen Status';
+      else if(optNeu&&(b.typ==='fix'||b.typ==='belohnung'))o.problem='bei diesem Block nicht möglich';
+      else if(optNeu&&a.optional&&b.status!=='offen')o.problem='Block ist schon bewertet';
+      else if(a.status&&a.status!==b.status&&(b.typ!=='aufgabe'&&b.typ!=='fix')&&!(optNeu&&!a.optional))o.problem='dieser Block hat keinen Status';
       else if(a.status&&a.status!==b.status&&b.status==='verschoben')o.problem='Block wurde verschoben';
       else if((a.status==='ok'||a.status==='teil')&&a.status!==b.status&&wpNeedsData(a.kategorie&&kcKatName(a.kategorie)?{kategorie:a.kategorie,typ:b.typ}:b)&&!(b.daten&&b.daten.fertig))o.problem='braucht beim Abhaken eine Angabe: bitte in der App selbst abhaken';
       else if(zeit&&b.status!=='offen')o.problem='Block ist schon bewertet';
@@ -23062,6 +23064,7 @@ function kcAktRun(a,days){
       b=wpFind(a.id); snap=JSON.parse(JSON.stringify(b)); days[b.tag]=1;
       if(a.titel)b.titel=String(a.titel).slice(0,120);
       if(a.kategorie&&kcKatName(a.kategorie))b.kategorie=a.kategorie;
+      if((a.optional===true||a.optional===false)&&a.optional!==(b.typ==='fenster')&&b.typ!=='fix'&&b.typ!=='belohnung'){ if(a.optional){ b.typ='fenster'; delete b.vonFenster; delete b.dabei; b.status='offen'; } else wbFestEinplanen(b); }
       var stNeu=(a.status&&KC_STLBL[a.status]&&a.status!==b.status)?a.status:null;
       if(a.bereich&&a.bereich!==wbBereich(b)){ b.bereich=a.bereich; if(a.unterart==null)delete b.unter; }
       if(a.unterart!=null){ if(a.unterart&&(WB_UNTER[a.bereich||wbBereich(b)]||[]).some(function(u){return u[0]===a.unterart;}))b.unter=a.unterart; else delete b.unter; }
