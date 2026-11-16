@@ -22616,10 +22616,10 @@ apThemaBalken=function(themaId){
 // Der Chat-Verlauf liegt nur auf dem Gerät (localStorage «sos_ki_chat»), nicht im Sync.
 // ═══════════════════════════════════════════════════════════
 var KC_MODELLE=[['claude-opus-5-5','Claude Opus 5.5 (stark, Standard)'],['claude-sonnet-5-5','Claude Sonnet 5.5 (schnell, günstiger)'],['claude-haiku-5-5','Claude Haiku 5.5 (am günstigsten)']];
-var KC_DATEN=[['plan','Wochenplan (diese und nächste Woche)'],['ampel','Bereichs-Ampel und Regeln'],['termine','Termine und Zeitspannen (14 Tage)'],['pendenzen','Pendenzen und Monatsziele'],['lernplan','Lernplan (Stand je Fach, Prüfungsdaten)'],['profil','Leitsatz, Werte, Nicht-Verhandelbares'],['liv','Titel der Liv-Blöcke (sonst nur «privat, belegt»)'],['koerper','Gewicht, Bauchumfang, Schlaf (14 Tage)']];
+var KC_DATEN=[['plan','Wochenplan (diese und nächste Woche)'],['ampel','Bereichs-Ampel und Regeln'],['termine','Termine und Zeitspannen (14 Tage)'],['pendenzen','Pendenzen und Monatsziele'],['lernplan','Lernplan (Stand je Fach, Prüfungsdaten)'],['alltag','Alltags-Blöcke im Wochenplan (Mahlzeiten, Routinen, Wägen, Messen, Pushups)'],['profil','Leitsatz, Werte, Nicht-Verhandelbares'],['liv','Titel der Liv-Blöcke (sonst nur «privat, belegt»)'],['koerper','Gewicht, Bauchumfang, Schlaf (14 Tage)']];
 CFG_DEFAULTS['ki.modell']='claude-opus-5-5'; CFG_META['ki.modell']={gruppe:'Claude',label:'Modell'};
 CFG_VALIDATE['ki.modell']=function(v){ return KC_MODELLE.some(function(m){return m[0]===v;})?null:'Unbekanntes Modell.'; };
-CFG_DEFAULTS['ki.daten']={plan:true,ampel:true,termine:true,pendenzen:true,lernplan:true,profil:true,liv:false,koerper:false}; CFG_META['ki.daten']={gruppe:'Claude',label:'Daten, die Claude sehen darf'};
+CFG_DEFAULTS['ki.daten']={alltag:true,plan:true,ampel:true,termine:true,pendenzen:true,lernplan:true,profil:true,liv:false,koerper:false}; CFG_META['ki.daten']={gruppe:'Claude',label:'Daten, die Claude sehen darf'};
 CFG_VALIDATE['ki.daten']=function(v){ return (v&&typeof v==='object')?null:'Ungültig.'; };
 var KC={open:false,busy:false,msgs:null,err:'',abort:null};
 function kcDaten(){ var d=cfg('ki.daten')||{}, o={}; KC_DATEN.forEach(function(k){ o[k[0]]=d[k[0]]==null?!!CFG_DEFAULTS['ki.daten'][k[0]]:!!d[k[0]]; }); return o; }
@@ -22655,7 +22655,7 @@ function kcEtappenText(){
 function kcWocheText(mon,dat){
   var out=['Woche KW '+wbKW(mon)+' ('+lpFmtShort(mon)+'–'+lpFmtShort(lpAdd(mon,6))+'), Modus '+wbModusName(wbModus(mon))+(wbFreigabe(mon)?', freigegeben':', nicht freigegeben')+':'];
   for(var i=0;i<7;i++){
-    var d=lpAdd(mon,i), bl=wpBlocksOn(d).filter(function(b){ return b.typ!=='belohnung'&&KC_ALLTAG.indexOf(b.kategorie)<0; }).sort(function(a,b){ return a.start.localeCompare(b.start); });
+    var d=lpAdd(mon,i), bl=wpBlocksOn(d).filter(function(b){ return b.typ!=='belohnung'&&(dat.alltag||KC_ALLTAG.indexOf(b.kategorie)<0); }).sort(function(a,b){ return a.start.localeCompare(b.start); });
     out.push(' '+lpDayLbl(d)+' '+lpFmtShort(d)+' ('+d+')'+(bl.length?':':': keine Blöcke')); bl.forEach(function(b){ out.push(kcBlockLine(b,dat)); });
   }
   return out.join('\n');
@@ -22858,7 +22858,7 @@ waHgMehr=function(){
     +'<div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:13px">Modell</div><div class="lp-mu" style="font-size:11px">Stärkere Modelle antworten besser, kosten aber mehr pro Anfrage.</div></div><select class="lp-in" id="kc-hg-modell" style="max-width:230px">'+KC_MODELLE.map(function(x){ return '<option value="'+x[0]+'"'+(x[0]===m?' selected':'')+'>'+x[1]+'</option>'; }).join('')+'</select></div>'
     +'<div class="lp-cap" style="margin:12px 0 4px">WAS CLAUDE SEHEN DARF</div>'
     +KC_DATEN.map(function(k){ return '<div class="hg-ln"><span style="font-size:13px">'+k[1]+'</span><button type="button" class="lp-sw'+(dat[k[0]]?' on':'')+'" data-kc="hg-dat" data-k="'+k[0]+'" aria-label="'+lpEsc(k[1])+'"><i></i></button></div>'; }).join('')
-    +'<div class="lp-mu" style="font-size:11px;margin-top:6px">Nie mitgeschickt werden: Konsum-Tracking, Journal, Check-in, Mahlzeiten und Routinen. Der Chat-Verlauf bleibt auf diesem Gerät.</div>'
+    +'<div class="lp-mu" style="font-size:11px;margin-top:6px">Nie mitgeschickt werden: Konsum-Tracking, Journal und Check-in. Von Mahlzeiten und Routinen gehen nur Titel, Zeit und Status mit, keine Kalorien und keine Checklisten. Der Chat-Verlauf bleibt auf diesem Gerät.</div>'
     +'<div class="lp-row" style="justify-content:flex-end;margin-top:8px"><button type="button" class="lp-btn gray" data-kc="hg-vorschau">Ansehen, was Claude jetzt sieht</button></div></div>';
 };
 
