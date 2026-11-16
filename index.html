@@ -2115,6 +2115,9 @@ body.no-hud #theme-canvas, body.no-hud #section-canvas { display: none !importan
 .kp-chip { display: inline-block; font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid color-mix(in srgb, var(--c-accent) 35%, transparent); } .kp-chip b { font-weight: 400; opacity: .7; margin-right: 4px; }
 .kp-chip.fix { border-color: color-mix(in srgb, var(--c-fun) 55%, transparent); }
 .kp-lock { opacity: .6; }
+/* Vollbild-Fenster: hoher Inhalt bleibt von oben bis unten scrollbar (Handy) */
+#wp-modal, #wp-dlg, #wp-ta { align-items: flex-start !important; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+#wp-modal > *, #wp-dlg > *, #wp-ta > * { margin: auto; flex-shrink: 0; }
 </style>
 </head>
 <body>
