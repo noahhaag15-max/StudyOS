@@ -23197,6 +23197,93 @@ waHgMehr=function(){
 };
 
 // ═══════════════════════════════════════════════════════════
+// CLAUDE · Bereich Freizeit: Spiele (Fussball, NFL), weitere Events, Flugshows. Claude sieht die kommenden Einträge
+// (Schalter cfg('ki.daten').freizeit) und kann sie als Karte anlegen, ändern, löschen, Favorit und Tipp setzen.
+// Resultate gehen nie mit und werden nie gesetzt (Spoiler-Schutz); die Hall of Fame bleibt beim Nutzer.
+// ═══════════════════════════════════════════════════════════
+KC_DATEN.push(['freizeit','Freizeit (Spiele, Events, Flugshows, deine Tipps)']); CFG_DEFAULTS['ki.daten'].freizeit=true;
+var KC_FZ_ART={sport:'Sport',kino:'Kino-Premiere',konzert:'Konzert',sonstiges:'Sonstiges'};
+var KC_FZ_TYP={event_neu:1,event_aendern:1,event_loeschen:1,spiel_neu:1,spiel_aendern:1,spiel_loeschen:1};
+function kcFzListe(n){ if(!Array.isArray(D[n]))D[n]=[]; return D[n]; }
+function kcFzFind(id,listen){ var r=null; listen.forEach(function(n){ if(r)return; var o=kcFzListe(n).find(function(x){ return x&&x.id===id; }); if(o)r={liste:n,o:o}; }); return r; }
+function kcFzWann(o){ return lpDayLbl(o.date)+' '+lpFmtShort(o.date)+(o.time?' '+o.time:''); }
+function kcFzTipp(t){ var m=/^\s*(\d{1,2})\s*[:\-–]\s*(\d{1,2})\s*$/.exec(String(t==null?'':t)); return m?{h:+m[1],g:+m[2]}:null; }
+function kcFreizeitText(){
+  var td=today(), l3=lpAdd(td,21), l8=lpAdd(td,56), out=[], sp=[], ev=[];
+  [['fussball','Fussball'],['nfl','NFL']].forEach(function(x){ kcFzListe(x[0]).forEach(function(s){ if(!s||!s.date||s.date<td||s.date>l3)return; sp.push({d:s.date+(s.time||''),t:' '+kcFzWann(s)+' '+s.heim+' – '+s.gast+' ('+x[1]+(s.typ?', '+s.typ:'')+')'+(s.ort?' in '+s.ort:'')+(s.interesting?' ★ Favorit':'')+(s.tipp?' — Tipp '+s.tipp.h+':'+s.tipp.g:'')+(kcAend()?' #'+s.id:'')}); }); });
+  kcFzListe('miscEvents').forEach(function(e){ if(!e||!e.date||e.date<td||e.date>l8)return; ev.push({d:e.date+(e.time||''),t:' '+kcFzWann(e)+' '+e.name+' ['+(e.kategorie||'Event')+']'+(e.ort?' in '+e.ort:'')+(e.notes?' — '+String(e.notes).slice(0,80):'')+(kcAend()?' #'+e.id:'')}); });
+  kcFzListe('flugshows').forEach(function(e){ if(!e||!e.date||e.date<td||e.date>l8)return; ev.push({d:e.date+(e.time||''),t:' '+kcFzWann(e)+' '+e.name+' [Flugshow]'+(e.ort?' in '+e.ort:'')+(e.notes?' — '+String(e.notes).slice(0,80):'')+(kcAend()?' #'+e.id:'')}); });
+  var srt=function(a,b){ return a.d<b.d?-1:1; };
+  out.push('Freizeit, Spiele der nächsten 3 Wochen (Resultate werden dir nie mitgeschickt):'); sp.sort(srt).slice(0,60).forEach(function(x){ out.push(x.t); }); if(!sp.length)out.push(' keine');
+  out.push('Freizeit, Events und Flugshows der nächsten 8 Wochen:'); ev.sort(srt).slice(0,40).forEach(function(x){ out.push(x.t); }); if(!ev.length)out.push(' keine');
+  return out.join('\n');
+}
+var _kcContext_fz=kcContext;
+kcContext=function(m){ var c=_kcContext_fz(m); if(kcDaten().freizeit){ try{ var t=kcFreizeitText(); if(t){ c.text+=(c.text?'\n\n':'')+t; c.teile.push('Freizeit'); } }catch(e){} } return c; };
+var _kcAendPrompt_fz=kcAendPrompt;
+kcAendPrompt=function(){
+  var p=_kcAendPrompt_fz(); if(!kcDaten().freizeit)return p;
+  return p+'\n\nBereich Freizeit (Spiele, Events, Flugshows), zusätzliche Aktionen:\n'
+    +'- event_neu: name, datum (JJJJ-MM-TT), art (sport, kino, konzert, sonstiges, flugshow); freiwillig zeit (HH:MM), ort, notiz\n- event_aendern: id, dazu nur was sich ändert: name, datum, zeit, ort, notiz\n- event_loeschen: id\n'
+    +'- spiel_neu: sport (fussball oder nfl), heim, gast, datum; freiwillig zeit, wettbewerb, ort\n- spiel_aendern: id, dazu nur was sich ändert: heim, gast, datum, zeit, wettbewerb, ort, favorit (true/false), tipp (z. B. "2:1", nur vor Anpfiff)\n- spiel_loeschen: id\n'
+    +'Favoriten-Spiele erscheinen automatisch als Fenster im Wochenplan. Resultate kennst du nicht und trägst du nie ein; nenne auch keine, falls du sie aus anderem Wissen kennst, denn der Nutzer will nicht gespoilert werden. Einen Tipp setzt du nur, wenn der Nutzer ihn dir genau so nennt.';
+};
+var _kcAktInfo_fz=kcAktInfo;
+kcAktInfo=function(a){
+  if(!a||!KC_FZ_TYP[a.typ])return _kcAktInfo_fz(a);
+  var o={text:'',sub:String(a.grund||''),problem:'',loeschen:false}, td=today(), f, t=[];
+  if(a.typ==='event_neu'){
+    o.text='Neues Event: '+String(a.name||'')+(kcIsD(a.datum)?' · '+lpDayLbl(a.datum)+' '+lpFmtShort(a.datum)+(a.zeit?' '+a.zeit:''):'')+' · '+(a.art==='flugshow'?'Flugshow':(KC_FZ_ART[a.art]||'?'))+(a.ort?' · '+a.ort:'');
+    if(!String(a.name||'').trim()||!kcIsD(a.datum))o.problem='Name oder Datum fehlt'; else if(a.art!=='flugshow'&&!KC_FZ_ART[a.art])o.problem='unbekannte Art'; else if(a.zeit&&!kcIsT(a.zeit))o.problem='Zeit ungültig';
+  } else if(a.typ==='event_aendern'||a.typ==='event_loeschen'){
+    f=kcFzFind(a.id,['miscEvents','flugshows']);
+    if(a.typ==='event_loeschen'){ o.loeschen=true; o.text='Löschen: Event «'+(f?f.o.name:'')+'»'+(f?' · '+kcFzWann(f.o):''); if(!f)o.problem='Event nicht gefunden'; return o; }
+    if(!f){ o.text='Event ändern'; o.problem='Event nicht gefunden'; return o; }
+    if(a.name&&a.name!==f.o.name)t.push('Name «'+a.name+'»'); if(a.datum&&a.datum!==f.o.date)t.push('Datum '+lpFmtShort(f.o.date)+' → '+(kcIsD(a.datum)?lpFmtShort(a.datum):'?')); if(a.zeit!=null&&a.zeit!==(f.o.time||''))t.push('Zeit '+(a.zeit||'offen')); if(a.ort!=null&&a.ort!==(f.o.ort||''))t.push('Ort '+(a.ort||'offen')); if(a.notiz!=null&&a.notiz!==(f.o.notes||''))t.push('Notiz geändert');
+    o.text='Event «'+f.o.name+'»: '+(t.join(' · ')||'keine Änderung'); if(!t.length)o.problem='ändert nichts'; else if(a.datum&&!kcIsD(a.datum))o.problem='Datum ungültig'; else if(a.zeit&&!kcIsT(a.zeit))o.problem='Zeit ungültig';
+  } else if(a.typ==='spiel_neu'){
+    o.text='Neues Spiel: '+String(a.heim||'')+' – '+String(a.gast||'')+(kcIsD(a.datum)?' · '+lpDayLbl(a.datum)+' '+lpFmtShort(a.datum)+(a.zeit?' '+a.zeit:''):'')+' · '+(a.sport==='nfl'?'NFL':'Fussball')+(a.wettbewerb?' · '+a.wettbewerb:'');
+    if(a.sport!=='fussball'&&a.sport!=='nfl')o.problem='Sportart fehlt (fussball oder nfl)'; else if(!String(a.heim||'').trim()||!String(a.gast||'').trim()||!kcIsD(a.datum))o.problem='Teams oder Datum fehlen'; else if(a.zeit&&!kcIsT(a.zeit))o.problem='Zeit ungültig';
+  } else {
+    f=kcFzFind(a.id,['fussball','nfl']);
+    if(a.typ==='spiel_loeschen'){ o.loeschen=true; o.text='Löschen: Spiel '+(f?f.o.heim+' – '+f.o.gast+' · '+kcFzWann(f.o):''); if(!f)o.problem='Spiel nicht gefunden'; return o; }
+    if(!f){ o.text='Spiel ändern'; o.problem='Spiel nicht gefunden'; return o; }
+    var s=f.o, tp=a.tipp!=null?kcFzTipp(a.tipp):null;
+    if(a.heim&&a.heim!==s.heim)t.push('Heim «'+a.heim+'»'); if(a.gast&&a.gast!==s.gast)t.push('Gast «'+a.gast+'»'); if(a.datum&&a.datum!==s.date)t.push('Datum '+lpFmtShort(s.date)+' → '+(kcIsD(a.datum)?lpFmtShort(a.datum):'?')); if(a.zeit!=null&&a.zeit!==(s.time||''))t.push('Zeit '+(a.zeit||'offen')); if(a.wettbewerb&&a.wettbewerb!==s.typ)t.push('Wettbewerb '+a.wettbewerb); if(a.ort!=null&&a.ort!==(s.ort||''))t.push('Ort '+(a.ort||'offen'));
+    if((a.favorit===true||a.favorit===false)&&a.favorit!==!!s.interesting)t.push(a.favorit?'★ als Favorit markieren':'Favorit entfernen'); if(a.tipp!=null&&!(tp&&s.tipp&&tp.h===s.tipp.h&&tp.g===s.tipp.g))t.push('Tipp '+(tp?tp.h+':'+tp.g:'?'));
+    o.text=s.heim+' – '+s.gast+' ('+kcFzWann(s)+'): '+(t.join(' · ')||'keine Änderung');
+    if(!t.length)o.problem='ändert nichts'; else if(a.datum&&!kcIsD(a.datum))o.problem='Datum ungültig'; else if(a.zeit&&!kcIsT(a.zeit))o.problem='Zeit ungültig'; else if(a.tipp!=null&&!tp)o.problem='Tipp unlesbar (Form 2:1)'; else if(a.tipp!=null&&mdStarted(s))o.problem='Spiel hat schon begonnen, Tipps nur vor Anpfiff';
+  }
+  return o;
+};
+var _kcAktRun_fz=kcAktRun;
+kcAktRun=function(a,days){
+  if(!a||!KC_FZ_TYP[a.typ])return _kcAktRun_fz(a,days);
+  var f, n, o, snap;
+  if(a.typ==='event_neu'){
+    n=a.art==='flugshow'?'flugshows':'miscEvents'; o={id:uid(),name:String(a.name).slice(0,160),date:a.datum,time:a.zeit||'',ort:String(a.ort||'').slice(0,120),notes:String(a.notiz||'').slice(0,300),ts:Date.now()}; if(n==='miscEvents')o.kategorie=KC_FZ_ART[a.art];
+    kcFzListe(n).push(o); return {undo:{typ:'fz_weg',liste:n,id:o.id}};
+  }
+  if(a.typ==='spiel_neu'){
+    n=a.sport==='nfl'?'nfl':'fussball'; o={id:uid(),heim:String(a.heim).slice(0,80),gast:String(a.gast).slice(0,80),date:a.datum,time:a.zeit||'',typ:String(a.wettbewerb||'').slice(0,60),ts:Date.now()}; if(n==='fussball')o.ort=String(a.ort||'').slice(0,120);
+    kcFzListe(n).push(o); return {undo:{typ:'fz_weg',liste:n,id:o.id}};
+  }
+  f=kcFzFind(a.id,a.typ.indexOf('event')===0?['miscEvents','flugshows']:['fussball','nfl']); o=f.o; snap=JSON.parse(JSON.stringify(o));
+  if(a.typ==='event_loeschen'||a.typ==='spiel_loeschen'){ markDeleted(o.id); D[f.liste]=kcFzListe(f.liste).filter(function(x){ return x.id!==o.id; }); return {undo:{typ:'fz_restore',liste:f.liste,snap:snap,geloescht:true}}; }
+  if(a.typ==='event_aendern'){ if(a.name)o.name=String(a.name).slice(0,160); if(a.datum)o.date=a.datum; if(a.zeit!=null)o.time=a.zeit; if(a.ort!=null)o.ort=String(a.ort).slice(0,120); if(a.notiz!=null)o.notes=String(a.notiz).slice(0,300); }
+  else { if(a.heim)o.heim=String(a.heim).slice(0,80); if(a.gast)o.gast=String(a.gast).slice(0,80); if(a.datum)o.date=a.datum; if(a.zeit!=null)o.time=a.zeit; if(a.wettbewerb)o.typ=String(a.wettbewerb).slice(0,60); if(a.ort!=null)o.ort=String(a.ort).slice(0,120); if(a.favorit===true||a.favorit===false)o.interesting=a.favorit; if(a.tipp!=null){ var tp=kcFzTipp(a.tipp); if(tp)o.tipp=tp; } }
+  o.ts=Date.now(); o.updatedAt=Date.now(); return {undo:{typ:'fz_restore',liste:f.liste,snap:snap}};
+};
+var _kcUndoRun_fz=kcUndoRun;
+kcUndoRun=function(u,days){
+  if(u.typ==='fz_weg'){ markDeleted(u.id); D[u.liste]=kcFzListe(u.liste).filter(function(x){ return x.id!==u.id; }); return; }
+  if(u.typ==='fz_restore'){ var o=JSON.parse(JSON.stringify(u.snap)); o.ts=Date.now(); o.updatedAt=Date.now(); if(u.geloescht)o.id=uid(); var l=kcFzListe(u.liste), i=l.findIndex(function(x){ return x.id===o.id; }); if(i>=0)l[i]=o; else l.push(o); return; }
+  return _kcUndoRun_fz(u,days);
+};
+var _kcNachAenderung_fz=kcNachAenderung;
+kcNachAenderung=function(days){ _kcNachAenderung_fz(days); try{ mdRender(); }catch(e){} try{ renderMiscEvents(); }catch(e){} try{ renderFlugshows(); }catch(e){} try{ entRender(); }catch(e){} };
+
+// ═══════════════════════════════════════════════════════════
 // MEHRTÄGIGE BLÖCKE — ein Block kann nach Mitternacht oder an einem späteren Tag enden (b.endTag > b.tag, höchstens 7 Tage).
 // Er bleibt EIN Block (gehört zum Starttag, zählt dort einmal mit seiner ganzen Dauer). Im Raster wird er pro Tag als Stück
 // gezeichnet (wpDayList liefert Kopien mit _mt: a = Anfang, m = Mitte, e = Ende; die Kennung bleibt die des echten Blocks).
