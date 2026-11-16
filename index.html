@@ -22622,7 +22622,7 @@ var KC={open:false,busy:false,msgs:null,err:'',abort:null};
 function kcDaten(){ var d=cfg('ki.daten')||{}, o={}; KC_DATEN.forEach(function(k){ o[k[0]]=d[k[0]]==null?!!CFG_DEFAULTS['ki.daten'][k[0]]:!!d[k[0]]; }); return o; }
 function kcModell(){ var m=cfg('ki.modell'); return KC_MODELLE.some(function(x){return x[0]===m;})?m:'claude-opus-5-5'; }
 function kcModellName(){ var m=kcModell(), x=KC_MODELLE.find(function(y){return y[0]===m;}); return x?x[1].replace(/ \(.*/,''):m; }
-function kcLoad(){ if(KC.msgs)return KC.msgs; try{ KC.msgs=JSON.parse(localStorage.getItem('sos_ki_chat')||'[]'); }catch(e){ KC.msgs=[]; } if(!Array.isArray(KC.msgs))KC.msgs=[]; return KC.msgs; }
+function kcLoad(){ if(KC.msgs)return KC.msgs; try{ KC.msgs=JSON.parse(localStorage.getItem('sos_ki_chat')||'[]'); }catch(e){ KC.msgs=[]; } if(!Array.isArray(KC.msgs))KC.msgs=[]; KC.msgs.forEach(function(m){ if(m&&m.karte)m.karte.laeuft=false; }); return KC.msgs; }
 function kcStore(){ try{ localStorage.setItem('sos_ki_chat',JSON.stringify(kcLoad().slice(-60))); }catch(e){} }
 
 // ── Datenpaket: kompakter Text aus dem, was in der App steht ──
@@ -22630,7 +22630,22 @@ var KC_ALLTAG=['mahlzeit','schlaf','routine','waegen','messen','pushups'];
 function kcBlockLine(b,dat){
   var ber=wbBereich(b), u=wbUnter(b), priv=(ber==='liv'&&!dat.liv);
   var st={ok:'erledigt',teil:'teilweise',nein:'nicht gemacht',verschoben:'verschoben',offen:''}[b.status]||'';
-  return '  '+b.start+'–'+b.ende+' '+(priv?'privat (belegt)':String(b.titel||'').slice(0,80))+' ['+(priv?'privat':wbBerName(ber)+(u&&wbUnterName(ber,u)?' / '+wbUnterName(ber,u):''))+']'+(b.typ==='fenster'?' (optional)':'')+(b.typ==='fix'?' (fix)':'')+(wbPrioText(b)&&b.prio?' Prio '+wbPrioText(b):'')+(st?' — '+st:'');
+  return '  '+b.start+'–'+b.ende+' '+(priv?'privat (belegt)':String(b.titel||'').slice(0,80))+' ['+(priv?'privat':wbBerName(ber)+(u&&wbUnterName(ber,u)?' / '+wbUnterName(ber,u):''))+']'+(b.typ==='fenster'?' (optional)':'')+(b.typ==='fix'?' (fix)':'')+(wbPrioText(b)&&b.prio?' Prio '+wbPrioText(b):'')+(st?' — '+st:'')+(kcAend()?' #'+b.id:'');
+}
+function kcAend(){ return cfg('ki.aendern')!==false; }
+// Offene Etappen (überfällig oder in den nächsten 14 Tagen geplant) und offene Pool-Aufgaben, mit Kennung — nur wenn Claude Änderungen vorbereiten darf
+function kcEtappenText(){
+  var td=today(), lim=lpAdd(td,14), out=[], n=0;
+  lpAktiveFaecher().forEach(function(name){
+    var f=lpFach(name,false); if(!f||name==='Fokus-Blöcke')return;
+    lpThemenOf(f.id).forEach(function(t){
+      var m=lpModus(t), rows=[];
+      if(m==='pool'){ lpAufgabenOf(t.id).forEach(function(a){ if(a.status==='sitzt'||a.status==='pruefungsfest'||n>=70)return; n++; rows.push('   Pool-Aufgabe '+a.quelle+' · '+a.nummer+' ('+AP_STATUS_LABEL[a.status||'neu']+(a.naechsteWdh?', nachholen '+lpFmtShort(a.naechsteWdh):'')+') #'+a.id); }); }
+      else lpEtappenOf(t.id).forEach(function(e){ if(lpEtappeDone(e,m)||n>=70)return; var d=e.geplantAm||e.deadline||''; if(d&&d>lim)return; n++; rows.push('   Etappe '+String(e.titel||'').slice(0,70)+' ('+(d?(d<td?'überfällig seit ':'geplant ')+lpFmtShort(d):'ohne Datum')+', '+(m==='drill'?'Drill':'Konzept')+') #'+e.id); });
+      if(rows.length){ out.push('  '+name+' › '+t.name+':'); out=out.concat(rows); }
+    });
+  });
+  return out.length?'Offene Lernplan-Posten (bis in 14 Tagen oder überfällig):\n'+out.join('\n'):'';
 }
 function kcWocheText(mon,dat){
   var out=['Woche KW '+wbKW(mon)+' ('+lpFmtShort(mon)+'–'+lpFmtShort(lpAdd(mon,6))+'), Modus '+wbModusName(wbModus(mon))+(wbFreigabe(mon)?', freigegeben':', nicht freigegeben')+':'];
@@ -22657,7 +22672,7 @@ function kcTermineText(dat){
 function kcPendenzenText(){
   var td=today(), out=['Pendenzen:'];
   var tasks=clTasks().filter(function(t){ return !ckTaskDone(t)&&clDate(t)&&clDate(t)<=lpAdd(td,14)&&clDate(t)>=lpAdd(td,-21); }).sort(function(a,b){ return clDate(a)<clDate(b)?-1:1; });
-  tasks.slice(0,20).forEach(function(t){ out.push(' Aufgabe: '+String(t.name||'').slice(0,90)+' (fällig '+lpFmtShort(clDate(t))+(clDate(t)<td?', überfällig':'')+')'); });
+  tasks.slice(0,20).forEach(function(t){ out.push(' Aufgabe: '+String(t.name||'').slice(0,90)+' (fällig '+lpFmtShort(clDate(t))+(clDate(t)<td?', überfällig':'')+')'+(kcAend()&&t.id?' #'+t.id:'')); });
   (D.monatsziele||[]).filter(function(z){ return !z.erledigt&&(!z.monat||z.monat===td.slice(0,7)); }).slice(0,10).forEach(function(z){ out.push(' Monatsziel: '+String(z.name||'').slice(0,90)+(z.ziel>0?' ('+(z.stand||0)+'/'+z.ziel+')':'')); });
   if(out.length===1)out.push(' keine offenen Aufgaben (14 Tage) und keine offenen Monatsziele');
   return out.join('\n');
@@ -22691,6 +22706,7 @@ function kcContext(fokusMon){
   if(dat.termine)add('Termine',function(){ return kcTermineText(dat); });
   if(dat.pendenzen)add('Pendenzen',kcPendenzenText);
   if(dat.lernplan)add('Lernplan',kcLernplanText);
+  if(dat.lernplan&&kcAend())add('Lernplan',kcEtappenText);
   if(dat.profil)add('Kompass',kcProfilText);
   if(dat.koerper)add('Körperwerte',kcKoerperText);
   return {text:parts.join('\n\n'),teile:teile};
@@ -22698,7 +22714,7 @@ function kcContext(fokusMon){
 var KC_SYSTEM='Du bist Claude, eingebaut in «Study OS», die persönliche Planungs-App eines Studenten (Aviation, Schweiz). Du hilfst ihm, seine Woche zu planen und den Überblick zu behalten.\n\n'
   +'So arbeitet die App: Der Wochenplan ist die einzige Wahrheit. Jeder Block gehört zu einem Bereich (z. B. Studium, PPL, Arbeit, Körper, Erholung). Normale Blöcke sind «befohlen», Blöcke mit «(optional)» sind unverbindliche Fenster, «(fix)» sind feste Termine. Die Bereichs-Ampel vergleicht die geplante Menge je Bereich mit Minimum, Standard und Maximum; der Modus der Woche (Normal, Lernphase, Unterwegs, Militär) bestimmt diese Werte. Eine freigegebene Woche ist festgehalten, Änderungen daran brauchen in der App einen Änderungsantrag.\n\n'
   +'Unten stehen die Daten, die der Nutzer für dich freigegeben hat. Stütze dich nur darauf und auf das, was er im Chat schreibt. Wenn etwas nicht in den Daten steht, sag das offen, statt zu raten; nenne bei Aussagen kurz, worauf sie beruhen (z. B. «laut Ampel», «im Wochenplan am Mittwoch»). Als «privat (belegt)» markierte Zeiten sind verplant, den Inhalt kennst du nicht.\n\n'
-  +'Im Chat kannst du nichts in der App ändern. Formuliere Vorschläge deshalb so konkret (Tag, Uhrzeit, Dauer, Bereich), dass er sie selbst eintragen kann.\n\n'
+  +'{{AEND}}\n\n'
   +'Ton: Der Nutzer hat ADHS. Antworte kurz, konkret und ohne Vorwurf; Rückstände neutral benennen und den nächsten machbaren Schritt zeigen. Deutsch mit Schweizer Orthografie (kein Eszett, Datum TT.MM.). Schlichter Text mit kurzen Absätzen oder Listen mit «- », keine Tabellen und keine Überschriften.';
 
 // ── API-Aufruf (Streaming) ──
@@ -22755,7 +22771,7 @@ function kcCall(opts,cb){
 }
 function kcSystem(fokusMon){
   var c=kcContext(fokusMon), n=new Date(), hm=(n.getHours()<10?'0':'')+n.getHours()+':'+(n.getMinutes()<10?'0':'')+n.getMinutes();
-  return {teile:c.teile,blocks:[{type:'text',text:KC_SYSTEM},{type:'text',text:'DATEN AUS DER APP (Stand '+lpFmt(today())+')\n\n'+(c.text||'Der Nutzer hat keine Daten freigegeben.'),cache_control:{type:'ephemeral'}},{type:'text',text:'Jetzt: '+lpDayLbl(today())+' '+lpFmt(today())+', '+hm+' Uhr.'}]};
+  return {teile:c.teile,blocks:[{type:'text',text:KC_SYSTEM.replace('{{AEND}}',(!fokusMon&&kcAend())?kcAendPrompt():KC_NURLESEN)},{type:'text',text:'DATEN AUS DER APP (Stand '+lpFmt(today())+')\n\n'+(c.text||'Der Nutzer hat keine Daten freigegeben.'),cache_control:{type:'ephemeral'}},{type:'text',text:'Jetzt: '+lpDayLbl(today())+' '+lpFmt(today())+', '+hm+' Uhr.'}]};
 }
 
 // ── Chat-Fenster ──
@@ -22766,7 +22782,7 @@ function kcMd(t){
 function kcHost(){ var h=document.getElementById('kc-host'); if(!h){ h=document.createElement('div'); h.id='kc-host'; h.className='lp'; h.style.cssText='position:fixed;inset:0;z-index:1950;background:rgba(0,0,0,.78);display:none;align-items:stretch;justify-content:center;padding:10px'; document.body.appendChild(h); } return h; }
 function kcMsgHTML(m,i){
   if(m.role==='user')return '<div style="display:flex;justify-content:flex-end;margin:8px 0"><div style="max-width:86%;background:color-mix(in srgb,var(--c-accent) 16%,transparent);border-radius:12px 12px 2px 12px;padding:8px 11px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere">'+lpEsc(m.text)+'</div></div>';
-  return '<div style="margin:8px 0"><div class="lp-inner" style="max-width:94%;font-size:13px;line-height:1.5;overflow-wrap:anywhere" data-kcm="'+i+'">'+(m.text?kcMd(m.text):'<span class="lp-mu">Claude denkt nach …</span>')+'</div>'
+  return '<div style="margin:8px 0"><div class="lp-inner" style="max-width:94%;font-size:13px;line-height:1.5;overflow-wrap:anywhere" data-kcm="'+i+'">'+(m.text?(kcMd(kcSichtbar(m.text))||'<span class="lp-mu">Änderungsvorschlag:</span>'):'<span class="lp-mu">Claude denkt nach …</span>')+'</div>'+(m.karte?kcKarteHTML(m,i):'')
     +(m.err?'<div style="font-size:11px;color:var(--c-work);margin-top:3px">'+lpEsc(m.err)+'</div>':'')
     +(m.teile?'<div class="lp-mu" style="font-size:10px;margin-top:3px">Mitgeschickt: '+(m.teile.length?lpEsc(m.teile.join(', ')):'keine App-Daten')+(m.modell?' · '+lpEsc(m.modell):'')+(m.gekuerzt?' · Antwort wurde gekürzt':'')+'</div>':'')+'</div>';
 }
@@ -22774,7 +22790,7 @@ function kcRender(keepInput){
   var h=kcHost(); if(!KC.open){ h.style.display='none'; h.innerHTML=''; return; }
   var old=document.getElementById('kc-in'), val=keepInput&&old?old.value:'', msgs=kcLoad(), key=lbKiKey(), body;
   if(!key)body='<div style="margin:auto;max-width:420px"><div style="font-size:14px;font-weight:500;margin-bottom:6px">API-Schlüssel eintragen</div><div class="lp-mu" style="font-size:12px;margin-bottom:10px">Claude braucht einen Anthropic-API-Schlüssel (console.anthropic.com › API Keys). Er wird nur auf diesem Gerät gespeichert und nicht synchronisiert. Die Nutzung wird über dein Anthropic-Konto nach Verbrauch abgerechnet.</div><div class="lp-row" style="gap:6px"><input class="lp-in lp-mono" id="kc-key" type="password" placeholder="sk-ant-…" autocomplete="off" style="flex:1;min-width:0"/><button type="button" class="lp-btn fill" data-kc="key-save">Speichern</button></div></div>';
-  else if(!msgs.length)body='<div style="margin:auto;max-width:440px;text-align:center"><i class="ti ti-sparkles" style="font-size:26px;color:var(--c-accent)"></i><div style="font-size:14px;font-weight:500;margin:6px 0">Frag Claude zu deinem Plan</div><div class="lp-mu" style="font-size:12px;margin-bottom:12px">Claude sieht die Daten, die du im Hangar freigegeben hast, und ändert nichts in der App.</div>'
+  else if(!msgs.length)body='<div style="margin:auto;max-width:440px;text-align:center"><i class="ti ti-sparkles" style="font-size:26px;color:var(--c-accent)"></i><div style="font-size:14px;font-weight:500;margin:6px 0">Frag Claude zu deinem Plan</div><div class="lp-mu" style="font-size:12px;margin-bottom:12px">Claude sieht die Daten, die du im Hangar freigegeben hast. '+(kcAend()?'Änderungen bereitet Claude als Karte vor; ausgeführt wird nur, was du bestätigst.':'Claude ändert nichts in der App.')+'</div>'
     +['Was ist heute das Wichtigste?','Wo bin ich diese Woche unter dem Minimum?','Was ist im Lernplan am dringendsten?','Wo habe ich diese Woche noch Luft?'].map(function(q){ return '<button type="button" class="wp-pill" data-kc="frage" style="margin:3px">'+q+'</button>'; }).join('')+'</div>';
   else body=msgs.map(kcMsgHTML).join('');
   h.innerHTML='<div class="lp-cd" style="width:100%;max-width:680px;display:flex;flex-direction:column;padding:0;overflow:hidden">'
@@ -22792,14 +22808,15 @@ function kcSend(text){
   var msgs=kcLoad(), sys=kcSystem(null);
   msgs.push({role:'user',text:text,ts:Date.now()});
   var a={role:'assistant',text:'',teile:sys.teile,modell:kcModellName(),ts:Date.now()}; msgs.push(a);
-  var api=msgs.slice(0,-1).filter(function(m){ return m.text; }).slice(-24).map(function(m){ return {role:m.role,content:m.text}; });
+  // Rückmeldung der App zu einer Änderungs-Karte steht vor der nächsten Nutzer-Nachricht
+  var roh=msgs.slice(0,-1), api=[]; roh.forEach(function(m,i){ if(!m.text)return; var prev=roh[i-1], note=(m.role==='user'&&prev&&prev.karte)?kcKarteNote(prev.karte)+'\n\n':''; api.push({role:m.role,content:note+m.text}); }); api=api.slice(-24);
   while(api.length&&api[0].role!=='user')api.shift();
   // aufeinanderfolgende gleiche Rollen (z. B. nach einem Fehler) zusammenziehen
   var seq=[]; api.forEach(function(m){ var p=seq[seq.length-1]; if(p&&p.role===m.role)p.content+='\n\n'+m.content; else seq.push({role:m.role,content:m.content}); });
   KC.busy=true; kcStore(); kcRender();
   var idx=msgs.length-1, last=0;
-  kcCall({system:sys.blocks,messages:seq,onText:function(t){ a.text=t; var now=Date.now(); if(now-last<80)return; last=now; var el=document.querySelector('#kc-host [data-kcm="'+idx+'"]'), l=document.getElementById('kc-list'); if(el){ var unten=l&&(l.scrollHeight-l.scrollTop-l.clientHeight<60); el.innerHTML=kcMd(t); if(unten)l.scrollTop=l.scrollHeight; } }},
-    function(err,t,info){ KC.busy=false; if(t)a.text=t; if(err)a.err=err; if(info&&info.gekuerzt)a.gekuerzt=true; if(!a.text&&!err)a.err='Keine Antwort erhalten.'; kcStore(); if(KC.open)kcRender(true); });
+  kcCall({system:sys.blocks,messages:seq,onText:function(t){ a.text=t; var now=Date.now(); if(now-last<80)return; last=now; var el=document.querySelector('#kc-host [data-kcm="'+idx+'"]'), l=document.getElementById('kc-list'); if(el){ var unten=l&&(l.scrollHeight-l.scrollTop-l.clientHeight<60); el.innerHTML=kcMd(kcSichtbar(t))||'<span class="lp-mu">Claude bereitet Änderungen vor …</span>'; if(unten)l.scrollTop=l.scrollHeight; } }},
+    function(err,t,info){ KC.busy=false; if(t)a.text=t; if(err)a.err=err; if(info&&info.gekuerzt)a.gekuerzt=true; if(!a.text&&!err)a.err='Keine Antwort erhalten.'; if(!err&&kcAend()){ try{ var k=kcKarteParse(a.text); if(k)a.karte=k; }catch(e){} } kcStore(); if(KC.open)kcRender(true); });
 }
 document.addEventListener('click',function(ev){
   var el=ev.target.closest&&ev.target.closest('[data-kc]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-kc');
@@ -22916,6 +22933,242 @@ wbfPruef=function(mon){
   if(K&&K.err)h+='<div style="font-size:12px;color:var(--c-work);margin-top:6px">'+lpEsc(K.err)+'</div>';
   if(K&&K.teile&&!K.busy)h+='<div class="lp-mu" style="font-size:10px;margin-top:6px">Grundlage: '+lpEsc(K.teile.join(', ')||'keine App-Daten')+'. Eine Meinung, keine Prüfung: die Zeilen oben bleiben massgebend.</div>';
   return h+'</div>';
+};
+
+// ═══════════════════════════════════════════════════════════
+// CLAUDE · Stufe 3: Änderungen vorbereiten. Claude führt nie selbst aus: Die Antwort enthält am Ende einen Block
+// ```aenderungen {"aktionen":[…]}```, die App zeigt ihn als Karte, der Nutzer hakt an und tippt «Ausführen».
+// Freigegebene Blöcke laufen über den normalen Änderungsantrag (wbGuard). Jede Karte lässt sich rückgängig machen
+// (ausser was über einen Antrag lief). Protokoll nur auf dem Gerät (localStorage «sos_ki_log»).
+// ═══════════════════════════════════════════════════════════
+var KC_NURLESEN='Im Chat kannst du nichts in der App ändern. Formuliere Vorschläge deshalb so konkret (Tag, Uhrzeit, Dauer, Bereich), dass er sie selbst eintragen kann.';
+CFG_DEFAULTS['ki.aendern']=true; CFG_META['ki.aendern']={gruppe:'Claude',label:'Claude darf Änderungen vorbereiten'};
+CFG_VALIDATE['ki.aendern']=function(v){ return (v===true||v===false)?null:'Ein oder aus.'; };
+var KC_PRIO={must:'must',sehr:'sehr',hoch:'hoch',mittel:'',niedrig:'niedrig',moeglich:'moeglich',optional:'optional'};
+function kcAendPrompt(){
+  var ber=wbBereicheAlle().map(function(b){ var u=(WB_UNTER[b[0]]||[]).map(function(y){return y[0];}).join(', '); return b[0]+' = '+b[1]+(u?' ('+u+')':''); }).join('; ');
+  return 'Du kannst Änderungen in der App vorbereiten. Du führst nie selbst etwas aus: Die App zeigt deinen Vorschlag als Karte, und der Nutzer entscheidet pro Zeile. Schlage Änderungen nur vor, wenn er darum bittet oder klar zustimmt; auf eine blosse Frage antwortest du nur mit Text.\n\n'
+    +'So geht es: Schreibe ein bis drei Sätze, was du vorschlägst, und hänge ganz am Ende genau einen Block in dieser Form an (gültiges JSON, höchstens 15 Aktionen):\n```aenderungen\n{"aktionen":[{"typ":"block_neu","tag":"2026-01-14","start":"09:00","ende":"10:30","titel":"Beispiel","bereich":"studium","unterart":"zuhause","optional":false,"grund":"kurzer Satz"}]}\n```\n'
+    +'Aktionen und ihre Felder («grund» ist überall ein kurzer Satz und freiwillig):\n'
+    +'- block_neu: tag (JJJJ-MM-TT), start und ende (HH:MM), titel, bereich; freiwillig unterart und optional (true = unverbindliches Fenster)\n'
+    +'- block_aendern: id, dazu nur die Felder, die sich ändern: tag, start, ende, titel, bereich, unterart, prio (must, sehr, hoch, mittel, niedrig, moeglich, optional)\n'
+    +'- block_loeschen: id\n- aufgabe_neu: name; freiwillig faellig (JJJJ-MM-TT)\n- aufgabe_erledigt: id\n- aufgabe_aendern: id, name und/oder faellig\n- aufgabe_loeschen: id\n'
+    +'- etappe_planen: id, datum (JJJJ-MM-TT, ab heute)\n- etappe_erledigt: id; bei Drill-Etappen zusätzlich ergebnis (ok = allein gelöst, hilfe, falsch)\n- pool_bewerten: id, ergebnis (sicher, zaeh, hilfe, falsch); freiwillig nachholen (JJJJ-MM-TT, oder null für «nicht nachholen»)\n\n'
+    +'Die Kennung (id) steht in den Daten hinter dem Eintrag als «#…». Verwende sie exakt und ohne das Zeichen #, und erfinde keine: Fehlt sie für das, was der Nutzer meint, frag nach. Im Fliesstext nennst du keine Kennungen. Als erledigt markierst oder bewertest du nur, was der Nutzer dir ausdrücklich so gesagt hat, und Löschen schlägst du nur vor, wenn er es verlangt. Blöcke einer freigegebenen Woche darfst du zum Verschieben oder Löschen vorschlagen; die App verlangt dann von ihm einen Änderungsantrag. Vor der nächsten Nachricht meldet dir die App in eckigen Klammern, was aus deiner Karte wurde.\n\n'
+    +'Bereiche (Id = Name, in Klammern die Unterart-Ids): '+ber+'.';
+}
+function kcSichtbar(t){ t=String(t||''); var i=t.indexOf('```aenderungen'); if(i<0)return t; var j=t.indexOf('```',i+14); return (t.slice(0,i)+(j>=0?t.slice(j+3):'')).trim(); }
+function kcIsD(s){ return /^\d{4}-\d\d-\d\d$/.test(String(s||'')); }
+function kcIsT(s){ return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(s||'')); }
+function kcBFmt(tag,s,e){ return lpDayLbl(tag)+' '+lpFmtShort(tag)+' '+s+'–'+e; }
+function kcTask(id){ return clTasks().find(function(t){ return t.id===id; })||null; }
+function kcPool(id){ return lpAufgaben().find(function(a){ return a.id===id; })||null; }
+function kcUeberschn(tag,s,e,ohneId){ return wpBlocksOn(tag).find(function(b){ return b.id!==ohneId&&(b.typ==='aufgabe'||b.typ==='fix')&&b.status!=='verschoben'&&KC_ALLTAG.indexOf(b.kategorie)<0&&lpT2M(b.start)<lpT2M(e)&&lpT2M(b.ende)>lpT2M(s); })||null; }
+function kcGeschuetzt(b){ try{ return !!(wbAktiv()&&cfg('wb.aktiv')&&b&&(b.typ==='aufgabe'||b.typ==='fix')&&b.status==='offen'&&b.tag>=today()&&wbFrozenEntry(b)); }catch(e){ return false; } }
+// Beschreibt und prüft eine Aktion gegen den aktuellen Stand → {text, sub, problem, loeschen}
+function kcAktInfo(a){
+  var td=today(), o={text:'',sub:String(a&&a.grund||''),problem:'',loeschen:false}, ids=wbBereicheAlle().map(function(b){return b[0];}), b, t, e, p, k;
+  if(!a||typeof a!=='object'){ o.text='Unlesbare Aktion'; o.problem='ungültige Angaben'; return o; }
+  switch(a.typ){
+    case 'block_neu':
+      o.text='Neuer Block: '+String(a.titel||'')+(kcIsD(a.tag)&&kcIsT(a.start)&&kcIsT(a.ende)?' · '+kcBFmt(a.tag,a.start,a.ende):'')+(a.bereich?' · '+wbBerName(a.bereich):'')+(a.optional?' · optional':'');
+      if(!String(a.titel||'').trim()||!kcIsD(a.tag)||!kcIsT(a.start)||!kcIsT(a.ende))o.problem='Angaben unvollständig';
+      else if(ids.indexOf(a.bereich)<0)o.problem='unbekannter Bereich';
+      else if(lpT2M(a.ende)<=lpT2M(a.start))o.problem='Ende liegt vor dem Start';
+      else if(a.tag<td)o.problem='liegt in der Vergangenheit';
+      else if(!a.optional&&(k=kcUeberschn(a.tag,a.start,a.ende,null)))o.problem='überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')';
+      break;
+    case 'block_aendern':
+      b=wpFind(a.id); if(!b){ o.text='Block ändern'; o.problem='Block nicht gefunden'; break; }
+      var nt=a.tag||b.tag, ns=a.start||b.start, ne=a.ende||b.ende, zeit=(nt!==b.tag||ns!==b.start||ne!==b.ende), teile=[];
+      if(zeit)teile.push(kcBFmt(b.tag,b.start,b.ende)+' → '+(kcIsD(nt)&&kcIsT(ns)&&kcIsT(ne)?kcBFmt(nt,ns,ne):'?'));
+      if(a.titel&&a.titel!==b.titel)teile.push('Titel «'+a.titel+'»'); if(a.bereich&&a.bereich!==wbBereich(b))teile.push('Bereich '+wbBerName(a.bereich)); if(a.unterart!=null&&a.unterart!==(b.unter||''))teile.push('Unterart '+(wbUnterName(a.bereich||wbBereich(b),a.unterart)||'keine')); if(a.prio!=null&&KC_PRIO[a.prio]!=null&&KC_PRIO[a.prio]!==(b.prio||''))teile.push('Priorität '+pzPrioLbl(KC_PRIO[a.prio]));
+      o.text='«'+b.titel+'»: '+(teile.join(' · ')||'keine Änderung');
+      if(!teile.length)o.problem='ändert nichts';
+      else if(!kcIsD(nt)||!kcIsT(ns)||!kcIsT(ne))o.problem='Datum oder Zeit ungültig';
+      else if(lpT2M(ne)<=lpT2M(ns))o.problem='Ende liegt vor dem Start';
+      else if(zeit&&nt<td)o.problem='liegt in der Vergangenheit';
+      else if(a.bereich&&ids.indexOf(a.bereich)<0)o.problem='unbekannter Bereich';
+      else if(a.prio!=null&&KC_PRIO[a.prio]==null)o.problem='unbekannte Priorität';
+      else if(zeit&&b.status!=='offen')o.problem='Block ist schon bewertet';
+      else { if(zeit&&b.typ!=='fenster'&&(k=kcUeberschn(nt,ns,ne,b.id)))o.sub=(o.sub?o.sub+' · ':'')+'Achtung: überschneidet sich mit «'+k.titel+'» ('+k.start+'–'+k.ende+')'; if(zeit&&kcGeschuetzt(b))o.sub=(o.sub?o.sub+' · ':'')+'freigegeben: braucht einen Änderungsantrag'; }
+      break;
+    case 'block_loeschen':
+      b=wpFind(a.id); o.loeschen=true; o.text='Löschen: '+(b?'«'+b.titel+'» · '+kcBFmt(b.tag,b.start,b.ende):'Block');
+      if(!b)o.problem='Block nicht gefunden'; else if(kcGeschuetzt(b))o.sub=(o.sub?o.sub+' · ':'')+'freigegeben: braucht einen Änderungsantrag';
+      break;
+    case 'aufgabe_neu':
+      o.text='Neue Aufgabe: '+String(a.name||'')+(kcIsD(a.faellig)?' · fällig '+lpFmtShort(a.faellig):'');
+      if(!String(a.name||'').trim())o.problem='Name fehlt'; else if(a.faellig&&!kcIsD(a.faellig))o.problem='Datum ungültig';
+      break;
+    case 'aufgabe_erledigt':
+      t=kcTask(a.id); o.text='Aufgabe erledigt: '+(t?t.name:''); if(!t)o.problem='Aufgabe nicht gefunden'; else if(ckTaskDone(t))o.problem='ist schon erledigt';
+      break;
+    case 'aufgabe_aendern':
+      t=kcTask(a.id); if(!t){ o.text='Aufgabe ändern'; o.problem='Aufgabe nicht gefunden'; break; }
+      var tt=[]; if(a.name&&a.name!==t.name)tt.push('neu «'+a.name+'»'); if(a.faellig!=null&&a.faellig!==clDate(t))tt.push('fällig '+(clDate(t)?lpFmtShort(clDate(t)):'offen')+' → '+(kcIsD(a.faellig)?lpFmtShort(a.faellig):(a.faellig===''?'offen':'?')));
+      o.text='Aufgabe «'+t.name+'»: '+(tt.join(' · ')||'keine Änderung'); if(!tt.length)o.problem='ändert nichts'; else if(a.faellig&&!kcIsD(a.faellig))o.problem='Datum ungültig';
+      break;
+    case 'aufgabe_loeschen':
+      t=kcTask(a.id); o.loeschen=true; o.text='Löschen: Aufgabe «'+(t?t.name:'')+'»'; if(!t)o.problem='Aufgabe nicht gefunden';
+      break;
+    case 'etappe_planen':
+      e=lpEtappe(a.id); o.text='Etappe «'+(e?e.titel:'')+'»: '+(e&&e.geplantAm?'geplant '+lpFmtShort(e.geplantAm)+' → ':'neu geplant auf ')+(kcIsD(a.datum)?lpDayLbl(a.datum)+' '+lpFmtShort(a.datum):'?');
+      if(!e)o.problem='Etappe nicht gefunden'; else if(!kcIsD(a.datum))o.problem='Datum ungültig'; else if(a.datum<td)o.problem='liegt in der Vergangenheit'; else if(a.datum===e.geplantAm)o.problem='ändert nichts';
+      break;
+    case 'etappe_erledigt':
+      e=lpEtappe(a.id); if(!e){ o.text='Etappe erledigt'; o.problem='Etappe nicht gefunden'; break; }
+      var m=lpModus(lpThema(e.themaId)); o.text='Etappe «'+e.titel+'»: '+(m==='drill'?'Ergebnis '+({ok:'✓ allein gelöst',hilfe:'~ mit Hilfe',falsch:'✗ falsch'}[a.ergebnis]||'?'):'erledigt');
+      if(m==='drill'&&['ok','hilfe','falsch'].indexOf(a.ergebnis)<0)o.problem='Ergebnis fehlt (allein, mit Hilfe oder falsch)'; else if(m!=='drill'&&e.erledigt)o.problem='ist schon erledigt';
+      break;
+    case 'pool_bewerten':
+      p=kcPool(a.id); o.text='Aufgabe '+(p?p.quelle+' · '+p.nummer:'')+': '+({sicher:'✓ Sicher',zaeh:'✓ Zäh',hilfe:'~ Mit Hilfe',falsch:'✗ Nicht gelöst'}[a.ergebnis]||'?')+(a.ergebnis!=='sicher'&&a.nachholen!==undefined?(a.nachholen?' · nachholen '+lpFmtShort(a.nachholen):' · nicht nachholen'):'');
+      if(!p)o.problem='Aufgabe nicht gefunden'; else if(['sicher','zaeh','hilfe','falsch'].indexOf(a.ergebnis)<0)o.problem='Ergebnis fehlt'; else if(a.nachholen&&!kcIsD(a.nachholen))o.problem='Datum ungültig';
+      break;
+    default: o.text='Unbekannte Aktion «'+String(a.typ||'')+'»'; o.problem='wird nicht unterstützt';
+  }
+  return o;
+}
+function kcKarteParse(text){
+  var t=String(text||''), i=t.indexOf('```aenderungen'); if(i<0)return null; var j=t.indexOf('```',i+14), roh=t.slice(i+14,j<0?t.length:j), obj=null;
+  try{ obj=JSON.parse(roh); }catch(e){ return {status:'fehler',items:[],ts:Date.now()}; }
+  var l=Array.isArray(obj)?obj:(obj&&Array.isArray(obj.aktionen)?obj.aktionen:null); if(!l||!l.length)return null;
+  return {status:'offen',ts:Date.now(),zuviel:l.length>15,items:l.slice(0,15).map(function(a){ var info=kcAktInfo(a); return {a:a,an:!info.problem&&!info.loeschen,status:''}; })};
+}
+// Ausführen einer Aktion → {undo} oder {pending:true, check:fn} (Änderungsantrag offen)
+function kcAktRun(a,days){
+  var b, t, e, p, snap, r;
+  switch(a.typ){
+    case 'block_neu':
+      b=wpNew({tag:a.tag,start:a.start,ende:a.ende,titel:String(a.titel).slice(0,120),kategorie:a.bereich==='studium'?'lernen':a.bereich==='koerper'?'sport':'aufgabe',typ:a.optional?'fenster':'aufgabe',quelle:'ki'});
+      b.bereich=a.bereich; if(a.unterart&&(WB_UNTER[a.bereich]||[]).some(function(u){return u[0]===a.unterart;}))b.unter=a.unterart;
+      wpAdd(b); days[a.tag]=1; return {undo:{typ:'block_weg',id:b.id}};
+    case 'block_aendern':
+      b=wpFind(a.id); snap=JSON.parse(JSON.stringify(b)); days[b.tag]=1;
+      if(a.titel)b.titel=String(a.titel).slice(0,120);
+      if(a.bereich&&a.bereich!==wbBereich(b)){ b.bereich=a.bereich; if(a.unterart==null)delete b.unter; }
+      if(a.unterart!=null){ if(a.unterart&&(WB_UNTER[a.bereich||wbBereich(b)]||[]).some(function(u){return u[0]===a.unterart;}))b.unter=a.unterart; else delete b.unter; }
+      if(a.prio!=null&&KC_PRIO[a.prio]!=null){ if(KC_PRIO[a.prio])b.prio=KC_PRIO[a.prio]; else delete b.prio; }
+      lpTouch(b);
+      var nt=a.tag||b.tag, ns=a.start||b.start, ne=a.ende||b.ende;
+      if(nt!==b.tag||ns!==b.start||ne!==b.ende){
+        days[nt]=1; WB4.ui=true; try{ r=wpMoveBlock(b,nt,ns,ne); }finally{ WB4.ui=false; }
+        if(WBA.ctx)return {pending:true,check:function(){ var c=wpFind(a.id); return !!c&&((c.tag===nt&&c.start===ns&&c.ende===ne)||c.status==='verschoben'); }};
+        return {undo:{typ:'block_restore',snap:snap,extra:(r&&r.id!==snap.id)?r.id:null}};
+      }
+      return {undo:{typ:'block_restore',snap:snap}};
+    case 'block_loeschen':
+      b=wpFind(a.id); snap=JSON.parse(JSON.stringify(b)); days[b.tag]=1;
+      WB4.ui=true; try{ wpRemove(b); }finally{ WB4.ui=false; }
+      if(WBA.ctx)return {pending:true,check:function(){ return !wpFind(a.id); }};
+      return {undo:{typ:'block_restore',snap:snap,geloescht:true}};
+    case 'aufgabe_neu':
+      t={id:uid(),name:String(a.name).slice(0,200),status:'Nicht begonnen',erledigt:false,faellig:a.faellig||'',notizen:'',bereich:'privat'}; clTasks().push(t); return {undo:{typ:'task_weg',id:t.id}};
+    case 'aufgabe_erledigt':
+      ckToggleTask(a.id); return {undo:{typ:'task_toggle',id:a.id}};
+    case 'aufgabe_aendern':
+      t=kcTask(a.id); snap=JSON.parse(JSON.stringify(t)); if(a.name)t.name=String(a.name).slice(0,200); if(a.faellig!=null)t.faellig=a.faellig; t.ts=Date.now(); return {undo:{typ:'task_restore',snap:snap}};
+    case 'aufgabe_loeschen':
+      t=kcTask(a.id); snap=JSON.parse(JSON.stringify(t)); markDeleted(a.id); D.woechentlich=clTasks().filter(function(x){ return x.id!==a.id; }); return {undo:{typ:'task_restore',snap:snap,geloescht:true}};
+    case 'etappe_planen':
+      e=lpEtappe(a.id); snap=JSON.parse(JSON.stringify(e)); e.geplantAm=a.datum; if(e.deadline&&e.deadline<a.datum)e.deadline=a.datum; e.verschobenCount=(e.verschobenCount||0)+1; lpTouch(e); return {undo:{typ:'etappe_restore',snap:snap}};
+    case 'etappe_erledigt':
+      e=lpEtappe(a.id); snap=JSON.parse(JSON.stringify(e));
+      if(lpModus(lpThema(e.themaId))==='drill')lpApplyResult(e,a.ergebnis); else { e.erledigt=true; lpScheduleKonzeptWdh(e); lpTouch(e); }
+      return {undo:{typ:'etappe_restore',snap:snap}};
+    case 'pool_bewerten':
+      p=kcPool(a.id); snap=JSON.parse(JSON.stringify(p)); apApplyResult(p,a.ergebnis); if(a.ergebnis!=='sicher'&&a.nachholen!==undefined){ p.naechsteWdh=a.nachholen||null; lpTouch(p); }
+      return {undo:{typ:'pool_restore',snap:snap}};
+  }
+  throw new Error('wird nicht unterstützt');
+}
+function kcUndoRun(u,days){
+  var c, i, L=lpEnsure(), x;
+  if(u.typ==='block_weg'){ c=wpFind(u.id); if(c){ days[c.tag]=1; wbBypass(function(){ wpRemove(c); }); } }
+  else if(u.typ==='block_restore'){
+    if(u.extra){ x=wpFind(u.extra); if(x){ days[x.tag]=1; wbBypass(function(){ wpRemove(x); }); } }
+    c=wpFind(u.snap.id); if(c){ days[c.tag]=1; var w=wpWeek(lpMonday(c.tag)); if(w)w.bloecke=w.bloecke.filter(function(y){ return y.id!==c.id; }); }
+    var nb=JSON.parse(JSON.stringify(u.snap)); nb.ts=Date.now(); if(u.geloescht)nb.id=uid();   // gelöschte Kennung bleibt gesperrt (Sync), darum neue
+    wpAdd(nb); days[nb.tag]=1;
+  }
+  else if(u.typ==='task_weg'){ markDeleted(u.id); D.woechentlich=clTasks().filter(function(t){ return t.id!==u.id; }); }
+  else if(u.typ==='task_toggle'){ c=kcTask(u.id); if(c&&ckTaskDone(c))ckToggleTask(u.id); }
+  else if(u.typ==='task_restore'){ var nt=JSON.parse(JSON.stringify(u.snap)); nt.ts=Date.now(); if(u.geloescht)nt.id=uid(); i=clTasks().findIndex(function(t){ return t.id===nt.id; }); if(i>=0)clTasks()[i]=nt; else clTasks().push(nt); }
+  else if(u.typ==='etappe_restore'){ i=L.etappen.findIndex(function(e){ return e.id===u.snap.id; }); if(i>=0){ L.etappen[i]=JSON.parse(JSON.stringify(u.snap)); L.etappen[i].ts=Date.now(); } }
+  else if(u.typ==='pool_restore'){ i=lpAufgaben().findIndex(function(a){ return a.id===u.snap.id; }); if(i>=0){ D.lpAufgaben[i]=JSON.parse(JSON.stringify(u.snap)); D.lpAufgaben[i].ts=Date.now(); } }
+}
+function kcNachAenderung(days){ try{ saveD(); }catch(e){} try{ wpAfterChange(Object.keys(days)); }catch(e){ try{ wpRender(); }catch(x){} } try{ lpRender(); }catch(e){} try{ ckRender(); }catch(e){} }
+function kcLog(){ try{ var l=JSON.parse(localStorage.getItem('sos_ki_log')||'[]'); return Array.isArray(l)?l:[]; }catch(e){ return []; } }
+function kcLogAdd(text,status){ var l=kcLog(); l.push({ts:Date.now(),text:String(text).slice(0,240),status:status}); try{ localStorage.setItem('sos_ki_log',JSON.stringify(l.slice(-200))); }catch(e){} }
+var KC_STATUS={ok:['ausgeführt','var(--c-ok)','✓'],abgelehnt:['abgelehnt','var(--lp-muted)','–'],unmoeglich:['nicht möglich','var(--c-work)','!'],fehler:['Fehler','var(--c-work)','!'],rueck:['rückgängig gemacht','var(--lp-muted)','↺']};
+function kcKarteRun(mi){
+  var m=kcLoad()[mi], K=m&&m.karte; if(!K||K.status!=='offen'||K.laeuft)return;
+  [].slice.call(document.querySelectorAll('#kc-host [data-kca^="'+mi+':"]')).forEach(function(c){ var it=K.items[+c.getAttribute('data-kca').split(':')[1]]; if(it)it.an=c.checked; });
+  if(!K.items.some(function(it){ return it.an; })){ showToast('Nichts angehakt. Zum Verwerfen «Ablehnen» tippen.'); return; }
+  K.laeuft=true; var q=K.items.slice(), days={};
+  var fertig=function(){
+    K.laeuft=false; K.status='erledigt'; K.ts=Date.now();
+    K.items.forEach(function(it){ kcLogAdd(kcAktInfo2(it),it.status); });
+    kcNachAenderung(days); kcStore(); if(KC.open)kcRender(true);
+    var n=K.items.filter(function(it){ return it.status==='ok'; }).length; showToast(n?n+' Änderung'+(n===1?'':'en')+' ausgeführt ✓':'Nichts wurde geändert.',n?'ok':undefined);
+  };
+  var next=function(){
+    var it=q.shift(); if(!it)return fertig();
+    var info=kcAktInfo(it.a); it.text=info.text;
+    if(info.problem){ it.status='unmoeglich'; it.problem=info.problem; return next(); }
+    if(!it.an){ it.status='abgelehnt'; return next(); }
+    try{
+      var r=kcAktRun(it.a,days);
+      if(r&&r.pending){ var iv=setInterval(function(){ if(WBA.ctx)return; clearInterval(iv); it.status=r.check()?'ok':'abgelehnt'; it.antrag=true; next(); },300); return; }
+      it.status='ok'; it.undo=(r&&r.undo)||null;
+    }catch(e){ it.status='fehler'; it.problem=String((e&&e.message)||e).slice(0,120); }
+    next();
+  };
+  next();
+}
+function kcAktInfo2(it){ return it.text||kcAktInfo(it.a).text; }
+function kcKarteNein(mi){ var m=kcLoad()[mi], K=m&&m.karte; if(!K||K.status!=='offen'||K.laeuft)return; K.items.forEach(function(it){ it.text=kcAktInfo(it.a).text; it.status='abgelehnt'; }); K.status='erledigt'; K.ts=Date.now(); kcStore(); kcRender(true); }
+function kcKarteUndo(mi){
+  var m=kcLoad()[mi], K=m&&m.karte; if(!K||K.status!=='erledigt'||K.rueck)return; var days={}, n=0;
+  K.items.slice().reverse().forEach(function(it){ if(it.status!=='ok'||!it.undo)return; try{ kcUndoRun(it.undo,days); it.status='rueck'; it.undo=null; n++; kcLogAdd(kcAktInfo2(it),'rueck'); }catch(e){} });
+  K.rueck=true; kcNachAenderung(days); kcStore(); kcRender(true); showToast(n?n+' Änderung'+(n===1?'':'en')+' rückgängig gemacht':'Nichts rückgängig zu machen.','ok');
+}
+function kcKarteNote(K){
+  if(K.status==='fehler')return '[Rückmeldung der App: Dein Änderungsblock war kein gültiges JSON und wurde nicht angezeigt.]';
+  if(K.status==='offen')return '[Rückmeldung der App zu deinem Änderungsvorschlag: Der Nutzer hat die Karte noch nicht ausgeführt oder abgelehnt.]';
+  return '[Rückmeldung der App zu deinem Änderungsvorschlag: '+K.items.map(function(it,i){ return (i+1)+') '+(KC_STATUS[it.status]||['offen'])[0]+(it.antrag&&it.status==='ok'?' (über Änderungsantrag)':'')+(it.problem?' ('+it.problem+')':''); }).join('; ')+'.]';
+}
+function kcKarteHTML(m,mi){
+  var K=m.karte; if(K.status==='fehler')return '<div style="font-size:11px;color:var(--c-work);margin-top:4px">Der Änderungsvorschlag liess sich nicht lesen. Bitte Claude, ihn nochmals zu schicken.</div>';
+  var offen=K.status==='offen', h='<div class="lp-cd" style="margin-top:6px;padding:10px;max-width:94%;border-color:color-mix(in srgb,var(--c-accent) 45%,transparent)"><div class="lp-cap" style="margin-bottom:6px"><i class="ti ti-pencil-check"></i> '+(offen?'DAS WÜRDE ICH ÄNDERN':'ÄNDERUNGEN')+' · '+K.items.length+'</div>';
+  K.items.forEach(function(it,i){
+    var info=offen?kcAktInfo(it.a):{text:it.text||kcAktInfo(it.a).text,sub:String(it.a&&it.a.grund||''),problem:it.problem||'',loeschen:/_loeschen$/.test(String(it.a&&it.a.typ))}, st=KC_STATUS[it.status];
+    h+='<label class="hg-ln" style="align-items:flex-start;gap:8px;'+(offen&&!info.problem?'cursor:pointer':'')+(info.problem&&offen?';opacity:.6':'')+'">'
+      +(offen?'<input type="checkbox" data-kca="'+mi+':'+i+'"'+(it.an&&!info.problem?' checked':'')+(info.problem?' disabled':'')+' style="margin-top:3px"/>':'<span style="width:16px;text-align:center;color:'+(st?st[1]:'var(--lp-muted)')+'">'+(st?st[2]:'')+'</span>')
+      +'<span style="flex:1;min-width:0"><span style="font-size:13px;overflow-wrap:anywhere'+(info.loeschen&&offen?';color:var(--c-danger)':'')+'">'+lpEsc(info.text)+'</span>'
+      +((info.problem||info.sub||(!offen&&st))?'<span class="lp-mu" style="display:block;font-size:11px">'+lpEsc((!offen&&st?st[0]+(it.antrag&&it.status==='ok'?' über Änderungsantrag':'')+(info.problem?': '+info.problem:''):(info.problem?'Nicht möglich: '+info.problem:info.sub)))+'</span>':'')+'</span></label>';
+  });
+  if(K.zuviel)h+='<div class="lp-mu" style="font-size:11px;margin-top:4px">Claude hat mehr als 15 Änderungen geschickt; gezeigt werden die ersten 15.</div>';
+  if(offen)h+='<div class="lp-mu" style="font-size:10px;margin-top:6px">Erst «Ausführen» ändert etwas. Löschungen sind nicht vorgehakt.</div><div class="lp-row" style="justify-content:flex-end;gap:6px;margin-top:8px"><button type="button" class="lp-btn gray" data-kc2="nein" data-i="'+mi+'">Ablehnen</button><button type="button" class="lp-btn fill" data-kc2="run" data-i="'+mi+'">Ausführen</button></div>';
+  else if(!K.rueck&&K.items.some(function(it){ return it.status==='ok'&&it.undo; }))h+='<div class="lp-row" style="justify-content:flex-end;margin-top:8px"><button type="button" class="lp-btn gray" data-kc2="undo" data-i="'+mi+'"><i class="ti ti-arrow-back-up"></i> Rückgängig</button></div>';
+  return h+'</div>';
+}
+document.addEventListener('click',function(ev){
+  var el=ev.target.closest&&ev.target.closest('[data-kc2]'); if(!el)return; ev.preventDefault(); var a=el.getAttribute('data-kc2'), i=+el.getAttribute('data-i');
+  if(a==='run')return kcKarteRun(i);
+  if(a==='nein')return kcKarteNein(i);
+  if(a==='undo')return kcKarteUndo(i);
+  if(a==='hg-aend'){ setCfg('ki.aendern',!kcAend(),'hangar'); try{ waHgRender(); }catch(e){} return; }
+  if(a==='log-leer'){ if(!window.confirm('Protokoll der Claude-Änderungen auf diesem Gerät leeren?'))return; try{ localStorage.removeItem('sos_ki_log'); }catch(e){} try{ waHgRender(); }catch(e){} return; }
+});
+var _waHgMehr_kc3=waHgMehr;
+waHgMehr=function(){
+  var l=kcLog().slice(-30).reverse();
+  return _waHgMehr_kc3()+'<div class="lp-cd" style="margin-top:12px"><div class="lp-cap" style="margin-bottom:6px">CLAUDE: ÄNDERUNGEN</div>'
+    +'<div class="hg-ln"><div style="min-width:0;flex:1"><div style="font-size:13px">Claude darf Änderungen vorbereiten</div><div class="lp-mu" style="font-size:11px">Blöcke, Aufgaben und Lernplan-Posten anlegen, ändern, abhaken, löschen. Ausgeführt wird nur, was du in der Karte im Chat bestätigst. Aus: Claude liest nur.</div></div><button type="button" class="lp-sw'+(kcAend()?' on':'')+'" data-kc2="hg-aend" aria-label="Änderungen vorbereiten"><i></i></button></div>'
+    +'<details style="margin-top:8px"><summary class="lp-mu" style="cursor:pointer;font-size:12px">Protokoll auf diesem Gerät ('+kcLog().length+')</summary><div style="margin-top:6px">'
+    +(l.length?l.map(function(x){ var st=KC_STATUS[x.status]||['',''], d=new Date(x.ts); return '<div class="hg-ln" style="gap:8px;align-items:flex-start"><span style="font-size:12px;flex:1;min-width:0;overflow-wrap:anywhere">'+lpEsc(x.text)+'</span><span class="lp-mono lp-mu" style="font-size:10px;white-space:nowrap;text-align:right">'+lpEsc(st[0])+'<br>'+lpEsc(d.toLocaleDateString('de-CH')+' '+d.toLocaleTimeString('de-CH').slice(0,5))+'</span></div>'; }).join('')+'<div class="lp-row" style="justify-content:flex-end;margin-top:6px"><button type="button" class="lp-btn gray" data-kc2="log-leer">Protokoll leeren</button></div>':'<div class="lp-mu" style="font-size:12px">Noch keine Änderungen über Claude.</div>')
+    +'</div></details></div>';
 };
 
 // ═══════════════════════════════════════════════════════════
