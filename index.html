@@ -22676,10 +22676,11 @@ function kcTermineText(dat){
 }
 function kcPendenzenText(){
   var td=today(), out=['Pendenzen:'];
-  var tasks=clTasks().filter(function(t){ return !ckTaskDone(t)&&clDate(t)&&clDate(t)<=lpAdd(td,14)&&clDate(t)>=lpAdd(td,-21); }).sort(function(a,b){ return clDate(a)<clDate(b)?-1:1; });
-  tasks.slice(0,20).forEach(function(t){ out.push(' Aufgabe: '+String(t.name||'').slice(0,90)+' (fällig '+lpFmtShort(clDate(t))+(clDate(t)<td?', überfällig':'')+')'+(kcAend()&&t.id?' #'+t.id:'')); });
+  var tasks=clTasks().filter(function(t){ return !ckTaskDone(t)&&String(t.name||'').trim(); }).sort(function(a,b){ var x=clDate(a)||'9999', y=clDate(b)||'9999'; return x<y?-1:x>y?1:0; });
+  tasks.slice(0,60).forEach(function(t){ out.push(' Aufgabe: '+String(t.name||'').slice(0,90)+(clDate(t)?' (fällig '+lpFmtShort(clDate(t))+(clDate(t)<td?', überfällig':'')+')':' (ohne Fälligkeit)')+(t.bereich&&t.bereich!=='privat'?' ['+t.bereich+']':'')+(kcAend()&&t.id?' #'+t.id:'')); });
   (D.monatsziele||[]).filter(function(z){ return !z.erledigt&&(!z.monat||z.monat===td.slice(0,7)); }).slice(0,10).forEach(function(z){ out.push(' Monatsziel: '+String(z.name||'').slice(0,90)+(z.ziel>0?' ('+(z.stand||0)+'/'+z.ziel+')':'')); });
-  if(out.length===1)out.push(' keine offenen Aufgaben (14 Tage) und keine offenen Monatsziele');
+  if(tasks.length>60)out.push(' … und '+(tasks.length-60)+' weitere offene Aufgaben (nicht mitgeschickt)');
+  if(out.length===1)out.push(' keine offenen Aufgaben und keine offenen Monatsziele');
   return out.join('\n');
 }
 function kcLernplanText(){
@@ -23282,6 +23283,65 @@ kcUndoRun=function(u,days){
 };
 var _kcNachAenderung_fz=kcNachAenderung;
 kcNachAenderung=function(days){ _kcNachAenderung_fz(days); try{ mdRender(); }catch(e){} try{ renderMiscEvents(); }catch(e){} try{ renderFlugshows(); }catch(e){} try{ entRender(); }catch(e){} };
+
+// ═══════════════════════════════════════════════════════════
+// CLAUDE · Zeitspannen (D.spannen: Militär, Arbeit, Liv, Ferien, Reise …, mit optionalem Modus) sehen und anpassen.
+// Mitgeschickt: alle laufenden und künftigen (bis 40), mit Kennung. Aktionen spanne_neu / spanne_aendern / spanne_loeschen.
+// ═══════════════════════════════════════════════════════════
+function kcSpFind(id){ return spList().find(function(x){ return x&&x.id===id; })||null; }
+function kcSpZeit(s){ return lpFmtShort(s.von)+(s.vonZeit?' '+s.vonZeit:'')+(s.bis!==s.von||s.bisZeit?' – '+(s.bis!==s.von?lpFmtShort(s.bis)+' ':'')+(s.bisZeit||''):''); }
+function kcSpannenText(){
+  var td=today(), l=spList().filter(function(s){ return s&&s.von&&s.bis&&s.bis>=td; }).sort(function(a,b){ return a.von<b.von?-1:1; });
+  if(!l.length)return 'Zeitspannen (laufend und künftig): keine';
+  return 'Zeitspannen (laufend und künftig, mehrtägige Abschnitte wie Militär, Ferien, Reisen):\n'+l.slice(0,40).map(function(s){ var m=wbSpModus(s); return ' '+kcSpZeit(s).trim()+' '+String(s.titel||spTyp(s.typ)[1]).slice(0,80)+' [Art '+spTyp(s.typ)[1]+(m?', Modus '+wbModusName(m)+(s.modus?'':' (automatisch)'):'')+']'+(s.notiz?' — '+String(s.notiz).slice(0,80):'')+(kcAend()?' #'+s.id:''); }).join('\n');
+}
+var _kcContext_sp=kcContext;
+kcContext=function(m){ var c=_kcContext_sp(m); if(kcDaten().termine){ try{ c.text+=(c.text?'\n\n':'')+kcSpannenText(); if(c.teile.indexOf('Zeitspannen')<0)c.teile.push('Zeitspannen'); }catch(e){} } return c; };
+var _kcAendPrompt_sp=kcAendPrompt;
+kcAendPrompt=function(){
+  return _kcAendPrompt_sp()+'\n\nZeitspannen (mehrtägige Abschnitte, keine Blöcke), zusätzliche Aktionen:\n'
+    +'- spanne_neu: von und bis (JJJJ-MM-TT), art ('+SP_TYPEN.map(function(t){return t[0];}).join(', ')+'); freiwillig titel, von_zeit und bis_zeit (HH:MM), modus ('+WB_MODI.map(function(m){return m[0];}).join(', ')+' oder leer = automatisch), notiz\n'
+    +'- spanne_aendern: id, dazu nur was sich ändert: von, bis, von_zeit, bis_zeit, art, titel, modus, notiz\n- spanne_loeschen: id\n'
+    +'Der Modus einer Zeitspanne bestimmt die Minima und Maxima der Wochen, in die sie fällt.';
+};
+var KC_SP_TYP={spanne_neu:1,spanne_aendern:1,spanne_loeschen:1};
+function kcSpPruef(von,bis,vz,bz){ if(!kcIsD(von)||!kcIsD(bis))return 'Datum fehlt oder ungültig'; if(bis<von)return '«bis» liegt vor «von»'; if((vz&&!kcIsT(vz))||(bz&&!kcIsT(bz)))return 'Zeit ungültig'; if(von===bis&&vz&&bz&&bz<=vz)return 'Endzeit vor Startzeit'; if(lpDayDiff(von,bis)>366)return 'länger als ein Jahr'; return ''; }
+var _kcAktInfo_sp=kcAktInfo;
+kcAktInfo=function(a){
+  if(!a||!KC_SP_TYP[a.typ])return _kcAktInfo_sp(a);
+  var o={text:'',sub:String(a.grund||''),problem:'',loeschen:false}, s, t=[], modOk=function(m){ return m===''||WB_MODI.some(function(x){return x[0]===m;}); };
+  if(a.typ==='spanne_neu'){
+    var tmp={von:a.von,bis:a.bis,vonZeit:a.von_zeit||'',bisZeit:a.bis_zeit||''};
+    o.text='Neue Zeitspanne: '+String(a.titel||(SP_TYPEN.some(function(x){return x[0]===a.art;})?spTyp(a.art)[1]:''))+(kcIsD(a.von)&&kcIsD(a.bis)?' · '+kcSpZeit(tmp).trim():'')+(a.modus?' · Modus '+wbModusName(a.modus):'');
+    o.problem=kcSpPruef(a.von,a.bis,a.von_zeit,a.bis_zeit)||(!SP_TYPEN.some(function(x){return x[0]===a.art;})?'unbekannte Art':'')||(a.modus!=null&&!modOk(a.modus)?'unbekannter Modus':'');
+    return o;
+  }
+  s=kcSpFind(a.id);
+  if(a.typ==='spanne_loeschen'){ o.loeschen=true; o.text='Löschen: Zeitspanne «'+(s?s.titel:'')+'»'+(s?' · '+kcSpZeit(s).trim():''); if(!s)o.problem='Zeitspanne nicht gefunden'; return o; }
+  if(!s){ o.text='Zeitspanne ändern'; o.problem='Zeitspanne nicht gefunden'; return o; }
+  var n={von:a.von||s.von,bis:a.bis||s.bis,vonZeit:a.von_zeit!=null?a.von_zeit:(s.vonZeit||''),bisZeit:a.bis_zeit!=null?a.bis_zeit:(s.bisZeit||'')};
+  if(n.von!==s.von||n.bis!==s.bis||n.vonZeit!==(s.vonZeit||'')||n.bisZeit!==(s.bisZeit||''))t.push(kcSpZeit(s).trim()+' → '+(kcIsD(n.von)&&kcIsD(n.bis)?kcSpZeit(n).trim():'?'));
+  if(a.art&&a.art!==s.typ)t.push('Art '+(SP_TYPEN.some(function(x){return x[0]===a.art;})?spTyp(a.art)[1]:'?')); if(a.titel&&a.titel!==s.titel)t.push('Titel «'+a.titel+'»'); if(a.modus!=null&&a.modus!==(s.modus||''))t.push('Modus '+(a.modus?wbModusName(a.modus):'automatisch')); if(a.notiz!=null&&a.notiz!==(s.notiz||''))t.push('Notiz geändert');
+  o.text='Zeitspanne «'+s.titel+'»: '+(t.join(' · ')||'keine Änderung');
+  o.problem=!t.length?'ändert nichts':(kcSpPruef(n.von,n.bis,n.vonZeit,n.bisZeit)||(a.art&&!SP_TYPEN.some(function(x){return x[0]===a.art;})?'unbekannte Art':'')||(a.modus!=null&&!modOk(a.modus)?'unbekannter Modus':''));
+  return o;
+};
+var _kcAktRun_sp=kcAktRun;
+kcAktRun=function(a,days){
+  if(!a||!KC_SP_TYP[a.typ])return _kcAktRun_sp(a,days);
+  var s, snap;
+  if(a.typ==='spanne_neu'){ s={id:uid(),typ:a.art,titel:String(a.titel||spTyp(a.art)[1]).slice(0,120),von:a.von,bis:a.bis,farbe:'',notiz:String(a.notiz||'').slice(0,300),vonZeit:a.von_zeit||'',bisZeit:a.bis_zeit||'',ts:Date.now()}; if(a.modus)s.modus=a.modus; spList().push(s); days[a.von]=1; return {undo:{typ:'sp_weg',id:s.id}}; }
+  s=kcSpFind(a.id); snap=JSON.parse(JSON.stringify(s)); days[s.von]=1;
+  if(a.typ==='spanne_loeschen'){ markDeleted(s.id); D.spannen=spList().filter(function(x){ return x.id!==s.id; }); return {undo:{typ:'sp_restore',snap:snap,geloescht:true}}; }
+  if(a.von)s.von=a.von; if(a.bis)s.bis=a.bis; if(a.von_zeit!=null)s.vonZeit=a.von_zeit; if(a.bis_zeit!=null)s.bisZeit=a.bis_zeit; if(a.art)s.typ=a.art; if(a.titel)s.titel=String(a.titel).slice(0,120); if(a.notiz!=null)s.notiz=String(a.notiz).slice(0,300); if(a.modus!=null){ if(a.modus)s.modus=a.modus; else delete s.modus; }
+  lpTouch(s); days[s.von]=1; return {undo:{typ:'sp_restore',snap:snap}};
+};
+var _kcUndoRun_sp=kcUndoRun;
+kcUndoRun=function(u,days){
+  if(u.typ==='sp_weg'){ markDeleted(u.id); D.spannen=spList().filter(function(x){ return x.id!==u.id; }); return; }
+  if(u.typ==='sp_restore'){ var o=JSON.parse(JSON.stringify(u.snap)); o.ts=Date.now(); if(u.geloescht)o.id=uid(); var l=spList(), i=l.findIndex(function(x){ return x.id===o.id; }); if(i>=0)l[i]=o; else l.push(o); return; }
+  return _kcUndoRun_sp(u,days);
+};
 
 // ═══════════════════════════════════════════════════════════
 // MEHRTÄGIGE BLÖCKE — ein Block kann nach Mitternacht oder an einem späteren Tag enden (b.endTag > b.tag, höchstens 7 Tage).
