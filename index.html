@@ -22616,7 +22616,7 @@ apThemaBalken=function(themaId){
 // Der Chat-Verlauf liegt nur auf dem Gerät (localStorage «sos_ki_chat»), nicht im Sync.
 // ═══════════════════════════════════════════════════════════
 var KC_MODELLE=[['claude-opus-5-5','Claude Opus 5.5 (stark, Standard)'],['claude-sonnet-5-5','Claude Sonnet 5.5 (schnell, günstiger)'],['claude-haiku-5-5','Claude Haiku 5.5 (am günstigsten)']];
-var KC_DATEN=[['plan','Wochenplan (diese und nächste Woche)'],['ampel','Bereichs-Ampel und Regeln'],['termine','Termine und Zeitspannen (14 Tage)'],['pendenzen','Pendenzen und Monatsziele'],['lernplan','Lernplan (Stand je Fach, Prüfungsdaten)'],['alltag','Alltags-Blöcke im Wochenplan (Mahlzeiten, Routinen, Wägen, Messen, Pushups)'],['profil','Leitsatz, Werte, Nicht-Verhandelbares'],['liv','Titel der Liv-Blöcke (sonst nur «privat, belegt»)'],['koerper','Gewicht, Bauchumfang, Schlaf (14 Tage)']];
+var KC_DATEN=[['plan','Wochenplan (die nächsten 4 Wochen)'],['ampel','Bereichs-Ampel und Regeln'],['termine','Termine und Zeitspannen (4 Wochen)'],['pendenzen','Pendenzen und Monatsziele'],['lernplan','Lernplan (Stand je Fach, Prüfungsdaten)'],['alltag','Alltags-Blöcke im Wochenplan (Mahlzeiten, Routinen, Wägen, Messen, Pushups)'],['profil','Leitsatz, Werte, Nicht-Verhandelbares'],['liv','Titel der Liv-Blöcke (sonst nur «privat, belegt»)'],['koerper','Gewicht, Bauchumfang, Schlaf (14 Tage)']];
 CFG_DEFAULTS['ki.modell']='claude-opus-5-5'; CFG_META['ki.modell']={gruppe:'Claude',label:'Modell'};
 CFG_VALIDATE['ki.modell']=function(v){ return KC_MODELLE.some(function(m){return m[0]===v;})?null:'Unbekanntes Modell.'; };
 CFG_DEFAULTS['ki.daten']={alltag:true,plan:true,ampel:true,termine:true,pendenzen:true,lernplan:true,profil:true,liv:true,koerper:false}; CFG_META['ki.daten']={gruppe:'Claude',label:'Daten, die Claude sehen darf'};
@@ -22640,7 +22640,7 @@ function kcBlockLine(b,dat){
 function kcAend(){ return cfg('ki.aendern')!==false; }
 // Offene Etappen (überfällig oder in den nächsten 14 Tagen geplant) und offene Pool-Aufgaben, mit Kennung — nur wenn Claude Änderungen vorbereiten darf
 function kcEtappenText(){
-  var td=today(), lim=lpAdd(td,14), out=[], n=0;
+  var td=today(), lim=lpAdd(td,28), out=[], n=0;
   lpAktiveFaecher().forEach(function(name){
     var f=lpFach(name,false); if(!f||name==='Fokus-Blöcke')return;
     lpThemenOf(f.id).forEach(function(t){
@@ -22650,7 +22650,7 @@ function kcEtappenText(){
       if(rows.length){ out.push('  '+name+' › '+t.name+':'); out=out.concat(rows); }
     });
   });
-  return out.length?'Offene Lernplan-Posten (bis in 14 Tagen oder überfällig):\n'+out.join('\n'):'';
+  return out.length?'Offene Lernplan-Posten (bis in 4 Wochen oder überfällig):\n'+out.join('\n'):'';
 }
 function kcWocheText(mon,dat){
   var out=['Woche KW '+wbKW(mon)+' ('+lpFmtShort(mon)+'–'+lpFmtShort(lpAdd(mon,6))+'), Modus '+wbModusName(wbModus(mon))+(wbFreigabe(mon)?', freigegeben':', nicht freigegeben')+':'];
@@ -22668,9 +22668,9 @@ function kcAmpelText(mon){
   return out.join('\n');
 }
 function kcTermineText(dat){
-  var td=today(), out=['Termine der nächsten 14 Tage:'], bl=wbTermineVor(td,14), sp=spList().filter(function(s){ return s.von&&s.bis&&s.von<=lpAdd(td,14)&&s.bis>=td; });
+  var td=today(), out=['Termine der nächsten 4 Wochen:'], bl=wbTermineVor(td,28), sp=spList().filter(function(s){ return s.von&&s.bis&&s.von<=lpAdd(td,28)&&s.bis>=td; });
   sp.forEach(function(s){ out.push(' Zeitspanne '+lpFmtShort(s.von)+(s.bis!==s.von?'–'+lpFmtShort(s.bis):'')+': '+(s.titel||spTyp(s.typ)[1])); });
-  bl.slice(0,40).forEach(function(b){ var priv=(wbBereich(b)==='liv'&&!dat.liv); out.push(' '+lpDayLbl(b.tag)+' '+lpFmtShort(b.tag)+' '+b.start+' '+(priv?'privat':String(b.titel||'').slice(0,80))); });
+  bl.slice(0,80).forEach(function(b){ var priv=(wbBereich(b)==='liv'&&!dat.liv); out.push(' '+lpDayLbl(b.tag)+' '+lpFmtShort(b.tag)+' '+b.start+' '+(priv?'privat':String(b.titel||'').slice(0,80))); });
   if(!bl.length&&!sp.length)out.push(' keine');
   return out.join('\n');
 }
@@ -22707,7 +22707,7 @@ function kcRueckblickText(mon){ var c=wbfBlockStatus(mon); return c.total?'Rück
 function kcContext(fokusMon){
   var dat=kcDaten(), td=today(), cur=lpMonday(td), mon=fokusMon||cur, parts=[], teile=[];
   var add=function(name,fn){ try{ var t=fn(); if(t){ parts.push(t); if(teile.indexOf(name)<0)teile.push(name); } }catch(e){} };
-  if(dat.plan){ var ws=[mon]; if(mon===cur)ws.push(lpAdd(cur,7)); else if(mon>cur)ws.unshift(cur); ws.forEach(function(m){ add('Wochenplan',function(){ return kcWocheText(m,dat); }); }); add('Wochenplan',function(){ return kcRueckblickText(lpAdd(mon,-7)); }); }
+  if(dat.plan){ var ws=[]; for(var wi=0;wi<4;wi++)ws.push(lpAdd(cur,7*wi)); if(ws.indexOf(mon)<0){ if(mon<cur)ws.unshift(mon); else ws.push(mon); } ws.forEach(function(m){ add('Wochenplan',function(){ return kcWocheText(m,dat); }); }); add('Wochenplan',function(){ return kcRueckblickText(lpAdd(mon,-7)); }); }
   if(dat.ampel)add('Ampel und Regeln',function(){ return kcAmpelText(mon); });
   if(dat.termine)add('Termine',function(){ return kcTermineText(dat); });
   if(dat.pendenzen)add('Pendenzen',kcPendenzenText);
@@ -23210,12 +23210,12 @@ function kcFzFind(id,listen){ var r=null; listen.forEach(function(n){ if(r)retur
 function kcFzWann(o){ return lpDayLbl(o.date)+' '+lpFmtShort(o.date)+(o.time?' '+o.time:''); }
 function kcFzTipp(t){ var m=/^\s*(\d{1,2})\s*[:\-–]\s*(\d{1,2})\s*$/.exec(String(t==null?'':t)); return m?{h:+m[1],g:+m[2]}:null; }
 function kcFreizeitText(){
-  var td=today(), l3=lpAdd(td,21), l8=lpAdd(td,56), out=[], sp=[], ev=[];
+  var td=today(), l3=lpAdd(td,28), l8=lpAdd(td,56), out=[], sp=[], ev=[];
   [['fussball','Fussball'],['nfl','NFL']].forEach(function(x){ kcFzListe(x[0]).forEach(function(s){ if(!s||!s.date||s.date<td||s.date>l3)return; sp.push({d:s.date+(s.time||''),t:' '+kcFzWann(s)+' '+s.heim+' – '+s.gast+' ('+x[1]+(s.typ?', '+s.typ:'')+')'+(s.ort?' in '+s.ort:'')+(s.interesting?' ★ Favorit':'')+(s.tipp?' — Tipp '+s.tipp.h+':'+s.tipp.g:'')+(kcAend()?' #'+s.id:'')}); }); });
   kcFzListe('miscEvents').forEach(function(e){ if(!e||!e.date||e.date<td||e.date>l8)return; ev.push({d:e.date+(e.time||''),t:' '+kcFzWann(e)+' '+e.name+' ['+(e.kategorie||'Event')+']'+(e.ort?' in '+e.ort:'')+(e.notes?' — '+String(e.notes).slice(0,80):'')+(kcAend()?' #'+e.id:'')}); });
   kcFzListe('flugshows').forEach(function(e){ if(!e||!e.date||e.date<td||e.date>l8)return; ev.push({d:e.date+(e.time||''),t:' '+kcFzWann(e)+' '+e.name+' [Flugshow]'+(e.ort?' in '+e.ort:'')+(e.notes?' — '+String(e.notes).slice(0,80):'')+(kcAend()?' #'+e.id:'')}); });
   var srt=function(a,b){ return a.d<b.d?-1:1; };
-  out.push('Freizeit, Spiele der nächsten 3 Wochen (Resultate werden dir nie mitgeschickt):'); sp.sort(srt).slice(0,60).forEach(function(x){ out.push(x.t); }); if(!sp.length)out.push(' keine');
+  out.push('Freizeit, Spiele der nächsten 4 Wochen (Resultate werden dir nie mitgeschickt):'); sp.sort(srt).slice(0,60).forEach(function(x){ out.push(x.t); }); if(!sp.length)out.push(' keine');
   out.push('Freizeit, Events und Flugshows der nächsten 8 Wochen:'); ev.sort(srt).slice(0,40).forEach(function(x){ out.push(x.t); }); if(!ev.length)out.push(' keine');
   return out.join('\n');
 }
